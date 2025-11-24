@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서용</title>
+    <title>강은지 주문서 v1.0</title>
     
     <!-- Daum Postcode 정적 로딩 -->
     <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -146,9 +146,7 @@
             const result = { recipientName: '', phone: '', zipCode: '', addressText: '', shippingMemo: '' };
             let remainingText = text.replace(/\n/g, ' ').trim();
 
-            // 1. 전화번호 추출 (개선됨: 특수문자가 섞여 있어도 010으로 시작하고 숫자 패턴이 맞으면 추출)
-            // 예: 010-1234-5678, 010.1234.5678, 010 1234 5678, 010*1234*5678 모두 가능
-            // 010 뒤에 숫자가 아닌 문자(\D)가 0개 이상 있고, 숫자 3~4개, 다시 숫자가 아닌 문자 0개 이상, 숫자 4개
+            // 1. 전화번호 추출
             const phoneRegex = /010[\D]*\d{3,4}[\D]*\d{4}/;
             const phoneMatch = remainingText.match(phoneRegex);
             
@@ -169,16 +167,14 @@
                 remainingText = remainingText.replace(zipMatch[0], ' ');
             }
 
-            // 3. 성함 (전화번호, 우편번호 제거 후 남은 텍스트의 첫 단어 또는 이름 패턴)
+            // 3. 성함
             const words = remainingText.split(/\s+/).filter(w => w.length > 0);
             if (words.length > 0) {
-                // 2~4글자 한글을 이름으로 추정
                 const potentialName = words.find(w => /^[가-힣]{2,4}$/.test(w));
                 if (potentialName) {
                     result.recipientName = potentialName;
                     remainingText = remainingText.replace(potentialName, ' ');
                 } else {
-                    // 이름 패턴이 없으면 첫 번째 단어를 이름으로 가정 (단, 주소 키워드가 아닐 경우)
                     const firstWord = words[0];
                     const isAddressKeyword = ['시', '도', '구', '군', '읍', '면', '동', '가', '로', '길'].some(kw => firstWord.endsWith(kw));
                     if (!isAddressKeyword) {
@@ -200,7 +196,7 @@
                 }
             }
 
-            // 5. 배송메모 (나머지)
+            // 5. 배송메모
             result.shippingMemo = remainingText.replace(/(배송|요청|메모|사항)[:\s]*/g, '').trim();
             
             return result;
@@ -252,7 +248,6 @@
                     addressText: parsed.addressText || order.addressText,
                     shippingMemo: parsed.shippingMemo || order.shippingMemo,
                 };
-                // 일괄 업데이트 호출
                 handleUpdateOrderBatch(order.id, updates);
                 showToast('변환 완료! (같은 닉네임 일괄 적용)');
                 setRawAddressText('');
@@ -388,74 +383,106 @@
             useEffect(() => { localStorage.setItem('globalMemo', globalMemo); }, [globalMemo]);
             useEffect(() => { localStorage.setItem('productHistory', JSON.stringify(productHistory)); }, [productHistory]);
 
-            const getCSVString = (listData) => {
+            const getCSVString = (listData, mode) => {
                  const list = [...listData].map(sanitizeOrder).sort((a, b) => (a.customer || '').localeCompare(b.customer || ''));
                 const firstIds = {};
                 list.forEach(o => { if (o.customer && !firstIds[o.customer]) firstIds[o.customer] = o.id; });
                 
-                // 요청하신 엑셀 헤더 구조 (A~D 공란, E부터 데이터 시작, J, M 공란)
-                const excelHeaders = [
-                    '', '', '', '',         // A, B, C, D (공란)
-                    '상품명',               // E
-                    '수령인',               // F
-                    '연락처',               // G
-                    '주소',                 // H
-                    '배송메모',             // I
-                    '',                     // J (공란)
-                    '메모',                 // K
-                    '우편번호',             // L
-                    ''                      // M (공란)
-                ];
+                // 유틸리티 함수: CSV 이스케이프 및 0 보존 처리
+                const clean = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+                const cleanPhone = (val) => {
+                    if (!val) return '""';
+                    return clean(`="${String(val)}"`);
+                };
 
-                const csv = [excelHeaders.join(',')].concat(
-                    list.map(o => {
-                        // 상품명 포맷 변경: 수량 조건부 표시
-                        // 수량이 2 이상일 경우에만 ★수량 표시, 그 외(0, 1)는 표시 안 함
-                        let quantitySuffix = '';
-                        if (o.quantity >= 2) {
-                            quantitySuffix = ` ★${o.quantity}`;
-                        }
-                        
-                        const productName = `[${o.customer || '미지정'}] ${o.product}${quantitySuffix}`;
-                        
-                        const clean = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
-                        
-                        // 엑셀에서 0이 사라지지 않도록 ="값" 형태로 저장하는 함수
-                        const cleanPhone = (val) => {
-                            if (!val) return '""';
-                            // ="값" 형태로 만들어 clean 함수에 전달 (CSV 이스케이프 처리 포함)
-                            return clean(`="${String(val)}"`);
-                        };
-                        
-                        return [
-                            '', '', '', '',                     // A, B, C, D
-                            clean(productName),                 // E: 상품명
-                            clean(o.recipientName),             // F: 수령인
-                            cleanPhone(o.phone),                // G: 연락처
-                            clean(o.addressText),               // H: 주소
-                            clean(o.shippingMemo),              // I: 배송메모
-                            '',                                 // J
-                            clean(o.memo),                      // K: 메모
-                            cleanPhone(o.zipCode),              // L: 우편번호
-                            ''                                  // M
-                        ].join(',');
-                    })
-                ).join('\n');
-                return "\ufeff" + csv;
+                // 1. 송장용 (택배사 양식)
+                if (mode === 'invoice') {
+                    const excelHeaders = [
+                        '', '', '', '',         // A, B, C, D (공란)
+                        '상품명',               // E
+                        '수령인',               // F
+                        '연락처',               // G
+                        '주소',                 // H
+                        '배송메모',             // I
+                        '',                     // J (공란)
+                        '메모',                 // K
+                        '우편번호',             // L
+                        ''                      // M (공란)
+                    ];
+
+                    const csv = [excelHeaders.join(',')].concat(
+                        list.map(o => {
+                            let quantitySuffix = '';
+                            if (o.quantity >= 2) { quantitySuffix = ` ★${o.quantity}`; }
+                            const productName = `[${o.customer || '미지정'}] ${o.product}${quantitySuffix}`;
+                            
+                            return [
+                                '', '', '', '',                     // A, B, C, D
+                                clean(productName),                 // E: 상품명
+                                clean(o.recipientName),             // F: 수령인
+                                cleanPhone(o.phone),                // G: 연락처
+                                clean(o.addressText),               // H: 주소
+                                clean(o.shippingMemo),              // I: 배송메모
+                                '',                                 // J
+                                clean(o.memo),                      // K: 메모
+                                cleanPhone(o.zipCode),              // L: 우편번호
+                                ''                                  // M
+                            ].join(',');
+                        })
+                    ).join('\n');
+                    return "\ufeff" + csv;
+                } 
+                
+                // 2. 전체 내역용 (모든 상세 정보)
+                else {
+                    const headers = ['닉네임', '입금명', '상품명', '수량', '금액', '입금액(현금)', '카드결제액', '배송비', '미수금', '수령인', '연락처', '우편번호', '주소', '배송메모', '메모'];
+                    
+                    const csv = [headers.join(',')].concat(
+                        list.map(o => {
+                            const isFirst = firstIds[o.customer] === o.id;
+                            const ship = o.customShippingFee ?? shippingFee;
+                            const shipCharge = isFirst ? ship : 0;
+                            const unpaid = Math.max(0, (o.price + shipCharge) - (o.deposit + o.cardAmount + (isFirst && o.isShippingPaid ? ship : 0)));
+                            const productName = `[${o.customer || '미지정'}] ${o.product}`; 
+
+                            return [
+                                clean(o.customer), clean(o.phone), clean(productName), o.quantity, o.price, clean(o.deposit), clean(o.cardAmount), clean(shipCharge), clean(unpaid),
+                                clean(o.recipientName), cleanPhone(o.phone), cleanPhone(o.zipCode), clean(o.addressText), clean(o.shippingMemo), clean(o.memo)
+                            ].join(',');
+                        })
+                    ).join('\n');
+                    return "\ufeff" + csv;
+                }
             };
+
             const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
             
-            const handleDownloadCSV = (silent = false) => {
+            const handleDownloadCSV = (mode = 'invoice') => {
                 if (ordersRef.current.length === 0) return;
-                const csvContent = getCSVString(ordersRef.current);
+                const csvContent = getCSVString(ordersRef.current, mode);
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url; 
-                const fileName = `강은지_주문서_${new Date().toLocaleDateString()}.csv`;
+                const typeName = mode === 'invoice' ? '송장용' : '전체내역';
+                const fileName = `강은지_주문서_${typeName}_${new Date().toLocaleDateString()}.csv`;
                 a.download = fileName;
                 a.click(); URL.revokeObjectURL(url);
-                if (!silent) showToast('엑셀 다운로드 완료!');
+                showToast(`${typeName} 엑셀 다운로드 완료!`);
+            };
+
+            const handleDownloadHTML = () => {
+                const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                // 파일명에 백업 날짜/시간 추가
+                const date = new Date();
+                const timestamp = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}`;
+                a.download = `강은지_주문서_백업_${timestamp}.html`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('앱 파일이 안전하게 백업(저장)되었습니다!');
             };
 
             const handleKeyDown = (e, index, field) => {
@@ -622,7 +649,6 @@
             const handleDelete = (id) => setOrders(prev => prev.filter(o => o.id !== id));
             const handleAutoDepositFull = (id) => { setOrders(prev => prev.map(o => o.id === id ? sanitizeOrder({ ...o, deposit: o.price + (o.isShippingPaid ? 0 : (o.customShippingFee ?? shippingFee)), cardAmount: 0, isPaid: true, isCardPaid: false, isShippingPaid: true }) : o)); setEditingAmountId(null); };
             const handleAutoCardFull = (id) => { setOrders(prev => prev.map(o => o.id === id ? sanitizeOrder({ ...o, deposit: 0, cardAmount: o.price, isPaid: true, isCardPaid: true }) : o)); setEditingAmountId(null); };
-            const handleDownloadHTML = () => { const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = '강은지_주문서.html'; a.click(); URL.revokeObjectURL(url); showToast('앱 파일 저장 완료!'); };
             const handleUploadClick = () => fileInputRef.current && fileInputRef.current.click();
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
@@ -719,9 +745,10 @@
                                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-yellow-500">
                                     <Icon name="Moon" size={20} />
                                 </button>
-                                <button onClick={handleDownloadHTML} className="px-3 py-1 bg-indigo-600 text-white rounded">앱 저장</button>
+                                <button onClick={handleDownloadHTML} className="px-3 py-1 bg-indigo-600 text-white rounded">앱 백업(저장)</button>
                                 <button onClick={handleUploadClick} className="px-3 py-1 bg-slate-600 text-white rounded">업로드</button>
-                                <button onClick={() => handleDownloadCSV(false)} className="px-3 py-1 bg-green-600 text-white rounded">다운</button>
+                                <button onClick={() => handleDownloadCSV('full')} className="px-3 py-1 bg-green-700 text-white rounded">전체 엑셀</button>
+                                <button onClick={() => handleDownloadCSV('invoice')} className="px-3 py-1 bg-green-600 text-white rounded">송장 엑셀</button>
                                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{display:'none'}} />
                             </div>
                         </div>
