@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>kang v1.1 pro</title>
+    <title>강은지 주문서 v1.1</title>
     
     <!-- Daum Postcode 정적 로딩 -->
     <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -64,6 +64,10 @@
 
         .animate-fade-in { animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Glassmorphism utilities */
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
+        .dark .glass { background: rgba(30, 41, 59, 0.7); }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-dark-bg text-slate-900 dark:text-dark-text transition-colors duration-300 selection:bg-brand-100 dark:selection:bg-brand-900">
@@ -118,7 +122,7 @@
             return <i className={`ph-bold ${map[name] || 'ph-question'} ${className}`} style={{ fontSize: size }}></i>;
         });
 
-        // --- COMPONENT: Top Summary Card (Clean Design: Text Only) ---
+        // --- COMPONENT: Top Summary Card (Clean Design without Main Icon) ---
         const SummaryDashboardCard = React.memo(({ totalRevenue, orderCount, shippingCount }) => {
             return (
                 <div className="bg-gradient-to-br from-indigo-600 to-violet-600 dark:from-indigo-900 dark:to-violet-900 px-8 py-5 rounded-2xl shadow-lg text-white relative overflow-hidden border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -368,12 +372,12 @@
                 list.forEach(o => { if (o.customer && !firstIds[o.customer]) firstIds[o.customer] = o.id; });
                 const clean = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
                 
-                // FIX: Force Excel to treat as formula string ="010..." to preserve leading zeros
+                // FIX: Use invisible char \u200B to force Excel text mode for leading zeros
                 const cleanPhone = (val) => {
                     if (!val) return '""';
                     const strVal = String(val);
-                    // Simply wrap every phone/zip in ="..." format
-                    return clean(`="${strVal}"`); 
+                    // This is the most robust way for modern Excel
+                    return `"\u200B${strVal}"`; 
                 };
 
                 if (mode === 'invoice') {
@@ -446,7 +450,6 @@
                         text += `카드 ${cardTotal.toLocaleString()}\n`; 
                         text += `총 카드결제 (10%) \n${totalCardPayment.toLocaleString()} 예정\n`; 
                     } else if (depositTotal > 0) { 
-                        
                         const displayDepositTotal = isShipPaid ? (depositTotal + shipFee) : depositTotal;
                         text += `입금 ${displayDepositTotal.toLocaleString()}\n`; 
                     } 
@@ -468,7 +471,6 @@
             const customerCounts = useMemo(() => orders.reduce((acc, o) => { if(o.customer) acc[o.customer] = (acc[o.customer] || 0) + 1; return acc; }, {}), [orders]);
             const filteredOrders = useMemo(() => { 
                 let result = orders;
-                
                 if (filterText) {
                     const lower = filterText.toLowerCase(); 
                     result = result.filter(o => (o.customer && o.customer.toLowerCase().includes(lower)) || (o.product && o.product.toLowerCase().includes(lower))); 
@@ -489,7 +491,6 @@
                     result = result.filter(o => {
                         const g = grouped[o.customer || 'u'];
                         if (!g) return false;
-                        
                         const ship = g.fee ?? shippingFee;
                         const totalRequired = g.p + ship;
                         const totalPaid = g.d + g.c;
@@ -512,7 +513,6 @@
                         return true;
                     });
                 }
-                
                 return result;
             }, [orders, filterText, unpaidFilter, shippingFee]);
 
@@ -684,7 +684,6 @@
 
                             <div className="grid grid-cols-3 gap-3">
                                 <DashboardCard icon="Calculator" color="red" title="총 미수금 합계" value={stats.totalUnpaid} isUnpaid={true} />
-                                
                                 <DashboardCard 
                                     icon="HandCoins" 
                                     color="orange" 
@@ -694,7 +693,6 @@
                                     onClick={() => handleUnpaidFilterClick('cash')}
                                     isActive={unpaidFilter === 'cash'}
                                 />
-                                
                                 <DashboardCard 
                                     icon="Truck" 
                                     color="amber" 
@@ -795,6 +793,7 @@
                                             let shippingIconClass = order.isShippingPaid 
                                                 ? 'bg-blue-100 text-blue-600' 
                                                 : (isFreeShipping ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-300 dark:bg-dark-input dark:text-slate-600');
+
                                             return (
                                                 <React.Fragment key={order.id}>
                                                     <div className={`grid grid-cols-[0.5fr_2.0fr_4.0fr_0.4fr_1.0fr_1.5fr_2.0fr_0.5fr] gap-4 p-3 border rounded-lg items-center text-sm transition-colors ${order.price > 0 && (order.deposit + order.cardAmount < order.price) ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-900' : 'bg-white border-slate-100 dark:bg-dark-card dark:border-dark-border'}`}>
@@ -848,4 +847,3 @@
     </script>
 
 </body></html>
-
