@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 v5.2</title>
+    <title>강은지 주문서 v5.3</title>
     
     <!-- Daum Postcode 정적 로딩 -->
     <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -111,12 +111,15 @@
             return <i className={`ph-bold ${map[name] || 'ph-question'} ${className}`} style={{ fontSize: size }}></i>;
         });
 
-        // --- COMPONENT: Top Summary Card (Clean Design without Main Icon) ---
+        // --- COMPONENT: Top Summary Card (Design Updated: No Icon for Revenue) ---
         const SummaryDashboardCard = React.memo(({ totalRevenue, orderCount, shippingCount }) => {
             return (
                 <div className="bg-gradient-to-br from-indigo-600 to-violet-600 dark:from-indigo-900 dark:to-violet-900 px-8 py-6 rounded-2xl shadow-lg text-white relative overflow-hidden border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="absolute -right-8 -top-8 text-white/10 rotate-12 pointer-events-none">
+                        <Icon name="TrendUp" size={140} />
+                    </div>
                     
-                    {/* Left: Total Revenue */}
+                    {/* Left: Total Revenue (Icon Removed) */}
                     <div className="text-center md:text-left z-10">
                         <p className="text-indigo-200 text-sm font-bold mb-1 tracking-wide uppercase">전체 매출 (예상)</p>
                         <p className="text-5xl font-black tracking-tight leading-none drop-shadow-md">
@@ -125,36 +128,45 @@
                         </p>
                     </div>
                     
-                    {/* Right: Counts */}
                     <div className="flex gap-8 z-10">
                         <div className="text-center">
                             <p className="text-indigo-200 text-xs font-bold mb-1 opacity-80">총 주문수량</p>
-                            <p className="text-2xl font-bold">{orderCount}<span className="text-sm ml-1 opacity-60 font-normal">개</span></p>
+                            <div className="flex items-center justify-center md:justify-end gap-1.5">
+                                <p className="text-2xl font-bold leading-none">{orderCount}<span className="text-sm ml-0.5 opacity-70">개</span></p>
+                            </div>
                         </div>
                         <div className="text-center">
-                            <p className="text-indigo-200 text-xs font-bold mb-1 opacity-80">배송 예정</p>
-                            <p className="text-2xl font-bold">{shippingCount}<span className="text-sm ml-1 opacity-60 font-normal">건</span></p>
+                            <p className="text-indigo-100 text-xs font-bold mb-1 opacity-80">배송 예정</p>
+                            <div className="flex items-center justify-center md:justify-end gap-1.5">
+                                <p className="text-2xl font-bold leading-none">{shippingCount}<span className="text-sm ml-0.5 opacity-70">건</span></p>
+                            </div>
                         </div>
                     </div>
                 </div>
             );
         });
 
-        // --- COMPONENT: Standard Dashboard Card ---
-        const DashboardCard = React.memo(({ icon, color, title, value, subTitle, isCurrency = true, isUnpaid = false }) => {
+        // --- COMPONENT: Standard Dashboard Card (Design Updated: Title Color Fixed, Unpaid Number Red) ---
+        const DashboardCard = React.memo(({ icon, color, title, value, subTitle, isCurrency = true, isUnpaid = false, onClick, isActive }) => {
             return (
-                <div className={`bg-white dark:bg-dark-card px-5 py-4 rounded-xl shadow-md border border-slate-100 dark:border-dark-border flex items-center min-h-[96px] transition-all hover:scale-[1.02] hover:shadow-lg relative group`}>
+                <div 
+                    onClick={onClick}
+                    className={`bg-white dark:bg-dark-card px-5 py-4 rounded-xl shadow-md border flex items-center min-h-[96px] transition-all hover:scale-[1.02] hover:shadow-lg relative group cursor-pointer
+                    ${isUnpaid ? 'border-red-100 dark:border-red-900/50' : 'border-slate-100 dark:border-dark-border'}
+                    ${isActive ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-dark-bg' : ''}
+                    `}
+                >
                     <div className={`flex-none p-3 rounded-xl mr-4 flex items-center justify-center ${color} h-14 w-14 shadow-sm group-hover:shadow-md transition-shadow`}>
                         <Icon name={icon} size={32} />
                     </div>
                     <div className="flex-1 flex flex-col justify-center">
                         <div className="flex justify-between items-center mb-1">
-                             {/* Title is always neutral/gray */}
+                             {/* Title: Always slate/gray (Requested change) */}
                              <span className="text-sm font-bold text-slate-500 dark:text-slate-400">{title}</span>
                              {subTitle && <span className="text-xs font-bold text-slate-400 dark:text-slate-600">{subTitle}</span>}
                         </div>
                         <div className="text-right">
-                            {/* Value is Red if Unpaid, otherwise standard dark */}
+                             {/* Value: Red if unpaid, otherwise dark */}
                             <p className={`text-2xl font-extrabold ${isUnpaid ? 'text-red-600 dark:text-red-500' : 'text-slate-800 dark:text-slate-200'} tracking-tight leading-none break-keep`}>
                                 {typeof value === 'number' ? value.toLocaleString() : value}
                                 {isCurrency && <span className={`text-sm font-bold ml-1 align-baseline ${isUnpaid ? 'text-red-400' : 'text-slate-400'}`}>원</span>}
@@ -327,6 +339,8 @@
             const [editingAmountId, setEditingAmountId] = useState(null);
             const [editingAddressId, setEditingAddressId] = useState(null); 
             const [editingShippingId, setEditingShippingId] = useState(null); 
+            const [unpaidFilter, setUnpaidFilter] = useState(null); // 'cash' | 'ship' | null
+            
             const ordersRef = useRef(orders);
             const fileInputRef = useRef(null);
 
@@ -394,6 +408,7 @@
                 showToast('메모가 복사되었습니다!');
             };
 
+            // --- FIX: Copy Logic (v5.1 update included) ---
             const handleCopyResults = () => { 
                 if (filteredOrders.length === 0) return; 
                 let text = ''; 
@@ -420,11 +435,15 @@
                         text += `카드 ${cardTotal.toLocaleString()}\n`; 
                         text += `총 카드결제 (10%) \n${totalCardPayment.toLocaleString()} 예정\n`; 
                     } else if (depositTotal > 0) { 
+                        
+                        // --- FIX: Add shipping fee to deposit total in copy text if truck is ON ---
                         const displayDepositTotal = isShipPaid ? (depositTotal + shipFee) : depositTotal;
                         text += `입금 ${displayDepositTotal.toLocaleString()}\n`; 
                     } 
                     text += ` -\n`; 
                     
+                    // --- NEW COPY LOGIC (v5.1) ---
+                    // Formula: (ItemTotal + ShipFee) - (PaidTotal) - (If TruckOn ? ShipAmount : 0)
                     const shippingCredit = isShipPaid ? shipFee : 0;
                     const totalUnpaid = Math.max(0, totalRequired - paidTotal - shippingCredit);
                     
@@ -439,9 +458,66 @@
 
             const firstOrderIds = useMemo(() => { const ids = {}; orders.forEach(o => { if (o.customer && !ids[o.customer]) ids[o.customer] = o.id; }); return ids; }, [orders]);
             const customerCounts = useMemo(() => orders.reduce((acc, o) => { if(o.customer) acc[o.customer] = (acc[o.customer] || 0) + 1; return acc; }, {}), [orders]);
-            const filteredOrders = useMemo(() => { if (!filterText) return orders; const lower = filterText.toLowerCase(); return orders.filter(o => (o.customer && o.customer.toLowerCase().includes(lower)) || (o.product && o.product.toLowerCase().includes(lower))); }, [orders, filterText]);
+            const filteredOrders = useMemo(() => { 
+                let result = orders;
+                
+                // Text Search
+                if (filterText) {
+                    const lower = filterText.toLowerCase(); 
+                    result = result.filter(o => (o.customer && o.customer.toLowerCase().includes(lower)) || (o.product && o.product.toLowerCase().includes(lower))); 
+                }
 
-            // --- NEW STATS LOGIC (v5.2 - No Logic Changes, Just Design) ---
+                // Unpaid Filter Logic
+                if (unpaidFilter) {
+                    // We need to group first to determine unpaid status of each order's group
+                    // This is slightly inefficient but necessary since unpaid status is per-customer
+                    const grouped = orders.reduce((acc, o) => { 
+                        const k = o.customer || 'u'; 
+                        if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null}; 
+                        acc[k].p += o.price; 
+                        acc[k].d += o.deposit; 
+                        acc[k].c += o.cardAmount; 
+                        if(o.isShippingPaid) acc[k].ship = true; 
+                        if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; 
+                        return acc; 
+                    }, {});
+
+                    // Filter based on group status
+                    result = result.filter(o => {
+                        const g = grouped[o.customer || 'u'];
+                        if (!g) return false;
+                        
+                        const ship = g.fee ?? shippingFee;
+                        const totalRequired = g.p + ship;
+                        const totalPaid = g.d + g.c;
+                        const shippingCredit = g.ship ? ship : 0;
+                        const personUnpaid = Math.max(0, totalRequired - totalPaid - shippingCredit);
+
+                        if (unpaidFilter === 'ship') {
+                            // Show if shipping is NOT paid AND there is a shipping fee
+                            return !g.ship && ship > 0;
+                        } 
+                        if (unpaidFilter === 'cash') {
+                            // Show if there is remaining unpaid AFTER accounting for shipping
+                            // If ship is NOT paid, unpaidAttribToItem is (personUnpaid - ship)
+                            // If ship IS paid, unpaidAttribToItem is personUnpaid
+                            let cashUnpaid = 0;
+                             if (g.ship) {
+                                cashUnpaid = personUnpaid;
+                            } else {
+                                const unpaidAttribToShip = Math.min(personUnpaid, ship);
+                                cashUnpaid = personUnpaid - unpaidAttribToShip;
+                            }
+                            return cashUnpaid > 0;
+                        }
+                        return true;
+                    });
+                }
+                
+                return result;
+            }, [orders, filterText, unpaidFilter, shippingFee]);
+
+            // --- NEW STATS LOGIC (v5.1 - Updated Qty Logic) ---
             const stats = useMemo(() => {
                 const res = { 
                     qty: 0, orderCount: 0, shippingCount: 0,
@@ -452,11 +528,11 @@
                 
                 const grouped = filteredOrders.reduce((acc, o) => { 
                     const k = o.customer || 'u'; 
-                    if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null, q:0}; 
+                    if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null, q:0}; // Added q for quantity
                     acc[k].p += o.price; 
                     acc[k].d += o.deposit; 
                     acc[k].c += o.cardAmount; 
-                    acc[k].q += o.quantity; 
+                    acc[k].q += o.quantity; // Sum quantity in group
                     if(o.isShippingPaid) acc[k].ship = true; 
                     if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; 
                     return acc; 
@@ -467,13 +543,16 @@
                     res.orderCount++; 
                     res.shippingCount++; 
                     
+                    // 1. 매출
                     res.cardRev += g.c; 
                     res.cashRev += Math.max(0, g.p - g.c); 
                     res.shipRev += ship;
                     res.totalRev += (g.p + ship);
 
+                    // FIX: Sum quantity from filtered groups
                     res.qty += g.q; 
                     
+                    // 2. 미수금 (v5.1 Unified)
                     const totalRequired = g.p + ship;
                     const totalPaid = g.d + g.c;
                     const shippingCredit = g.ship ? ship : 0;
@@ -492,7 +571,7 @@
                 });
 
                 return res;
-            }, [filteredOrders, shippingFee]);
+            }, [filteredOrders, shippingFee]); // Depends on filteredOrders
             
             const filteredStats = useMemo(() => { return stats; }, [stats]);
 
@@ -541,10 +620,12 @@
             const handleUpdateOrderBatch = (id, updates) => { setOrders(prev => { const targetOrder = prev.find(o => o.id === id); if (!targetOrder || !targetOrder.customer) return prev; const isAddressUpdate = ['recipientName', 'phone', 'zipCode', 'addressText', 'shippingMemo'].some(key => key in updates); const targetCustomer = targetOrder.customer.trim(); return prev.map(o => { if (o.id === id) return sanitizeOrder({ ...o, ...updates }); if (isAddressUpdate && o.customer && o.customer.trim() === targetCustomer) return sanitizeOrder({ ...o, ...updates }); return o; }); }); };
             const handleDelete = (id) => setOrders(prev => prev.filter(o => o.id !== id));
             
+            // --- FIX: Toggle Logic for Deposit (Independent from Shipping) ---
             const handleAutoDepositFull = (id) => { 
                 setOrders(prev => {
                     return prev.map(o => {
                         if (o.id === id) {
+                            // Toggle Deposit Status
                             if (o.isPaid) {
                                 return sanitizeOrder({ ...o, deposit: 0, cardAmount: 0, isPaid: false, isCardPaid: false });
                             } else {
@@ -560,16 +641,27 @@
             
             const handleAutoCardFull = (id) => { setOrders(prev => prev.map(o => o.id === id ? sanitizeOrder({ ...o, deposit: 0, cardAmount: o.price, isPaid: true, isCardPaid: true }) : o)); setEditingAmountId(null); setEditingShippingId(null); };
 
+            // --- HANDLER: Unpaid Filter Toggle ---
+            const handleUnpaidFilterClick = (type) => {
+                if (unpaidFilter === type) {
+                    setUnpaidFilter(null); // Toggle off if already selected
+                } else {
+                    setUnpaidFilter(type); // Set new filter
+                }
+            };
+
             return (
                 <div className="min-h-screen flex flex-col text-slate-900 dark:text-dark-text">
                     <header className="sticky top-0 z-50 bg-white/80 dark:bg-dark-card/80 backdrop-blur-md border-b border-slate-200 dark:border-dark-border flex-none">
                         <div className="max-w-[1920px] mx-auto px-6 h-16 flex items-center justify-between overflow-x-auto gap-6">
                             <div className="flex items-center gap-3 text-indigo-600 dark:text-indigo-400 min-w-fit">
                                 <Icon name="Package" size={28} />
-                                <h1 className="text-xl font-bold text-slate-900 dark:text-dark-text hidden md:block">강은지 주문서용</h1>
+                                <h1 className="text-xl font-bold text-slate-900 dark:text-dark-text hidden md:block">강은지 주문서 자동화 v1.1</h1>
                             </div>
                             <div className="flex items-center gap-3 text-sm whitespace-nowrap">
                                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-yellow-500"><Icon name="Moon" size={20} /></button>
+                                {/* Moved "Trash" to Left of Backup */}
+                                <button onClick={() => setOrders([])} className="px-3 py-1 bg-slate-500 hover:bg-slate-600 text-white rounded transition-colors">초기화</button>
                                 <button onClick={handleDownloadHTML} className="px-3 py-1 bg-indigo-600 text-white rounded">앱 백업(저장)</button>
                                 <button onClick={handleUploadClick} className="px-3 py-1 bg-slate-600 text-white rounded">업로드</button>
                                 <button onClick={() => handleDownloadCSV('full')} className="px-3 py-1 bg-green-700 text-white rounded">전체 엑셀</button>
@@ -586,9 +678,9 @@
                             ))}
                         </datalist>
 
-                        {/* --- NEW LAYOUT START (v5.2 - Updated Design) --- */}
+                        {/* --- DASHBOARD (Click events added for filtering) --- */}
                         <div className="flex-none grid grid-cols-1 gap-3">
-                            {/* 1행: 전체매출 / 총 주문건수 */}
+                            {/* 1행: 전체매출 / 총 주문건수 (Use stats.qty for order count) */}
                             <SummaryDashboardCard 
                                 totalRevenue={stats.totalRev}
                                 orderCount={stats.qty} 
@@ -602,17 +694,33 @@
                                 <DashboardCard icon="Truck" color="bg-cyan-100 text-cyan-600" title="배송비매출" value={stats.shipRev} />
                             </div>
 
-                            {/* 3행: 미수금 현황 (3 Columns) - Colors Changed */}
+                            {/* 3행: 미수금 현황 (3 Columns) */}
                             <div className="grid grid-cols-3 gap-3">
-                                {/* Total Unpaid: Red */}
                                 <DashboardCard icon="Calculator" color="bg-red-100 text-red-600" title="총 미수금 합계" value={stats.totalUnpaid} isUnpaid={true} />
-                                {/* Cash Unpaid: Orange */}
-                                <DashboardCard icon="HandCoins" color="bg-orange-100 text-orange-600" title="현금 미수금" value={stats.cashUnpaid} isUnpaid={true} />
-                                {/* Ship Unpaid: Amber */}
-                                <DashboardCard icon="Truck" color="bg-amber-100 text-amber-600" title="배송 미수금" value={stats.shipUnpaid} isUnpaid={true} />
+                                
+                                {/* Clickable Cash Unpaid Card */}
+                                <DashboardCard 
+                                    icon="HandCoins" 
+                                    color="bg-orange-100 text-orange-600" 
+                                    title="현금 미수금" 
+                                    value={stats.cashUnpaid} 
+                                    isUnpaid={true} 
+                                    onClick={() => handleUnpaidFilterClick('cash')}
+                                    isActive={unpaidFilter === 'cash'}
+                                />
+                                
+                                {/* Clickable Ship Unpaid Card */}
+                                <DashboardCard 
+                                    icon="Truck" 
+                                    color="bg-amber-100 text-amber-600" 
+                                    title="배송 미수금" 
+                                    value={stats.shipUnpaid} 
+                                    isUnpaid={true} 
+                                    onClick={() => handleUnpaidFilterClick('ship')}
+                                    isActive={unpaidFilter === 'ship'}
+                                />
                             </div>
                         </div>
-                        {/* --- NEW LAYOUT END --- */}
 
                         <div className="flex flex-col gap-4">
                             {/* ... Paste & Memo sections ... */}
@@ -683,7 +791,6 @@
 
                                     <div className="flex items-center gap-2 flex-none">
                                         <ActionButton onClick={handleCopyResults} color="slate" icon="Copy" text="복사" />
-                                        <ActionButton onClick={() => setOrders([])} color="slate" icon="Trash2" />
                                     </div>
                                 </div>
 
@@ -694,56 +801,62 @@
 
                                 {/* List */}
                                 <div className="p-2 space-y-2">
-                                    {filteredOrders.map((order, index) => {
-                                        const isFirst = firstOrderIds[order.customer] === order.id;
-                                        const addressIconClass = order.isAddressFilled ? 'bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-slate-50 text-slate-300 hover:bg-slate-100 dark:bg-dark-input dark:text-slate-600 dark:hover:bg-slate-700';
-                                        const nickColor = getNicknameColor(order.customer);
-                                        
-                                        let moneyIcon = order.deposit > 0 ? (order.cardAmount > 0 ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600') : 'bg-slate-50 text-slate-300 dark:bg-dark-input dark:text-slate-600';
-                                        let cardIcon = order.cardAmount > 0 ? 'bg-pink-100 text-pink-500' : 'bg-slate-50 text-slate-300 dark:bg-dark-input dark:text-slate-600';
-                                        
-                                        const currentShippingFee = order.customShippingFee ?? shippingFee;
-                                        // FIX: Check if isFreeShipping is defined before using. Here we define it based on currentShippingFee
-                                        const isFreeShipping = currentShippingFee === 0;
-                                        
-                                        let shippingIconClass = order.isShippingPaid 
-                                            ? 'bg-blue-100 text-blue-600' 
-                                            : (isFreeShipping ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-300 dark:bg-dark-input dark:text-slate-600');
+                                    {filteredOrders.length === 0 ? (
+                                        <div className="p-8 text-center text-slate-500 dark:text-dark-muted">
+                                            {unpaidFilter ? (unpaidFilter === 'cash' ? '현금 미수금이 있는 주문이 없습니다.' : '배송 미수금이 있는 주문이 없습니다.') : '주문 내역이 없습니다.'}
+                                        </div>
+                                    ) : (
+                                        filteredOrders.map((order, index) => {
+                                            const isFirst = firstOrderIds[order.customer] === order.id;
+                                            const addressIconClass = order.isAddressFilled ? 'bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-slate-50 text-slate-300 hover:bg-slate-100 dark:bg-dark-input dark:text-slate-600 dark:hover:bg-slate-700';
+                                            const nickColor = getNicknameColor(order.customer);
+                                            
+                                            let moneyIcon = order.deposit > 0 ? (order.cardAmount > 0 ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600') : 'bg-slate-50 text-slate-300 dark:bg-dark-input dark:text-slate-600';
+                                            let cardIcon = order.cardAmount > 0 ? 'bg-pink-100 text-pink-500' : 'bg-slate-50 text-slate-300 dark:bg-dark-input dark:text-slate-600';
+                                            
+                                            const currentShippingFee = order.customShippingFee ?? shippingFee;
+                                            // FIX: Check if isFreeShipping is defined before using. Here we define it based on currentShippingFee
+                                            const isFreeShipping = currentShippingFee === 0;
+                                            
+                                            let shippingIconClass = order.isShippingPaid 
+                                                ? 'bg-blue-100 text-blue-600' 
+                                                : (isFreeShipping ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-300 dark:bg-dark-input dark:text-slate-600');
 
-                                        return (
-                                            <React.Fragment key={order.id}>
-                                                {/* Order Row ... */}
-                                                <div className={`grid grid-cols-[0.5fr_2.0fr_4.0fr_0.4fr_1.0fr_1.5fr_2.0fr_0.5fr] gap-4 p-3 border rounded-lg items-center text-sm transition-colors ${order.price > 0 && (order.deposit + order.cardAmount < order.price) ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-900' : 'bg-white border-slate-100 dark:bg-dark-card dark:border-dark-border'}`}>
-                                                    <div className="flex justify-center"><button onClick={() => handleToggleAddressEdit(order.id)} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${addressIconClass}`}><Icon name="MapPin" size={20}/></button></div>
-                                                    <div className="relative pl-1">
-                                                        <input id={`customer-${index}`} onKeyDown={e => handleKeyDown(e, index, 'customer')} className={`w-full bg-transparent font-bold outline-none text-base ${nickColor}`} value={order.customer} onChange={e => handleUpdateOrder(order.id, 'customer', e.target.value)} placeholder="닉네임" />
-                                                        <input id={`phone-${index}`} onKeyDown={e => handleKeyDown(e, index, 'phone')} className="w-full bg-transparent text-slate-400 dark:text-slate-500 text-xs outline-none block mt-0.5" value={order.phone} onChange={e => handleUpdateOrder(order.id, 'phone', e.target.value)} placeholder="입금명" />
-                                                        {customerCounts[order.customer] > 1 && <span className="absolute right-0 top-0 text-[10px] bg-slate-200 dark:bg-slate-600 px-1.5 rounded-full text-slate-600 dark:text-slate-300 font-bold">{customerCounts[order.customer]}</span>}
+                                            return (
+                                                <React.Fragment key={order.id}>
+                                                    {/* Order Row ... */}
+                                                    <div className={`grid grid-cols-[0.5fr_2.0fr_4.0fr_0.4fr_1.0fr_1.5fr_2.0fr_0.5fr] gap-4 p-3 border rounded-lg items-center text-sm transition-colors ${order.price > 0 && (order.deposit + order.cardAmount < order.price) ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-900' : 'bg-white border-slate-100 dark:bg-dark-card dark:border-dark-border'}`}>
+                                                        <div className="flex justify-center"><button onClick={() => handleToggleAddressEdit(order.id)} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${addressIconClass}`}><Icon name="MapPin" size={20}/></button></div>
+                                                        <div className="relative pl-1">
+                                                            <input id={`customer-${index}`} onKeyDown={e => handleKeyDown(e, index, 'customer')} className={`w-full bg-transparent font-bold outline-none text-base ${nickColor}`} value={order.customer} onChange={e => handleUpdateOrder(order.id, 'customer', e.target.value)} placeholder="닉네임" />
+                                                            <input id={`phone-${index}`} onKeyDown={e => handleKeyDown(e, index, 'phone')} className="w-full bg-transparent text-slate-400 dark:text-slate-500 text-xs outline-none block mt-0.5" value={order.phone} onChange={e => handleUpdateOrder(order.id, 'phone', e.target.value)} placeholder="입금명" />
+                                                            {customerCounts[order.customer] > 1 && <span className="absolute right-0 top-0 text-[10px] bg-slate-200 dark:bg-slate-600 px-1.5 rounded-full text-slate-600 dark:text-slate-300 font-bold">{customerCounts[order.customer]}</span>}
+                                                        </div>
+                                                        <div><ProductAutocomplete id={`product-${index}`} value={order.product} onChange={(e) => handleUpdateOrder(order.id, 'product', e.target.value)} onSelect={(name, price) => handleProductSelect(order.id, name, price)} onDeleteProduct={handleDeleteProduct} onKeyDown={(e) => handleKeyDown(e, index, 'product')} priceMap={productHistory} /></div>
+                                                        <div className="flex justify-center"><input id={`quantity-${index}`} onKeyDown={e => handleKeyDown(e, index, 'quantity')} type="number" className="w-full text-center bg-slate-50 dark:bg-dark-input rounded font-bold dark:text-dark-text" value={order.quantity} onChange={e => handleUpdateOrder(order.id, 'quantity', Number(e.target.value))} /></div>
+                                                        <div className="text-right"><input id={`price-${index}`} onKeyDown={e => handleKeyDown(e, index, 'price')} className="w-full text-right bg-transparent font-bold dark:text-dark-text" value={order.price === 0 ? '' : order.price.toLocaleString()} onChange={e => { const v = e.target.value.replace(/,/g,''); if(!isNaN(v)) handleUpdateOrder(order.id, 'price', Number(v)); }} placeholder="0" /></div>
+                                                        <div className="flex justify-center gap-1">
+                                                            <button onClick={() => handleAutoDepositFull(order.id)} className={`w-9 h-9 rounded-full flex justify-center items-center transition-all ${moneyIcon}`}><Icon name="DollarSign" size={27}/></button>
+                                                            {isFirst ? (
+                                                                <div className="relative group">
+                                                                    <button onClick={() => handleUpdateOrder(order.id, 'isShippingPaid', !order.isShippingPaid)} onContextMenu={(e) => { e.preventDefault(); handleToggleShippingEdit(order.id); }} className={`w-9 h-9 rounded-full flex justify-center items-center transition-all ${shippingIconClass}`} title="클릭: 배송비 납부 토글 / 우클릭: 배송비 금액 수정"><Icon name="Truck" size={27}/></button>
+                                                                    {currentShippingFee !== shippingFee && (<span className="absolute -top-1 -right-1 bg-slate-500 text-white text-[9px] px-1 rounded-full">{currentShippingFee/1000}k</span>)}
+                                                                </div>
+                                                            ) : <div className="w-9"/>}
+                                                            <button onClick={() => handleToggleAmountEdit(order.id)} className={`w-9 h-9 rounded-full flex justify-center items-center transition-all ${cardIcon}`}><Icon name="CreditCard" size={27}/></button>
+                                                        </div>
+                                                        <div><input id={`memo-${index}`} onKeyDown={e => handleKeyDown(e, index, 'memo')} className="w-full text-center bg-transparent outline-none dark:text-dark-text" value={order.memo} onChange={e => handleUpdateOrder(order.id, 'memo', e.target.value)} placeholder="메모" /></div>
+                                                        <div className="flex justify-center"><button onClick={() => handleDelete(order.id)} className="text-slate-300 hover:text-red-500 dark:text-slate-600"><Icon name="Trash2" size={18}/></button></div>
                                                     </div>
-                                                    <div><ProductAutocomplete id={`product-${index}`} value={order.product} onChange={(e) => handleUpdateOrder(order.id, 'product', e.target.value)} onSelect={(name, price) => handleProductSelect(order.id, name, price)} onDeleteProduct={handleDeleteProduct} onKeyDown={(e) => handleKeyDown(e, index, 'product')} priceMap={productHistory} /></div>
-                                                    <div className="flex justify-center"><input id={`quantity-${index}`} onKeyDown={e => handleKeyDown(e, index, 'quantity')} type="number" className="w-full text-center bg-slate-50 dark:bg-dark-input rounded font-bold dark:text-dark-text" value={order.quantity} onChange={e => handleUpdateOrder(order.id, 'quantity', Number(e.target.value))} /></div>
-                                                    <div className="text-right"><input id={`price-${index}`} onKeyDown={e => handleKeyDown(e, index, 'price')} className="w-full text-right bg-transparent font-bold dark:text-dark-text" value={order.price === 0 ? '' : order.price.toLocaleString()} onChange={e => { const v = e.target.value.replace(/,/g,''); if(!isNaN(v)) handleUpdateOrder(order.id, 'price', Number(v)); }} placeholder="0" /></div>
-                                                    <div className="flex justify-center gap-1">
-                                                        <button onClick={() => handleAutoDepositFull(order.id)} className={`w-9 h-9 rounded-full flex justify-center items-center transition-all ${moneyIcon}`}><Icon name="DollarSign" size={27}/></button>
-                                                        {isFirst ? (
-                                                            <div className="relative group">
-                                                                <button onClick={() => handleUpdateOrder(order.id, 'isShippingPaid', !order.isShippingPaid)} onContextMenu={(e) => { e.preventDefault(); handleToggleShippingEdit(order.id); }} className={`w-9 h-9 rounded-full flex justify-center items-center transition-all ${shippingIconClass}`} title="클릭: 배송비 납부 토글 / 우클릭: 배송비 금액 수정"><Icon name="Truck" size={27}/></button>
-                                                                {currentShippingFee !== shippingFee && (<span className="absolute -top-1 -right-1 bg-slate-500 text-white text-[9px] px-1 rounded-full">{currentShippingFee/1000}k</span>)}
-                                                            </div>
-                                                        ) : <div className="w-9"/>}
-                                                        <button onClick={() => handleToggleAmountEdit(order.id)} className={`w-9 h-9 rounded-full flex justify-center items-center transition-all ${cardIcon}`}><Icon name="CreditCard" size={27}/></button>
-                                                    </div>
-                                                    <div><input id={`memo-${index}`} onKeyDown={e => handleKeyDown(e, index, 'memo')} className="w-full text-center bg-transparent outline-none dark:text-dark-text" value={order.memo} onChange={e => handleUpdateOrder(order.id, 'memo', e.target.value)} placeholder="메모" /></div>
-                                                    <div className="flex justify-center"><button onClick={() => handleDelete(order.id)} className="text-slate-300 hover:text-red-500 dark:text-slate-600"><Icon name="Trash2" size={18}/></button></div>
-                                                </div>
-                                                
-                                                {/* ... Hidden Edit Sections ... */}
-                                                {editingAmountId === order.id && ( <div className="col-span-full p-2 bg-slate-100 dark:bg-dark-input rounded flex gap-2 justify-end items-center"> <button onClick={() => handleAutoCardFull(order.id)} className="w-8 h-8 rounded-md flex items-center justify-center bg-pink-100 text-pink-600 hover:bg-pink-200 transition-colors" title="카드 전액 결제"><Icon name="CreditCard" size={20}/></button> <span className="text-xs font-bold dark:text-dark-text">현금:</span><input type="number" className="w-24 p-1 rounded border dark:bg-dark-card dark:border-dark-border dark:text-white" value={order.deposit} onChange={e => handleUpdateOrder(order.id, 'deposit', Number(e.target.value))} /> <span className="text-xs font-bold dark:text-dark-text">카드:</span><input type="number" className="w-24 p-1 rounded border dark:bg-dark-card dark:border-dark-border dark:text-white" value={order.cardAmount} onChange={e => handleUpdateOrder(order.id, 'cardAmount', Number(e.target.value))} /> </div> )}
-                                                {editingShippingId === order.id && ( <div className="col-span-full p-2 bg-blue-50 dark:bg-slate-700 rounded flex gap-2 justify-center items-center animate-bounce-in"> <span className="text-xs font-bold text-slate-600 dark:text-slate-300">개별 배송비 설정:</span> <input type="number" className="w-24 p-1 rounded border border-blue-200 dark:border-slate-500 dark:bg-slate-600 dark:text-white text-center font-bold" value={order.customShippingFee ?? shippingFee} onChange={e => handleUpdateOrder(order.id, 'customShippingFee', Number(e.target.value))} /> <button onClick={() => handleUpdateOrder(order.id, 'customShippingFee', null)} className="text-xs bg-slate-200 px-2 py-1 rounded hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500">기본값 복원</button> <button onClick={() => setEditingShippingId(null)} className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 ml-2">닫기</button> </div> )}
-                                                {editingAddressId === order.id && <AddressEditor order={order} handleUpdateOrder={handleUpdateOrder} handleUpdateOrderBatch={handleUpdateOrderBatch} setEditingAddressId={setEditingAddressId} showToast={showToast} />}
-                                            </React.Fragment>
-                                        );
-                                    })}
+                                                    
+                                                    {/* ... Hidden Edit Sections ... */}
+                                                    {editingAmountId === order.id && ( <div className="col-span-full p-2 bg-slate-100 dark:bg-dark-input rounded flex gap-2 justify-end items-center"> <button onClick={() => handleAutoCardFull(order.id)} className="w-8 h-8 rounded-md flex items-center justify-center bg-pink-100 text-pink-600 hover:bg-pink-200 transition-colors" title="카드 전액 결제"><Icon name="CreditCard" size={20}/></button> <span className="text-xs font-bold dark:text-dark-text">현금:</span><input type="number" className="w-24 p-1 rounded border dark:bg-dark-card dark:border-dark-border dark:text-white" value={order.deposit} onChange={e => handleUpdateOrder(order.id, 'deposit', Number(e.target.value))} /> <span className="text-xs font-bold dark:text-dark-text">카드:</span><input type="number" className="w-24 p-1 rounded border dark:bg-dark-card dark:border-dark-border dark:text-white" value={order.cardAmount} onChange={e => handleUpdateOrder(order.id, 'cardAmount', Number(e.target.value))} /> </div> )}
+                                                    {editingShippingId === order.id && ( <div className="col-span-full p-2 bg-blue-50 dark:bg-slate-700 rounded flex gap-2 justify-center items-center animate-bounce-in"> <span className="text-xs font-bold text-slate-600 dark:text-slate-300">개별 배송비 설정:</span> <input type="number" className="w-24 p-1 rounded border border-blue-200 dark:border-slate-500 dark:bg-slate-600 dark:text-white text-center font-bold" value={order.customShippingFee ?? shippingFee} onChange={e => handleUpdateOrder(order.id, 'customShippingFee', Number(e.target.value))} /> <button onClick={() => handleUpdateOrder(order.id, 'customShippingFee', null)} className="text-xs bg-slate-200 px-2 py-1 rounded hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500">기본값 복원</button> <button onClick={() => setEditingShippingId(null)} className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 ml-2">닫기</button> </div> )}
+                                                    {editingAddressId === order.id && <AddressEditor order={order} handleUpdateOrder={handleUpdateOrder} handleUpdateOrderBatch={handleUpdateOrderBatch} setEditingAddressId={setEditingAddressId} showToast={showToast} />}
+                                                </React.Fragment>
+                                            );
+                                        })
+                                    )}
                                 </div>
                                 {/* Footer */}
                                 <div className="p-4 bg-slate-50 dark:bg-dark-input border-t border-slate-200 dark:border-dark-border text-sm flex justify-between items-center rounded-b-xl">
