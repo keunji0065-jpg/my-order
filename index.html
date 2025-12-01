@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 v1.1</title>
+    <title>강은지 주문서 자동화 v1.3 (Final)</title>
     
     <!-- Daum Postcode 정적 로딩 -->
     <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -117,7 +117,8 @@
                 ArrowRight: "ph-arrow-right", UploadSimple: "ph-upload-simple", Note: "ph-note-pencil", MapPin: "ph-map-pin",
                 Address: "ph-map-pin", User: "ph-user", Brain: "ph-brain", ChartBar: "ph-chart-bar", WarningCircle: "ph-warning-circle",
                 Wallet: "ph-wallet", TrendUp: "ph-trend-up", Coins: "ph-coins", Bank: "ph-bank", Receipt: "ph-receipt",
-                HandCoins: "ph-hand-coins", Calculator: "ph-calculator", Eraser: "ph-eraser"
+                HandCoins: "ph-hand-coins", Calculator: "ph-calculator", Eraser: "ph-eraser", List: "ph-list",
+                CaretDown: "ph-caret-down", FileXls: "ph-file-xls"
             };
             return <i className={`ph-bold ${map[name] || 'ph-question'} ${className}`} style={{ fontSize: size }}></i>;
         });
@@ -126,7 +127,6 @@
         const SummaryDashboardCard = React.memo(({ totalRevenue, orderCount, shippingCount }) => {
             return (
                 <div className="bg-gradient-to-br from-indigo-600 to-violet-600 dark:from-indigo-900 dark:to-violet-900 px-8 py-5 rounded-2xl shadow-lg text-white relative overflow-hidden border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-4">
-                    {/* No Icons Here */}
                     <div className="text-center md:text-left z-10">
                         <p className="text-indigo-200 text-xs font-bold mb-1 tracking-wide uppercase">전체 매출 (예상)</p>
                         <p className="text-4xl font-black tracking-tight leading-none drop-shadow-md">
@@ -149,16 +149,15 @@
             );
         });
 
-        // --- COMPONENT: Compact Dashboard Card (Pro Design) ---
+        // --- COMPONENT: Standard Dashboard Card ---
         const DashboardCard = React.memo(({ icon, color, title, value, subTitle, isCurrency = true, isUnpaid = false, onClick, isActive }) => {
-            // Color classes mapping
             const iconBgColor = {
                 pink: 'bg-pink-50 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400',
                 emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
                 cyan: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
-                red: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400', // Total Unpaid
-                orange: 'bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400', // Cash Unpaid
-                amber: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400', // Ship Unpaid
+                red: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400', 
+                orange: 'bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
+                amber: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
             }[color] || 'bg-slate-100 text-slate-600';
 
             return (
@@ -174,11 +173,9 @@
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                         <div className="flex justify-between items-baseline">
-                             {/* Title: Always slate/gray */}
                              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 truncate">{title}</span>
                         </div>
                         <div className="text-right -mt-0.5">
-                            {/* Value: Red if Unpaid */}
                             <p className={`text-xl font-extrabold tracking-tight leading-none ${isUnpaid ? 'text-red-600 dark:text-red-500' : 'text-slate-800 dark:text-slate-200'}`}>
                                 {typeof value === 'number' ? value.toLocaleString() : value}
                                 {isCurrency && <span className={`text-[10px] font-medium ml-0.5 align-top ${isUnpaid ? 'text-red-400' : 'text-slate-400'}`}>원</span>}
@@ -189,11 +186,78 @@
             );
         });
 
+        const ProductManager = ({ isOpen, onClose, productHistory, setProductHistory }) => {
+            if (!isOpen) return null;
+            const [name, setName] = useState('');
+            const [price, setPrice] = useState('');
+
+            const handleAdd = () => {
+                if (!name.trim()) return;
+                setProductHistory(prev => ({ ...prev, [name.trim()]: Number(price) }));
+                setName(''); setPrice('');
+            };
+
+            const handleDelete = (key) => {
+                setProductHistory(prev => {
+                    const next = { ...prev };
+                    delete next[key];
+                    return next;
+                });
+            };
+
+            // --- NEW: Delete All Products ---
+            const handleDeleteAll = () => {
+                if (window.confirm("정말로 모든 상품 목록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) {
+                    setProductHistory({});
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-dark-card w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-dark-border flex flex-col max-h-[80vh]">
+                        <div className="p-4 border-b border-slate-100 dark:border-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-dark-card">
+                            <h3 className="font-bold text-lg text-slate-800 dark:text-dark-text flex items-center gap-2"><Icon name="List" size={20} className="text-brand-500"/> 상품 관리</h3>
+                            <div className="flex gap-2">
+                                <button onClick={handleDeleteAll} className="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition-colors">전체 삭제</button>
+                                <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full"><Icon name="X" size={18} /></button>
+                            </div>
+                        </div>
+                        <div className="p-4 border-b border-slate-100 dark:border-dark-border bg-white dark:bg-dark-card">
+                            <div className="flex gap-2">
+                                <input className="flex-1 p-2 border border-slate-200 dark:border-dark-border rounded-lg text-sm dark:bg-dark-input dark:text-dark-text" placeholder="상품명" value={name} onChange={e => setName(e.target.value)} />
+                                <input className="w-24 p-2 border border-slate-200 dark:border-dark-border rounded-lg text-sm dark:bg-dark-input dark:text-dark-text" type="number" placeholder="단가" value={price} onChange={e => setPrice(e.target.value)} />
+                                <button onClick={handleAdd} className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700">등록</button>
+                            </div>
+                        </div>
+                        <div className="overflow-y-auto p-2 flex-1 bg-slate-50 dark:bg-dark-bg">
+                            {Object.entries(productHistory).length === 0 ? (
+                                <p className="text-center text-slate-400 text-sm py-8">등록된 상품이 없습니다.</p>
+                            ) : (
+                                <ul className="space-y-1">
+                                    {Object.entries(productHistory).map(([pName, pPrice]) => (
+                                        <li key={pName} className="flex justify-between items-center p-3 bg-white dark:bg-dark-card rounded-lg border border-slate-100 dark:border-dark-border shadow-sm">
+                                            <span className="font-medium text-slate-700 dark:text-dark-text">{pName}</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm text-slate-500 dark:text-slate-400 font-mono">{pPrice.toLocaleString()}원</span>
+                                                <button onClick={() => handleDelete(pName)} className="text-red-400 hover:text-red-600 p-1"><Icon name="Trash2" size={16}/></button>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const ActionButton = React.memo(({ onClick, color, icon, text, className='' }) => {
             const baseClass = "px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shadow-sm active:scale-95";
             const colorClass = color === 'blue' 
                 ? 'bg-brand-600 hover:bg-brand-700 text-white shadow-brand-500/30' 
-                : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 dark:bg-dark-card dark:border-dark-border dark:text-slate-300 dark:hover:bg-slate-800';
+                : color === 'white'
+                    ? 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 dark:bg-dark-card dark:border-dark-border dark:text-slate-300 dark:hover:bg-slate-800'
+                    : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 dark:bg-dark-card dark:border-dark-border dark:text-slate-300 dark:hover:bg-slate-800';
             
             return (
                 <button onClick={onClick} className={`${baseClass} ${colorClass} ${className}`}>
@@ -357,26 +421,40 @@
             const [editingAddressId, setEditingAddressId] = useState(null); 
             const [editingShippingId, setEditingShippingId] = useState(null); 
             const [unpaidFilter, setUnpaidFilter] = useState(null); 
+            const [isProductManagerOpen, setIsProductManagerOpen] = useState(false);
+            const [isExcelMenuOpen, setIsExcelMenuOpen] = useState(false);
             
             const ordersRef = useRef(orders);
             const fileInputRef = useRef(null);
+            const excelMenuRef = useRef(null); // Ref for dropdown
 
             useEffect(() => { if (isDarkMode) document.documentElement.classList.add('dark'); else document.documentElement.classList.remove('dark'); }, [isDarkMode]);
             useEffect(() => { localStorage.setItem('youtubeOrders', JSON.stringify(orders)); ordersRef.current = orders; }, [orders]);
             useEffect(() => { localStorage.setItem('globalMemo', globalMemo); }, [globalMemo]);
             useEffect(() => { localStorage.setItem('productHistory', JSON.stringify(productHistory)); }, [productHistory]);
 
+            // Click outside to close Excel menu
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (excelMenuRef.current && !excelMenuRef.current.contains(event.target)) {
+                        setIsExcelMenuOpen(false);
+                    }
+                };
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, []);
+
+            // --- FIX: Using invisible char to force text in Excel (most robust method) ---
             const getCSVString = (listData, mode) => {
                  const list = [...listData].map(sanitizeOrder).sort((a, b) => (a.customer || '').localeCompare(b.customer || ''));
                 const firstIds = {};
                 list.forEach(o => { if (o.customer && !firstIds[o.customer]) firstIds[o.customer] = o.id; });
                 const clean = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
                 
-                // FIX: Use invisible char \u200B to force Excel text mode for leading zeros
                 const cleanPhone = (val) => {
                     if (!val) return '""';
                     const strVal = String(val);
-                    // This is the most robust way for modern Excel
+                    // Using Zero Width Space to force Excel to treat as text without ugly characters
                     return `"\u200B${strVal}"`; 
                 };
 
@@ -405,9 +483,38 @@
 
             const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
             const handleDownloadCSV = (mode = 'invoice') => { if (ordersRef.current.length === 0) return; const csvContent = getCSVString(ordersRef.current, mode); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const typeName = mode === 'invoice' ? '송장용' : '전체내역'; const fileName = `강은지_주문서_${typeName}_${new Date().toLocaleDateString()}.csv`; a.download = fileName; a.click(); URL.revokeObjectURL(url); showToast(`${typeName} 엑셀 다운로드 완료!`); };
+
+            const handleDownloadProductCSV = () => {
+                const targetOrders = filteredOrders.length > 0 ? filteredOrders : orders;
+                if (targetOrders.length === 0) return;
+                const summary = targetOrders.reduce((acc, curr) => {
+                    const name = curr.product;
+                    if (!acc[name]) acc[name] = 0;
+                    acc[name] += curr.quantity;
+                    return acc;
+                }, {});
+                const csv = "\ufeff" + ["상품명,총수량"].concat(Object.entries(summary).map(([name, qty]) => `"${name}",${qty}`)).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `강은지_주문서_발주내역_${new Date().toLocaleDateString()}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('발주 엑셀 다운로드 완료!');
+            };
+
             const handleDownloadHTML = () => { const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const date = new Date(); const timestamp = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}`; a.download = `강은지_주문서_백업_${timestamp}.html`; a.click(); URL.revokeObjectURL(url); showToast('앱 파일이 안전하게 백업(저장)되었습니다!'); };
             const handleUploadClick = () => fileInputRef.current && fileInputRef.current.click();
             const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const uploaded = results.data.map((row, i) => sanitizeOrder({ id: Date.now() + i, originalText: `UPLOAD: ${row['상품명']}`, customer: row['닉네임']?.trim(), product: row['상품명'], quantity: Number(row['수량']) || 1, price: Number(row['금액']?.replace(/,/g, '')) || 0, deposit: Number(row['입금액(현금)']), cardAmount: Number(row['카드결제액']), recipientName: row['수령인'], phone: row['연락처'], zipCode: row['우편번호'], addressText: row['주소'], shippingMemo: row['배송메모'], memo: row['메모'] })).filter(o => o.customer); setOrders(prev => [...uploaded, ...prev]); showToast(`${uploaded.length}건 업로드 완료!`); }}); e.target.value = null; };
+            
+            // --- NEW: Reset Confirmation ---
+            const handleReset = () => {
+                if (window.confirm("정말로 모든 주문 내역을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.")) {
+                    setOrders([]);
+                    showToast("모든 데이터가 초기화되었습니다.", "error");
+                }
+            };
 
             // --- HELPER FUNCTIONS ---
             const getNicknameColor = (name) => {
@@ -645,18 +752,39 @@
             return (
                 <div className="min-h-screen flex flex-col text-slate-900 dark:text-dark-text">
                     <header className="sticky top-0 z-50 bg-white/80 dark:bg-dark-card/80 backdrop-blur-md border-b border-slate-200 dark:border-dark-border flex-none">
-                        <div className="max-w-[1920px] mx-auto px-6 h-16 flex items-center justify-between overflow-x-auto gap-6">
+                        <div className="max-w-[1920px] mx-auto px-6 h-16 flex items-center justify-between gap-6">
                             <div className="flex items-center gap-3 text-indigo-600 dark:text-indigo-400 min-w-fit">
                                 <Icon name="Package" size={28} />
-                                <h1 className="text-xl font-bold text-slate-900 dark:text-dark-text hidden md:block">강은지 주문서 자동화 v1.1 (Pro)</h1>
+                                <h1 className="text-xl font-bold text-slate-900 dark:text-dark-text hidden md:block">강은지 주문서 자동화 v1.2 (Final)</h1>
                             </div>
                             <div className="flex items-center gap-3 text-sm whitespace-nowrap">
                                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-yellow-500"><Icon name="Moon" size={20} /></button>
-                                <button onClick={() => setOrders([])} className="px-3 py-1 bg-slate-500 hover:bg-slate-600 text-white rounded transition-colors">초기화</button>
+                                
+                                {/* Product Manager Button */}
+                                <button onClick={() => setIsProductManagerOpen(true)} className="px-3 py-1 bg-brand-500 hover:bg-brand-600 text-white rounded transition-colors">상품 관리</button>
+                                
+                                {/* Reset Button with Confirm */}
+                                <button onClick={handleReset} className="px-3 py-1 bg-slate-500 hover:bg-slate-600 text-white rounded transition-colors">초기화</button>
+                                
+                                {/* Combined Excel Button */}
+                                <div className="relative" ref={excelMenuRef}>
+                                    <button 
+                                        onClick={() => setIsExcelMenuOpen(!isExcelMenuOpen)}
+                                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-colors flex items-center gap-1"
+                                    >
+                                        엑셀 저장 <Icon name="CaretDown" size={12} />
+                                    </button>
+                                    {isExcelMenuOpen && (
+                                        <div className="absolute top-full right-0 mt-1 w-40 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-xl z-50 overflow-hidden">
+                                            <button onClick={() => { handleDownloadCSV('full'); setIsExcelMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2"><Icon name="FileXls" size={14}/> 전체 내역</button>
+                                            <button onClick={() => { handleDownloadCSV('invoice'); setIsExcelMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2"><Icon name="Truck" size={14}/> 송장용</button>
+                                            <button onClick={() => { handleDownloadProductCSV(); setIsExcelMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2"><Icon name="List" size={14}/> 발주용 (통계)</button>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <button onClick={handleDownloadHTML} className="px-3 py-1 bg-indigo-600 text-white rounded">앱 백업(저장)</button>
                                 <button onClick={handleUploadClick} className="px-3 py-1 bg-slate-600 text-white rounded">업로드</button>
-                                <button onClick={() => handleDownloadCSV('full')} className="px-3 py-1 bg-green-700 text-white rounded">전체 엑셀</button>
-                                <button onClick={() => handleDownloadCSV('invoice')} className="px-3 py-1 bg-green-600 text-white rounded">송장 엑셀</button>
                                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{display:'none'}} />
                             </div>
                         </div>
@@ -706,6 +834,7 @@
                         </div>
 
                         <div className="flex flex-col gap-4">
+                            {/* ... Paste & Memo sections ... */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-none h-48 md:h-56">
                                 <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-dark-border p-4 flex flex-col h-full">
                                     <div className="flex items-center justify-between mb-2 h-8">
@@ -743,7 +872,9 @@
                                 </div>
                             </div>
 
+                            {/* Main Order List Section */}
                             <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-dark-border flex flex-col">
+                                {/* ... Search & Add Controls ... */}
                                 <div className="p-3 border-b border-slate-100 dark:border-dark-border flex flex-nowrap gap-2 items-center justify-between bg-slate-50/50 dark:bg-dark-card overflow-x-auto">
                                     <div className="flex items-center gap-2 w-40 flex-none">
                                         <div className="relative flex-1">
@@ -772,10 +903,12 @@
                                     </div>
                                 </div>
 
+                                {/* Table Header */}
                                 <div className="sticky top-16 z-40 grid grid-cols-[0.5fr_2.0fr_4.0fr_0.4fr_1.0fr_1.5fr_2.0fr_0.5fr] gap-4 p-3 bg-slate-100 dark:bg-dark-input text-xs font-bold text-slate-500 dark:text-dark-muted border-b dark:border-dark-border text-center shadow-sm">
                                     <div className="text-center">주소</div><div className="text-left">닉네임/입금명</div><div className="text-left">상품명</div><div className="text-center">수량</div><div class="text-right">금액</div><div class="text-center">상태</div><div class="text-center">메모</div><div class="text-center">삭제</div>
                                 </div>
 
+                                {/* List */}
                                 <div className="p-2 space-y-2">
                                     {filteredOrders.length === 0 ? (
                                         <div className="p-8 text-center text-slate-500 dark:text-dark-muted">
@@ -827,6 +960,7 @@
                                         })
                                     )}
                                 </div>
+                                {/* Footer */}
                                 <div className="p-4 bg-slate-50 dark:bg-dark-input border-t border-slate-200 dark:border-dark-border text-sm flex justify-between items-center rounded-b-xl">
                                     <div className="text-xs text-slate-500 dark:text-dark-muted">총 {filteredStats.shippingCount}명 배송 예정</div>
                                     <div className="text-right flex gap-4">
@@ -837,6 +971,13 @@
                             </div>
                         </div>
                     </main>
+                    
+                    <ProductManager 
+                        isOpen={isProductManagerOpen} 
+                        onClose={() => setIsProductManagerOpen(false)} 
+                        productHistory={productHistory} 
+                        setProductHistory={setProductHistory} 
+                    />
                     {toast && <div className="fixed bottom-6 right-6 px-4 py-3 bg-slate-800 text-white rounded-xl shadow-xl flex items-center gap-2 animate-bounce-in z-50"><Icon name={toast.type==='error'?'X':'CheckCircle'} className={toast.type==='error'?'text-red-400':'text-green-400'}/> {toast.message}</div>}
                 </div>
             );
