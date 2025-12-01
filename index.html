@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 자동화 v1.3 (Final)</title>
+    <title>강은지 주문서 자동화 v1.3</title>
     
     <!-- Daum Postcode 정적 로딩 -->
     <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -755,7 +755,7 @@
                         <div className="max-w-[1920px] mx-auto px-6 h-16 flex items-center justify-between gap-6">
                             <div className="flex items-center gap-3 text-indigo-600 dark:text-indigo-400 min-w-fit">
                                 <Icon name="Package" size={28} />
-                                <h1 className="text-xl font-bold text-slate-900 dark:text-dark-text hidden md:block">강은지 주문서 자동화 v1.2 (Final)</h1>
+                                <h1 className="text-xl font-bold text-slate-900 dark:text-dark-text hidden md:block">강은지 주문서 자동화 v1.3 (Final)</h1>
                             </div>
                             <div className="flex items-center gap-3 text-sm whitespace-nowrap">
                                 <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-yellow-500"><Icon name="Moon" size={20} /></button>
@@ -883,6 +883,7 @@
                                                 placeholder="검색" value={filterText} onChange={(e) => setFilterText(e.target.value)} />
                                         </div>
                                     </div>
+                                    
                                     <div className="flex items-center gap-2 text-xs flex-none">
                                         <div className="flex items-center bg-white dark:bg-dark-input rounded border border-slate-200 dark:border-dark-border px-2 py-1.5">
                                             <span className="text-slate-500 dark:text-dark-muted mr-2">상품:</span>
@@ -898,6 +899,7 @@
                                         </div>
                                         <ActionButton onClick={handleAddEmptyOrder} color="blue" icon="Plus" text="추가" />
                                     </div>
+
                                     <div className="flex items-center gap-2 flex-none">
                                         <ActionButton onClick={handleCopyResults} color="slate" icon="Copy" text="복사" />
                                     </div>
