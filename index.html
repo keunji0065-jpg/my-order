@@ -2,7 +2,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Final Integrity Check)</title>
+    <title>강은지 주문관리 PRO (Receipt Layout Fix)</title>
     
     <!-- Daum Postcode -->
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -84,6 +84,7 @@
             .print-break-after { page-break-after: always; }
             .print-break-inside-avoid { page-break-inside: avoid; }
             
+            /* 1 per page layout */
             .print-layout-1 .receipt-card {
                 height: 100vh;
                 page-break-after: always;
@@ -94,6 +95,7 @@
                 padding-top: 20px;
             }
 
+            /* 2 per page layout */
             .print-layout-2 .receipt-card {
                 height: 48vh; 
                 page-break-inside: avoid;
@@ -206,9 +208,8 @@
 
         // --- COMPONENT: Receipt Modal & Print View ---
         const ReceiptModal = ({ orders, onClose, shippingFee }) => {
-            const [layout, setLayout] = useState(1); // 1: 1 per page, 2: 2 per page
+            const [layout, setLayout] = useState(1); 
 
-            // Group orders by customer
             const groupedReceipts = useMemo(() => {
                 const grouped = {};
                 orders.forEach(order => {
@@ -262,45 +263,46 @@
                         <div className="flex-1 overflow-y-auto p-8 bg-slate-100 dark:bg-black/50">
                             <div className={`max-w-[210mm] mx-auto bg-white shadow-lg min-h-[297mm] p-8 ${layout === 2 ? 'grid grid-cols-1 gap-8' : 'space-y-8'}`}>
                                 {groupedReceipts.map((receipt, idx) => (
-                                    <div key={idx} className="border border-slate-800 p-8 rounded-sm bg-white text-black mb-8 last:mb-0">
-                                        <div className="text-center border-b-2 border-black pb-4 mb-4">
-                                            <h1 className="text-2xl font-extrabold tracking-widest mb-1">구매 내역서</h1>
-                                            <p className="text-sm font-medium text-slate-600">{new Date().toLocaleDateString()} 주문분</p>
+                                    <div key={idx} className="border border-slate-200 p-8 rounded-sm bg-white text-black mb-8 last:mb-0 shadow-sm">
+                                        {/* Header Layout Fix */}
+                                        <div className="flex justify-between items-end border-b border-slate-300 pb-3 mb-3">
+                                            <h1 className="text-2xl font-extrabold tracking-tight text-slate-800">{receipt.customer} 님</h1>
+                                            <p className="text-xs font-medium text-slate-500">주문일 : {new Date().toLocaleDateString()}</p>
                                         </div>
-                                        <div className="flex justify-between items-end mb-4">
-                                            <div className="text-lg font-bold">닉네임: <span className="text-xl">{receipt.customer}</span> 님</div>
-                                            <div className="text-right text-sm">
-                                                <p>Total Items: {receipt.totalQty}</p>
+                                        
+                                        <div className="flex justify-end items-end mb-3">
+                                            <div className="text-right text-xs text-slate-500">
+                                                <p>품목 수: {receipt.totalQty}</p>
                                             </div>
                                         </div>
-                                        <table className="w-full text-sm mb-6">
+                                        <table className="w-full text-sm mb-5">
                                             <thead>
-                                                <tr className="border-y border-black">
-                                                    <th className="py-2 text-left w-[50%]">상품명</th>
-                                                    <th className="py-2 text-center w-[15%]">수량</th>
-                                                    <th className="py-2 text-right w-[35%]">금액</th>
+                                                <tr className="border-y border-slate-300">
+                                                    <th className="py-1.5 text-left w-[50%] font-bold text-slate-700">상품명</th>
+                                                    <th className="py-1.5 text-center w-[15%] font-bold text-slate-700">수량</th>
+                                                    <th className="py-1.5 text-right w-[35%] font-bold text-slate-700">금액</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-slate-200">
+                                            <tbody className="divide-y divide-slate-100">
                                                 {receipt.items.map((item, i) => (
                                                     <tr key={i}>
-                                                        <td className="py-2">{item.product}</td>
-                                                        <td className="py-2 text-center">{item.quantity}</td>
-                                                        <td className="py-2 text-right">{item.price.toLocaleString()}</td>
+                                                        <td className="py-1.5 text-slate-800">{item.product}</td>
+                                                        <td className="py-1.5 text-center text-slate-600">{item.quantity}</td>
+                                                        <td className="py-1.5 text-right font-mono text-slate-800">{item.price.toLocaleString()}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
                                             <tfoot>
                                                 <tr>
-                                                    <td className="py-2 font-bold text-slate-600">배송비</td>
+                                                    <td className="py-2 font-bold text-slate-500">배송비</td>
                                                     <td></td>
-                                                    <td className="py-2 text-right font-bold text-slate-600">{receipt.shipping.toLocaleString()}</td>
+                                                    <td className="py-2 text-right font-bold font-mono text-slate-600">{receipt.shipping.toLocaleString()}</td>
                                                 </tr>
                                             </tfoot>
                                         </table>
-                                        <div className="border-t-2 border-black pt-4 flex justify-between items-center">
-                                            <span className="text-lg font-bold">총 결제금액</span>
-                                            <span className="text-3xl font-extrabold font-mono">{receipt.grandTotal.toLocaleString()} <span className="text-sm font-sans font-normal">원</span></span>
+                                        <div className="border-t border-slate-300 pt-3 flex justify-between items-center">
+                                            <span className="text-base font-bold text-slate-800">총 결제금액</span>
+                                            <span className="text-2xl font-extrabold font-mono text-black">{receipt.grandTotal.toLocaleString()} <span className="text-xs font-sans font-normal text-slate-500">원</span></span>
                                         </div>
                                     </div>
                                 ))}
@@ -310,39 +312,38 @@
                     <div className={`print-only fixed inset-0 bg-white z-[200] p-0 m-0 ${layout === 1 ? 'print-layout-1' : 'print-layout-2'}`}>
                          {groupedReceipts.map((receipt, idx) => (
                             <div key={idx} className="receipt-card p-8 box-border text-black w-full max-w-[210mm] mx-auto">
-                                <div className="text-center border-b-2 border-black pb-2 mb-4">
-                                    <h1 className="text-2xl font-extrabold tracking-widest mb-1">구매 내역서</h1>
-                                    <p className="text-sm font-medium text-slate-600">{new Date().toLocaleDateString()} 주문분</p>
+                                {/* Print Layout Header Fix */}
+                                <div className="flex justify-between items-end border-b border-slate-300 pb-2 mb-3">
+                                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{receipt.customer} 님</h1>
+                                    <p className="text-xs font-medium text-slate-500">주문일 : {new Date().toLocaleDateString()}</p>
                                 </div>
-                                <div className="flex justify-between items-end mb-2">
-                                    <div className="text-lg font-bold"><span className="text-xl">{receipt.customer}</span> 님</div>
-                                </div>
-                                <table className="w-full text-sm mb-4 border-collapse">
+                                
+                                <table className="w-full text-sm mb-3 border-collapse">
                                     <thead>
-                                        <tr className="border-y-2 border-black">
-                                            <th className="py-1 text-left">상품명</th>
-                                            <th className="py-1 text-center">수량</th>
-                                            <th className="py-1 text-right">금액</th>
+                                        <tr className="border-y border-slate-300">
+                                            <th className="py-1 text-left font-bold">상품명</th>
+                                            <th className="py-1 text-center font-bold">수량</th>
+                                            <th className="py-1 text-right font-bold">금액</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-300">
+                                    <tbody className="divide-y divide-slate-200">
                                         {receipt.items.map((item, i) => (
                                             <tr key={i}>
                                                 <td className="py-1">{item.product}</td>
                                                 <td className="py-1 text-center">{item.quantity}</td>
-                                                <td className="py-1 text-right">{item.price.toLocaleString()}</td>
+                                                <td className="py-1 text-right font-mono">{item.price.toLocaleString()}</td>
                                             </tr>
                                         ))}
                                         <tr>
                                             <td className="py-1 text-slate-600">배송비</td>
                                             <td></td>
-                                            <td className="py-1 text-right text-slate-600">{receipt.shipping.toLocaleString()}</td>
+                                            <td className="py-1 text-right font-mono text-slate-600">{receipt.shipping.toLocaleString()}</td>
                                         </tr>
                                     </tbody>
                                 </table>
-                                <div className="border-t-2 border-black pt-2 flex justify-between items-center">
-                                    <span className="text-lg font-bold">합계</span>
-                                    <span className="text-2xl font-extrabold">{receipt.grandTotal.toLocaleString()} <span className="text-sm font-normal">원</span></span>
+                                <div className="border-t border-slate-300 pt-2 flex justify-between items-center">
+                                    <span className="text-base font-bold">합계</span>
+                                    <span className="text-xl font-extrabold font-mono">{receipt.grandTotal.toLocaleString()} <span className="text-xs font-sans font-normal">원</span></span>
                                 </div>
                             </div>
                         ))}
@@ -564,7 +565,59 @@
             };
             
             const handleCustomerUploadClick = () => customerFileRef.current && customerFileRef.current.click();
-            const handleCustomerFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const newDB = { ...customerDB }; let count = 0; results.data.forEach(row => { const nick = row['닉네임'] || row['Nickname'] || row['이름'] || row['성함']; if (nick && nick.trim()) { newDB[nick.trim()] = { recipientName: row['수령인'] || row['받는분'] || row['이름'] || nick.trim(), phone: row['연락처'] || row['전화번호'] || row['휴대폰'] || '', zipCode: row['우편번호'] || row['Zip'] || '', addressText: row['주소'] || row['Address'] || row['기본주소'] || '', shippingMemo: row['배송메모'] || row['배송요청사항'] || row['메모'] || '' }; count++; } }); setCustomerDB(newDB); showToast(`총 ${count}명의 고객 정보를 등록했습니다!`, 'success'); } }); e.target.value = null; };
+            const handleCustomerFileUpload = (e) => { 
+                const file = e.target.files[0]; 
+                if (!file) return; 
+                Papa.parse(file, { 
+                    header: true, 
+                    skipEmptyLines: true, 
+                    complete: (results) => { 
+                        const newDB = { ...customerDB }; 
+                        let count = 0; 
+                        
+                        // Header Mapping Logic
+                        const headers = results.meta.fields;
+                        if (!headers) return;
+
+                        const findHeader = (keywords) => headers.find(h => keywords.some(kw => h.replace(/[\(\)\*\s]/g, '').includes(kw)));
+                        
+                        const nickH = findHeader(['닉네임', '이름', '성함', 'Nickname']);
+                        const phoneH = findHeader(['핸드폰', '전화', '연락처', 'Phone']);
+                        const addrH = findHeader(['주소', '배송지', 'Address']);
+                        const memoH = findHeader(['메모', '요청', 'Memo']);
+                        const zipH = findHeader(['우편번호', 'Zip']);
+
+                        results.data.forEach(row => { 
+                            const nick = row[nickH];
+                            if (nick && nick.trim()) { 
+                                const rawAddr = row[addrH] || '';
+                                let zipCode = row[zipH] || '';
+                                let addressText = rawAddr;
+
+                                // Extract Zip if embedded in Address like (12345)
+                                const zipMatch = rawAddr.match(/\((\d{5,6})\)/);
+                                if (zipMatch) {
+                                    zipCode = zipMatch[1];
+                                    addressText = rawAddr.replace(zipMatch[0], '').trim();
+                                }
+
+                                newDB[nick.trim()] = { 
+                                    recipientName: row['수령인'] || row['받는분'] || nick.trim(), 
+                                    phone: row[phoneH] || '', 
+                                    zipCode: zipCode, 
+                                    addressText: addressText, 
+                                    shippingMemo: row[memoH] || '' 
+                                }; 
+                                count++; 
+                            } 
+                        }); 
+                        setCustomerDB(newDB); 
+                        showToast(`총 ${count}명의 고객 정보를 등록했습니다!`, 'success'); 
+                    } 
+                }); 
+                e.target.value = null; 
+            };
+
             const getNicknameColor = (name) => { if (!name) return 'text-slate-700 dark:text-slate-300'; const colors = ['text-brand-600 dark:text-brand-400', 'text-slate-700 dark:text-slate-300']; let hash = 0; for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash); return colors[Math.abs(hash) % colors.length]; };
             const handleCopyMemo = () => { if (!globalMemo) { showToast('복사할 메모가 없습니다.', 'error'); return; } const ta = document.createElement("textarea"); ta.value = globalMemo; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('메모 복사 완료'); };
             
@@ -614,9 +667,11 @@
 
             const firstOrderIds = useMemo(() => { const ids = {}; orders.forEach(o => { if (o.customer && !ids[o.customer]) ids[o.customer] = o.id; }); return ids; }, [orders]);
             const customerCounts = useMemo(() => orders.reduce((acc, o) => { if(o.customer) acc[o.customer] = (acc[o.customer] || 0) + 1; return acc; }, {}), [orders]);
+            
+            // 1. Define filteredOrders first
             const filteredOrders = useMemo(() => { let result = orders; if (filterText) { const lower = filterText.toLowerCase(); result = result.filter(o => (o.customer && o.customer.toLowerCase().includes(lower)) || (o.product && o.product.toLowerCase().includes(lower))); } if (unpaidFilter) { const grouped = orders.reduce((acc, o) => { const k = o.customer || 'u'; if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null}; acc[k].p += o.price; acc[k].d += o.deposit; acc[k].c += o.cardAmount; if(o.isShippingPaid) acc[k].ship = true; if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; return acc; }, {}); result = result.filter(o => { const g = grouped[o.customer || 'u']; if (!g) return false; const ship = g.fee ?? shippingFee; const totalRequired = g.p + ship; const totalPaid = g.d + g.c; const shippingCredit = g.ship ? ship : 0; const personUnpaid = Math.max(0, totalRequired - totalPaid - shippingCredit); if (unpaidFilter === 'ship') { return !g.ship && ship > 0; } if (unpaidFilter === 'cash') { let cashUnpaid = 0; if (g.ship) { cashUnpaid = personUnpaid; } else { const unpaidAttribToShip = Math.min(personUnpaid, ship); cashUnpaid = personUnpaid - unpaidAttribToShip; } return cashUnpaid > 0; } return true; }); } return result; }, [orders, filterText, unpaidFilter, shippingFee]);
             
-            // --- MISSING STATS LOGIC RESTORED ---
+            // 2. Define stats depending on filteredOrders
             const stats = useMemo(() => { 
                 const res = { qty: 0, orderCount: 0, shippingCount: 0, cardRev: 0, cashRev: 0, shipRev: 0, totalRev: 0, cardUnpaid: 0, cashUnpaid: 0, shipUnpaid: 0, totalUnpaid: 0 }; 
                 const grouped = filteredOrders.reduce((acc, o) => { 
@@ -648,7 +703,7 @@
             const handleKeyDown = (e, index, field) => { if (e.key === 'Enter') { e.preventDefault(); const nextIndex = index + 1; if (nextIndex < filteredOrders.length) { const nextElement = document.getElementById(`${field}-${nextIndex}`); if (nextElement) { nextElement.focus(); if (nextElement.select) nextElement.select(); } } } };
             const handleMemoKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const textarea = e.target; const start = textarea.selectionStart; const end = textarea.selectionEnd; const value = globalMemo; const newValue = value.substring(0, start) + "\n▫ " + value.substring(end); setGlobalMemo(newValue); setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = start + 3; }, 0); } };
             
-            // --- PARSE ORDERS (RESTORED) ---
+            // --- PARSE ORDERS ---
             const handleParseOrders = () => {
                 if (!rawInput.trim()) { showToast('입력 내용이 없습니다.', 'error'); return; }
                 setIsProcessing(true);
@@ -709,7 +764,7 @@
                     <header className="h-10 bg-white dark:bg-dark-card border-b border-slate-200 dark:border-dark-border flex items-center justify-between px-3 shrink-0 shadow-sm z-50">
                         <div className="flex items-center gap-2">
                             <div className="bg-brand-700 text-white p-0.5 rounded"><Icon name="Lightning" size={14} weight="fill"/></div>
-                            <span className="font-bold text-xs tracking-tight text-slate-800 dark:text-white">주문관리 PRO</span>
+                            <span className="font-bold text-xs tracking-tight text-slate-800 dark:text-white">강은지 주문관리 <span className="text-brand-600 dark:text-brand-400">PRO</span></span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="flex items-center bg-slate-100 dark:bg-dark-input rounded-sm p-0.5">
@@ -834,7 +889,7 @@
                                                     <div className="flex items-center justify-center gap-1">
                                                         <button onClick={() => handleAutoDepositFull(order.id)} className={`h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold border transition-all ${order.deposit > 0 ? 'bg-accent-teal/10 text-accent-teal border-accent-teal/30' : 'bg-transparent text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'}`}>현금</button>
                                                         {isFirst ? (
-                                                            <button onClick={() => handleUpdateOrder(order.id, 'isShippingPaid', !order.isShippingPaid)} onContextMenu={(e) => { e.preventDefault(); handleToggleShippingEdit(order.id); }} className={`h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold transition-colors ${order.isShippingPaid ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>배송</button>
+                                                            <button onClick={() => handleUpdateOrder(order.id, 'isShippingPaid', !order.isShippingPaid)} onContextMenu={(e) => { e.preventDefault(); handleToggleShippingEdit(order.id); }} className={`h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold transition-colors ${order.isShippingPaid ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>배송</button>
                                                         ) : (
                                                             <span className="h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold text-transparent border border-transparent select-none">배송</span>
                                                         )}
