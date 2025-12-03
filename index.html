@@ -2,7 +2,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Final Complete)</title>
+    <title>강은지 주문서 PRO (Final Integrity Check)</title>
     
     <!-- Daum Postcode -->
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -74,6 +74,38 @@
         *:focus { outline: none !important; }
         
         .grid-rows-compact { grid-template-columns: 40px 1.2fr 3fr 0.5fr 1fr 1.5fr 2fr 30px; }
+
+        /* Print Specific Styles */
+        @media print {
+            @page { margin: 0; size: auto; }
+            body { background-color: white; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            .print-break-after { page-break-after: always; }
+            .print-break-inside-avoid { page-break-inside: avoid; }
+            
+            .print-layout-1 .receipt-card {
+                height: 100vh;
+                page-break-after: always;
+                border: none;
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-start;
+                padding-top: 20px;
+            }
+
+            .print-layout-2 .receipt-card {
+                height: 48vh; 
+                page-break-inside: avoid;
+                border-bottom: 1px dashed #ccc;
+                margin-bottom: 1vh;
+            }
+            .print-layout-2 .receipt-card:nth-child(2n) {
+                page-break-after: always;
+                border-bottom: none;
+            }
+        }
+        .print-only { display: none; }
     </style>
 </head>
 <body class="bg-[#f5f7fa] dark:bg-dark-bg text-slate-700 dark:text-gray-300 transition-colors duration-200 min-h-screen flex flex-col overflow-hidden">
@@ -123,7 +155,7 @@
                 HandCoins: "ph-hand-coins", Calculator: "ph-calculator", Eraser: "ph-eraser", List: "ph-list",
                 CaretDown: "ph-caret-down", FileXls: "ph-file-xls", Sun: "ph-sun", Lightning: "ph-lightning",
                 Star: "ph-star", Users: "ph-users", AddressBook: "ph-address-book", CloudArrowUp: "ph-cloud-arrow-up", CloudArrowDown: "ph-cloud-arrow-down",
-                Gear: "ph-gear", Spinner: "ph-spinner"
+                Gear: "ph-gear", Spinner: "ph-spinner", Printer: "ph-printer", Receipt: "ph-receipt"
             };
             const weightClass = weight === 'bold' ? 'ph-bold' : (weight === 'fill' ? 'ph-fill' : 'ph');
             const spinClass = spin ? 'animate-spin' : '';
@@ -171,6 +203,153 @@
                 </div>
             );
         });
+
+        // --- COMPONENT: Receipt Modal & Print View ---
+        const ReceiptModal = ({ orders, onClose, shippingFee }) => {
+            const [layout, setLayout] = useState(1); // 1: 1 per page, 2: 2 per page
+
+            // Group orders by customer
+            const groupedReceipts = useMemo(() => {
+                const grouped = {};
+                orders.forEach(order => {
+                    const name = order.customer || '미지정';
+                    if (!grouped[name]) {
+                        grouped[name] = {
+                            customer: name,
+                            items: [],
+                            totalPrice: 0,
+                            totalQty: 0,
+                            shipping: 0
+                        };
+                    }
+                    grouped[name].items.push(order);
+                    grouped[name].totalPrice += order.price;
+                    grouped[name].totalQty += order.quantity;
+                    if (order.customShippingFee !== null) {
+                         grouped[name].shipping = Math.max(grouped[name].shipping, order.customShippingFee);
+                    } else if (grouped[name].shipping === 0) {
+                         grouped[name].shipping = shippingFee;
+                    }
+                });
+                Object.values(grouped).forEach(g => {
+                    g.grandTotal = g.totalPrice + g.shipping;
+                });
+                return Object.values(grouped);
+            }, [orders, shippingFee]);
+
+            const handlePrint = () => {
+                window.print();
+            };
+
+            return (
+                <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex justify-center items-center">
+                    <div className="bg-white dark:bg-dark-card w-full max-w-4xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden no-print">
+                        <div className="p-4 border-b border-slate-200 dark:border-dark-border flex justify-between items-center bg-white dark:bg-dark-card">
+                            <h2 className="text-lg font-bold flex items-center gap-2 dark:text-white">
+                                <Icon name="Receipt" size={20} className="text-brand-600"/> 구매 내역서 미리보기
+                            </h2>
+                            <div className="flex items-center gap-2">
+                                <div className="flex bg-slate-100 dark:bg-dark-input p-1 rounded-lg">
+                                    <button onClick={()=>setLayout(1)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${layout===1 ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-500'}`}>1장/페이지</button>
+                                    <button onClick={()=>setLayout(2)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${layout===2 ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-500'}`}>2장/페이지</button>
+                                </div>
+                                <button onClick={handlePrint} className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 shadow-md transition-all active:scale-95">
+                                    <Icon name="Printer" size={16} weight="fill"/> 인쇄하기
+                                </button>
+                                <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><Icon name="X" size={20}/></button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-8 bg-slate-100 dark:bg-black/50">
+                            <div className={`max-w-[210mm] mx-auto bg-white shadow-lg min-h-[297mm] p-8 ${layout === 2 ? 'grid grid-cols-1 gap-8' : 'space-y-8'}`}>
+                                {groupedReceipts.map((receipt, idx) => (
+                                    <div key={idx} className="border border-slate-800 p-8 rounded-sm bg-white text-black mb-8 last:mb-0">
+                                        <div className="text-center border-b-2 border-black pb-4 mb-4">
+                                            <h1 className="text-2xl font-extrabold tracking-widest mb-1">구매 내역서</h1>
+                                            <p className="text-sm font-medium text-slate-600">{new Date().toLocaleDateString()} 주문분</p>
+                                        </div>
+                                        <div className="flex justify-between items-end mb-4">
+                                            <div className="text-lg font-bold">닉네임: <span className="text-xl">{receipt.customer}</span> 님</div>
+                                            <div className="text-right text-sm">
+                                                <p>Total Items: {receipt.totalQty}</p>
+                                            </div>
+                                        </div>
+                                        <table className="w-full text-sm mb-6">
+                                            <thead>
+                                                <tr className="border-y border-black">
+                                                    <th className="py-2 text-left w-[50%]">상품명</th>
+                                                    <th className="py-2 text-center w-[15%]">수량</th>
+                                                    <th className="py-2 text-right w-[35%]">금액</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-200">
+                                                {receipt.items.map((item, i) => (
+                                                    <tr key={i}>
+                                                        <td className="py-2">{item.product}</td>
+                                                        <td className="py-2 text-center">{item.quantity}</td>
+                                                        <td className="py-2 text-right">{item.price.toLocaleString()}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr>
+                                                    <td className="py-2 font-bold text-slate-600">배송비</td>
+                                                    <td></td>
+                                                    <td className="py-2 text-right font-bold text-slate-600">{receipt.shipping.toLocaleString()}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                        <div className="border-t-2 border-black pt-4 flex justify-between items-center">
+                                            <span className="text-lg font-bold">총 결제금액</span>
+                                            <span className="text-3xl font-extrabold font-mono">{receipt.grandTotal.toLocaleString()} <span className="text-sm font-sans font-normal">원</span></span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    <div className={`print-only fixed inset-0 bg-white z-[200] p-0 m-0 ${layout === 1 ? 'print-layout-1' : 'print-layout-2'}`}>
+                         {groupedReceipts.map((receipt, idx) => (
+                            <div key={idx} className="receipt-card p-8 box-border text-black w-full max-w-[210mm] mx-auto">
+                                <div className="text-center border-b-2 border-black pb-2 mb-4">
+                                    <h1 className="text-2xl font-extrabold tracking-widest mb-1">구매 내역서</h1>
+                                    <p className="text-sm font-medium text-slate-600">{new Date().toLocaleDateString()} 주문분</p>
+                                </div>
+                                <div className="flex justify-between items-end mb-2">
+                                    <div className="text-lg font-bold"><span className="text-xl">{receipt.customer}</span> 님</div>
+                                </div>
+                                <table className="w-full text-sm mb-4 border-collapse">
+                                    <thead>
+                                        <tr className="border-y-2 border-black">
+                                            <th className="py-1 text-left">상품명</th>
+                                            <th className="py-1 text-center">수량</th>
+                                            <th className="py-1 text-right">금액</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-300">
+                                        {receipt.items.map((item, i) => (
+                                            <tr key={i}>
+                                                <td className="py-1">{item.product}</td>
+                                                <td className="py-1 text-center">{item.quantity}</td>
+                                                <td className="py-1 text-right">{item.price.toLocaleString()}</td>
+                                            </tr>
+                                        ))}
+                                        <tr>
+                                            <td className="py-1 text-slate-600">배송비</td>
+                                            <td></td>
+                                            <td className="py-1 text-right text-slate-600">{receipt.shipping.toLocaleString()}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div className="border-t-2 border-black pt-2 flex justify-between items-center">
+                                    <span className="text-lg font-bold">합계</span>
+                                    <span className="text-2xl font-extrabold">{receipt.grandTotal.toLocaleString()} <span className="text-sm font-normal">원</span></span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
 
         // --- COMPONENT: Inline Product Manager ---
         const InlineProductManager = ({ productHistory, setProductHistory, setOrders, showToast }) => {
@@ -271,6 +450,7 @@
             const [editingShippingId, setEditingShippingId] = useState(null); 
             const [unpaidFilter, setUnpaidFilter] = useState(null); 
             const [isExcelMenuOpen, setIsExcelMenuOpen] = useState(false);
+            const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
             const ordersRef = useRef(orders);
             const fileInputRef = useRef(null);
             const customerFileRef = useRef(null);
@@ -387,19 +567,88 @@
             const handleCustomerFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const newDB = { ...customerDB }; let count = 0; results.data.forEach(row => { const nick = row['닉네임'] || row['Nickname'] || row['이름'] || row['성함']; if (nick && nick.trim()) { newDB[nick.trim()] = { recipientName: row['수령인'] || row['받는분'] || row['이름'] || nick.trim(), phone: row['연락처'] || row['전화번호'] || row['휴대폰'] || '', zipCode: row['우편번호'] || row['Zip'] || '', addressText: row['주소'] || row['Address'] || row['기본주소'] || '', shippingMemo: row['배송메모'] || row['배송요청사항'] || row['메모'] || '' }; count++; } }); setCustomerDB(newDB); showToast(`총 ${count}명의 고객 정보를 등록했습니다!`, 'success'); } }); e.target.value = null; };
             const getNicknameColor = (name) => { if (!name) return 'text-slate-700 dark:text-slate-300'; const colors = ['text-brand-600 dark:text-brand-400', 'text-slate-700 dark:text-slate-300']; let hash = 0; for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash); return colors[Math.abs(hash) % colors.length]; };
             const handleCopyMemo = () => { if (!globalMemo) { showToast('복사할 메모가 없습니다.', 'error'); return; } const ta = document.createElement("textarea"); ta.value = globalMemo; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('메모 복사 완료'); };
-            const handleCopyResults = () => { if (filteredOrders.length === 0) return; let text = ''; const grouped = filteredOrders.reduce((acc, o) => { (acc[o.customer] = acc[o.customer] || []).push(o); return acc; }, {}); Object.entries(grouped).forEach(([name, items]) => { text += `💙 ${name} 님 💙\n\n`; items.forEach(o => { const qtyText = o.quantity > 1 ? ` (${o.quantity})` : ''; text += `${o.product}${qtyText} ${o.price.toLocaleString()}\n` }); const shipFee = items[0].customShippingFee ?? shippingFee; if (shipFee > 0) text += `배송비 ${shipFee.toLocaleString()}\n`; text += `-\n`; const cardTotal = items.reduce((s, o) => s + o.cardAmount, 0); const depositTotal = items.reduce((s, o) => s + o.deposit, 0); const itemTotal = items.reduce((s, o) => s + o.price, 0); const paidTotal = depositTotal + cardTotal; const totalRequired = itemTotal + shipFee; const isShipPaid = items.some(o => o.isShippingPaid); if (cardTotal > 0) { const cardFee = Math.round(cardTotal * 0.10); const totalCardPayment = cardTotal + cardFee; text += `입금 ${depositTotal.toLocaleString()}\n`; text += `카드 ${cardTotal.toLocaleString()}\n`; text += `총 카드결제 (10%) \n${totalCardPayment.toLocaleString()} 예정\n`; } else if (depositTotal > 0) { const displayDepositTotal = isShipPaid ? (depositTotal + shipFee) : depositTotal; text += `입금 ${displayDepositTotal.toLocaleString()}\n`; } text += ` -\n`; const shippingCredit = isShipPaid ? shipFee : 0; const totalUnpaid = Math.max(0, totalRequired - paidTotal - shippingCredit); if (totalUnpaid > 0) { text += `미입금: ${totalUnpaid.toLocaleString()}원\n\n`; text += `카카오뱅크 김선정\n7942 18 01611 \n\n입금 부탁드립니다 🙏\n\n`; } else { text += `완납 확인! 감사합니다 😍\n\n`; } }); const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('주문 내역 복사 완료'); };
+            
+            const handleCopyResults = () => { 
+                if (filteredOrders.length === 0) return; 
+                let text = ''; 
+                const grouped = filteredOrders.reduce((acc, o) => { (acc[o.customer] = acc[o.customer] || []).push(o); return acc; }, {}); 
+                Object.entries(grouped).forEach(([name, items]) => { 
+                    text += `💙 ${name} 님 💙\n\n`; 
+                    items.forEach(o => { const qtyText = o.quantity > 1 ? ` (${o.quantity})` : ''; text += `${o.product}${qtyText} ${o.price.toLocaleString()}\n` }); 
+                    const shipFee = items[0].customShippingFee ?? shippingFee; 
+                    if (shipFee > 0) text += `배송비 ${shipFee.toLocaleString()}\n`; 
+                    text += `-\n`; 
+                    const cardTotal = items.reduce((s, o) => s + o.cardAmount, 0); 
+                    const depositTotal = items.reduce((s, o) => s + o.deposit, 0); 
+                    const itemTotal = items.reduce((s, o) => s + o.price, 0); 
+                    const paidTotal = depositTotal + cardTotal; 
+                    const totalRequired = itemTotal + shipFee; 
+                    const isShipPaid = items.some(o => o.isShippingPaid); 
+                    if (cardTotal > 0) { 
+                        const cardFee = Math.round(cardTotal * 0.10); 
+                        const totalCardPayment = cardTotal + cardFee; 
+                        text += `입금 ${depositTotal.toLocaleString()}\n`; 
+                        text += `카드 ${cardTotal.toLocaleString()}\n`; 
+                        text += `총 카드결제 (10%) \n${totalCardPayment.toLocaleString()} 예정\n`; 
+                    } else if (depositTotal > 0) { 
+                        const displayDepositTotal = isShipPaid ? (depositTotal + shipFee) : depositTotal; 
+                        text += `입금 ${displayDepositTotal.toLocaleString()}\n`; 
+                    } 
+                    text += ` -\n`; 
+                    const shippingCredit = isShipPaid ? shipFee : 0; 
+                    const totalUnpaid = Math.max(0, totalRequired - paidTotal - shippingCredit); 
+                    
+                    if (totalUnpaid > 0) { 
+                        text += `미입금: ${totalUnpaid.toLocaleString()}원\n\n`; 
+                        text += `카카오뱅크 김선정\n7942 18 01611 \n\n입금 부탁드립니다 🙏\n\n`; 
+                    } else { 
+                        if (cardTotal > 0) {
+                             text += `\n\n`; 
+                        } else {
+                             text += `완납 확인! 감사합니다 😍\n\n`; 
+                        }
+                    } 
+                }); 
+                const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('주문 내역 복사 완료'); 
+            };
+
             const firstOrderIds = useMemo(() => { const ids = {}; orders.forEach(o => { if (o.customer && !ids[o.customer]) ids[o.customer] = o.id; }); return ids; }, [orders]);
             const customerCounts = useMemo(() => orders.reduce((acc, o) => { if(o.customer) acc[o.customer] = (acc[o.customer] || 0) + 1; return acc; }, {}), [orders]);
             const filteredOrders = useMemo(() => { let result = orders; if (filterText) { const lower = filterText.toLowerCase(); result = result.filter(o => (o.customer && o.customer.toLowerCase().includes(lower)) || (o.product && o.product.toLowerCase().includes(lower))); } if (unpaidFilter) { const grouped = orders.reduce((acc, o) => { const k = o.customer || 'u'; if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null}; acc[k].p += o.price; acc[k].d += o.deposit; acc[k].c += o.cardAmount; if(o.isShippingPaid) acc[k].ship = true; if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; return acc; }, {}); result = result.filter(o => { const g = grouped[o.customer || 'u']; if (!g) return false; const ship = g.fee ?? shippingFee; const totalRequired = g.p + ship; const totalPaid = g.d + g.c; const shippingCredit = g.ship ? ship : 0; const personUnpaid = Math.max(0, totalRequired - totalPaid - shippingCredit); if (unpaidFilter === 'ship') { return !g.ship && ship > 0; } if (unpaidFilter === 'cash') { let cashUnpaid = 0; if (g.ship) { cashUnpaid = personUnpaid; } else { const unpaidAttribToShip = Math.min(personUnpaid, ship); cashUnpaid = personUnpaid - unpaidAttribToShip; } return cashUnpaid > 0; } return true; }); } return result; }, [orders, filterText, unpaidFilter, shippingFee]);
-            const stats = useMemo(() => { const res = { qty: 0, orderCount: 0, shippingCount: 0, cardRev: 0, cashRev: 0, shipRev: 0, totalRev: 0, cardUnpaid: 0, cashUnpaid: 0, shipUnpaid: 0, totalUnpaid: 0 }; const grouped = filteredOrders.reduce((acc, o) => { const k = o.customer || 'u'; if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null, q:0}; acc[k].p += o.price; acc[k].d += o.deposit; acc[k].c += o.cardAmount; acc[k].q += o.quantity; if(o.isShippingPaid) acc[k].ship = true; if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; return acc; }, {}); Object.values(grouped).forEach(g => { const ship = g.fee ?? shippingFee; res.orderCount++; res.shippingCount++; res.cardRev += g.c; res.cashRev += Math.max(0, g.p - g.c); res.shipRev += ship; res.totalRev += (g.p + ship); res.qty += g.q; const totalRequired = g.p + ship; const totalPaid = g.d + g.c; const shippingCredit = g.ship ? ship : 0; const personUnpaid = Math.max(0, totalRequired - totalPaid - shippingCredit); if (g.ship) { res.cashUnpaid += personUnpaid; } else { const unpaidAttribToShip = Math.min(personUnpaid, ship); res.shipUnpaid += unpaidAttribToShip; res.cashUnpaid += (personUnpaid - unpaidAttribToShip); } res.totalUnpaid += personUnpaid; }); return res; }, [filteredOrders, shippingFee]);
+            
+            // --- MISSING STATS LOGIC RESTORED ---
+            const stats = useMemo(() => { 
+                const res = { qty: 0, orderCount: 0, shippingCount: 0, cardRev: 0, cashRev: 0, shipRev: 0, totalRev: 0, cardUnpaid: 0, cashUnpaid: 0, shipUnpaid: 0, totalUnpaid: 0 }; 
+                const grouped = filteredOrders.reduce((acc, o) => { 
+                    const k = o.customer || 'u'; 
+                    if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null, q:0}; 
+                    acc[k].p += o.price; acc[k].d += o.deposit; acc[k].c += o.cardAmount; acc[k].q += o.quantity; 
+                    if(o.isShippingPaid) acc[k].ship = true; 
+                    if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; 
+                    return acc; 
+                }, {}); 
+                Object.values(grouped).forEach(g => { 
+                    const ship = g.fee ?? shippingFee; 
+                    res.orderCount++; res.shippingCount++; 
+                    res.cardRev += g.c; res.cashRev += Math.max(0, g.p - g.c); res.shipRev += ship; res.totalRev += (g.p + ship); res.qty += g.q; 
+                    const totalRequired = g.p + ship; const totalPaid = g.d + g.c; const shippingCredit = g.ship ? ship : 0; 
+                    const personUnpaid = Math.max(0, totalRequired - totalPaid - shippingCredit); 
+                    if (g.ship) { res.cashUnpaid += personUnpaid; } 
+                    else { const unpaidAttribToShip = Math.min(personUnpaid, ship); res.shipUnpaid += unpaidAttribToShip; res.cashUnpaid += (personUnpaid - unpaidAttribToShip); } 
+                    res.totalUnpaid += personUnpaid; 
+                }); 
+                return res; 
+            }, [filteredOrders, shippingFee]);
+
             const filteredStats = useMemo(() => { return stats; }, [stats]);
+
             const handleToggleAmountEdit = (id) => { setEditingAmountId(id === editingAmountId ? null : id); setEditingShippingId(null); };
             const handleToggleShippingEdit = (id) => { setEditingShippingId(id === editingShippingId ? null : id); setEditingAmountId(null); };
             const handleToggleAddressEdit = (id) => { setEditingAddressId(id === editingAddressId ? null : id); };
             const handleKeyDown = (e, index, field) => { if (e.key === 'Enter') { e.preventDefault(); const nextIndex = index + 1; if (nextIndex < filteredOrders.length) { const nextElement = document.getElementById(`${field}-${nextIndex}`); if (nextElement) { nextElement.focus(); if (nextElement.select) nextElement.select(); } } } };
             const handleMemoKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const textarea = e.target; const start = textarea.selectionStart; const end = textarea.selectionEnd; const value = globalMemo; const newValue = value.substring(0, start) + "\n▫ " + value.substring(end); setGlobalMemo(newValue); setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = start + 3; }, 0); } };
             
-            // --- PARSE ORDERS ---
+            // --- PARSE ORDERS (RESTORED) ---
             const handleParseOrders = () => {
                 if (!rawInput.trim()) { showToast('입력 내용이 없습니다.', 'error'); return; }
                 setIsProcessing(true);
@@ -416,7 +665,6 @@
                         const price = quantity * unitPrice;
                         const existingOrder = orders.find(o => o.customer === customer);
                         
-                        // CRM Lookup
                         let recipientName = '', zipCode = '', addressText = '', shippingMemo = '', phone = '', isCRM = false;
                         const crmData = customerDB[customer];
                         if (crmData) {
@@ -448,41 +696,7 @@
             const handleUpdateOrder = (id, field, value) => { setOrders(prev => prev.map(o => { if (o.id !== id) return o; let updates = { [field]: value }; if (field === 'quantity') { const savedUnitPrice = productHistory[o.product] || Number(pricePerUnit) || 0; updates.price = value * savedUnitPrice; } if (field === 'product') { const savedUnitPrice = productHistory[value]; if (savedUnitPrice !== undefined) { updates.price = o.quantity * savedUnitPrice; } } if (field === 'price') { if (o.product && o.quantity > 0) { const unitPrice = value / o.quantity; setProductHistory(prevHist => ({ ...prevHist, [o.product]: unitPrice })); } } const newPrice = updates.price ?? o.price; if (field === 'deposit') { const rem = Math.max(0, newPrice - value); updates.cardAmount = rem; updates.isCardPaid = rem > 0; } return sanitizeOrder({ ...o, ...updates }); })); };
             const handleProductSelect = (id, product, unitPrice) => { setOrders(prev => prev.map(o => { if (o.id !== id) return o; return sanitizeOrder({ ...o, product: product, price: o.quantity * unitPrice }); })); };
             const handleDeleteProduct = useCallback((productName) => { if (window.confirm(`'${productName}' 상품을 삭제하시겠습니까?`)) { setProductHistory(prev => { const newHistory = { ...prev }; delete newHistory[productName]; return newHistory; }); showToast(`'${productName}' 삭제 완료`); } }, []);
-            
-            // --- UPDATED CRM UPDATE LOGIC ---
-            const handleUpdateOrderBatch = (id, updates) => {
-                setOrders(prev => {
-                    const targetOrder = prev.find(o => o.id === id);
-                    if (!targetOrder || !targetOrder.customer) return prev;
-                    
-                    const isAddressUpdate = ['recipientName', 'phone', 'zipCode', 'addressText', 'shippingMemo'].some(key => key in updates);
-                    const targetCustomer = targetOrder.customer.trim();
-                    
-                    // CRM: Auto-save to DB if address info is updated
-                    if (isAddressUpdate) {
-                        const mergedOrder = { ...targetOrder, ...updates };
-                        if (mergedOrder.recipientName && mergedOrder.addressText) {
-                            setCustomerDB(prevDB => ({
-                                ...prevDB,
-                                [targetCustomer]: {
-                                    recipientName: mergedOrder.recipientName,
-                                    phone: mergedOrder.phone,
-                                    zipCode: mergedOrder.zipCode,
-                                    addressText: mergedOrder.addressText,
-                                    shippingMemo: mergedOrder.shippingMemo
-                                }
-                            }));
-                        }
-                    }
-
-                    return prev.map(o => {
-                        if (o.id === id) return sanitizeOrder({ ...o, ...updates });
-                        if (isAddressUpdate && o.customer && o.customer.trim() === targetCustomer) return sanitizeOrder({ ...o, ...updates, isCRM: true });
-                        return o;
-                    });
-                });
-            };
-
+            const handleUpdateOrderBatch = (id, updates) => { setOrders(prev => { const targetOrder = prev.find(o => o.id === id); if (!targetOrder || !targetOrder.customer) return prev; const isAddressUpdate = ['recipientName', 'phone', 'zipCode', 'addressText', 'shippingMemo'].some(key => key in updates); const targetCustomer = targetOrder.customer.trim(); if (isAddressUpdate) { const mergedOrder = { ...targetOrder, ...updates }; if (mergedOrder.recipientName && mergedOrder.addressText) { setCustomerDB(prevDB => ({ ...prevDB, [targetCustomer]: { recipientName: mergedOrder.recipientName, phone: mergedOrder.phone, zipCode: mergedOrder.zipCode, addressText: mergedOrder.addressText, shippingMemo: mergedOrder.shippingMemo } })); } } return prev.map(o => { if (o.id === id) return sanitizeOrder({ ...o, ...updates }); if (isAddressUpdate && o.customer && o.customer.trim() === targetCustomer) return sanitizeOrder({ ...o, ...updates, isCRM: true }); return o; }); }); };
             const handleDelete = (id) => setOrders(prev => prev.filter(o => o.id !== id));
             const handleAutoDepositFull = (id) => { setOrders(prev => { return prev.map(o => { if (o.id === id) { if (o.isPaid) { return sanitizeOrder({ ...o, deposit: 0, cardAmount: 0, isPaid: false, isCardPaid: false }); } else { return sanitizeOrder({ ...o, deposit: o.price, cardAmount: 0, isPaid: true, isCardPaid: false }); } } return o; }); }); setEditingAmountId(null); setEditingShippingId(null); };
             const handleAutoCardFull = (id) => { setOrders(prev => prev.map(o => o.id === id ? sanitizeOrder({ ...o, deposit: 0, cardAmount: o.price, isPaid: true, isCardPaid: true }) : o)); setEditingAmountId(null); setEditingShippingId(null); };
@@ -519,6 +733,7 @@
                                     </div>
                                 )}
                             </div>
+                            <ActionButton onClick={() => setIsReceiptModalOpen(true)} color="brand" icon="Receipt" text="영수증" />
                             <ActionButton onClick={handleDownloadHTML} color="white" icon="FloppyDisk" text="백업" />
                             <ActionButton onClick={handleUploadClick} color="white" icon="UploadSimple" text="복원" />
                             <ActionButton onClick={handleReset} color="ghost" icon="Eraser" text="초기화" />
@@ -649,6 +864,15 @@
                         </div>
                     </main>
                     
+                    {/* RECEIPT MODAL */}
+                    {isReceiptModalOpen && (
+                        <ReceiptModal 
+                            orders={filteredOrders} 
+                            onClose={() => setIsReceiptModalOpen(false)} 
+                            shippingFee={shippingFee}
+                        />
+                    )}
+
                     {toast && (
                         <div className="fixed top-6 right-6 px-4 py-2.5 bg-slate-800 text-white rounded-md shadow-lg flex items-center gap-2 animate-fade-in z-[100] border-l-4 border-brand-500">
                             <Icon name={toast.type==='error'?'WarningCircle':'CheckCircle'} className={toast.type==='error'?'text-accent-rose':'text-accent-teal'} size={14} weight="fill"/> 
