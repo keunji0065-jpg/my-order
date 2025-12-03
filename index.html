@@ -2,7 +2,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Compact Edition)</title>
+    <title>강은지 주문서 PRO (Final Complete)</title>
     
     <!-- Daum Postcode -->
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -32,36 +32,22 @@
                     },
                     colors: {
                         brand: {
-                            50: '#f0f4f8',
-                            100: '#d9e2ec',
-                            200: '#bcccdc',
-                            300: '#9fb3c8',
-                            400: '#829ab1',
-                            500: '#627d98',
-                            600: '#486581',
-                            700: '#334e68',
-                            800: '#243b53',
-                            900: '#102a43',
+                            50: '#f0f4f8', 100: '#d9e2ec', 200: '#bcccdc', 300: '#9fb3c8', 400: '#829ab1',
+                            500: '#627d98', 600: '#486581', 700: '#334e68', 800: '#243b53', 900: '#102a43',
                         },
                         accent: {
-                            rose: '#d64545',
-                            teal: '#3ebd93',
-                            amber: '#f0b429',
+                            rose: '#d64545', teal: '#3ebd93', amber: '#f0b429',
                         },
                         dark: {
-                            bg: '#121212',       
-                            card: '#1e1e1e',     
-                            border: '#2c2c2c',
-                            input: '#252525'
+                            bg: '#121212', card: '#1e1e1e', border: '#2c2c2c', input: '#252525'
                         }
                     },
                     boxShadow: {
                         'soft': '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
                         'inner-soft': 'inset 0 1px 2px 0 rgba(0, 0, 0, 0.03)',
                     },
-                    fontSize: {
-                        'xxs': '0.65rem',
-                    }
+                    fontSize: { 'xxs': '0.65rem' },
+                    animation: { spin: 'spin 1s linear infinite' }
                 }
             }
         }
@@ -87,9 +73,7 @@
         
         *:focus { outline: none !important; }
         
-        .grid-rows-compact {
-            grid-template-columns: 40px 1.2fr 3fr 0.5fr 1fr 1.5fr 2fr 30px;
-        }
+        .grid-rows-compact { grid-template-columns: 40px 1.2fr 3fr 0.5fr 1fr 1.5fr 2fr 30px; }
     </style>
 </head>
 <body class="bg-[#f5f7fa] dark:bg-dark-bg text-slate-700 dark:text-gray-300 transition-colors duration-200 min-h-screen flex flex-col overflow-hidden">
@@ -126,7 +110,7 @@
             return sanitized;
         };
 
-        const Icon = React.memo(({ name, size = 14, className = "", weight = "regular" }) => {
+        const Icon = React.memo(({ name, size = 14, className = "", weight = "regular", spin = false }) => {
              const map = {
                 ClipboardList: "ph-clipboard-text", FileDown: "ph-download-simple", Trash2: "ph-trash", Plus: "ph-plus",
                 Search: "ph-magnifying-glass", Youtube: "ph-youtube-logo", CheckCircle: "ph-check-circle", 
@@ -138,14 +122,16 @@
                 Wallet: "ph-wallet", TrendUp: "ph-trend-up", Coins: "ph-coins", Bank: "ph-bank", Receipt: "ph-receipt",
                 HandCoins: "ph-hand-coins", Calculator: "ph-calculator", Eraser: "ph-eraser", List: "ph-list",
                 CaretDown: "ph-caret-down", FileXls: "ph-file-xls", Sun: "ph-sun", Lightning: "ph-lightning",
-                Star: "ph-star", Users: "ph-users", AddressBook: "ph-address-book"
+                Star: "ph-star", Users: "ph-users", AddressBook: "ph-address-book", CloudArrowUp: "ph-cloud-arrow-up", CloudArrowDown: "ph-cloud-arrow-down",
+                Gear: "ph-gear", Spinner: "ph-spinner"
             };
             const weightClass = weight === 'bold' ? 'ph-bold' : (weight === 'fill' ? 'ph-fill' : 'ph');
-            return <i className={`${weightClass} ${map[name] || 'ph-question'} ${className}`} style={{ fontSize: size }}></i>;
+            const spinClass = spin ? 'animate-spin' : '';
+            return <i className={`${weightClass} ${map[name] || 'ph-question'} ${className} ${spinClass}`} style={{ fontSize: size }}></i>;
         });
 
         // --- COMPONENT: Compact Stat Card ---
-        const CompactStat = ({ label, value, subValue, icon, colorClass, borderClass }) => (
+        const CompactStat = ({ label, value, subValue, icon, colorClass }) => (
             <div className={`flex items-center justify-between p-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border shadow-soft rounded-md h-full`}>
                 <div>
                     <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mb-0.5">{label}</p>
@@ -174,15 +160,13 @@
                             <span className="text-[10px] opacity-70">원</span>
                         </div>
                     </div>
-
-                    <CompactStat label="총 주문" value={stats.qty} subValue="개" icon="Package" colorClass="text-slate-600 dark:text-slate-300" borderClass="" />
-                    <CompactStat label="배송 예정" value={stats.shippingCount} subValue="건" icon="Truck" colorClass="text-brand-600 dark:text-brand-400" borderClass="" />
-                    
+                    <CompactStat label="총 주문" value={stats.qty} subValue="개" icon="Package" colorClass="text-slate-600 dark:text-slate-300" />
+                    <CompactStat label="배송 예정" value={stats.shippingCount} subValue="건" icon="Truck" colorClass="text-brand-600 dark:text-brand-400" />
                     <div className={`col-span-1 cursor-pointer transition-all ${unpaidFilter === 'cash' ? 'ring-1 ring-accent-rose' : 'hover:bg-slate-50'}`} onClick={() => handleUnpaidFilterClick('cash')}>
-                        <CompactStat label="현금 미수금" value={stats.cashUnpaid.toLocaleString()} subValue="" icon="WarningCircle" colorClass="text-accent-rose" borderClass="" />
+                        <CompactStat label="현금 미수금" value={stats.cashUnpaid.toLocaleString()} subValue="" icon="WarningCircle" colorClass="text-accent-rose" />
                     </div>
                     <div className={`col-span-1 cursor-pointer transition-all ${unpaidFilter === 'ship' ? 'ring-1 ring-accent-amber' : 'hover:bg-slate-50'}`} onClick={() => handleUnpaidFilterClick('ship')}>
-                        <CompactStat label="배송 미수금" value={stats.shipUnpaid.toLocaleString()} subValue="" icon="WarningCircle" colorClass="text-accent-amber" borderClass="" />
+                        <CompactStat label="배송 미수금" value={stats.shipUnpaid.toLocaleString()} subValue="" icon="WarningCircle" colorClass="text-accent-amber" />
                     </div>
                 </div>
             );
@@ -192,7 +176,6 @@
         const InlineProductManager = ({ productHistory, setProductHistory, setOrders, showToast }) => {
             const [name, setName] = useState('');
             const [price, setPrice] = useState('');
-
             const handleSave = () => {
                 if (!name.trim()) { showToast("입력 필요", "error"); return; }
                 const cleanName = name.trim();
@@ -200,12 +183,11 @@
                 const isUpdate = productHistory.hasOwnProperty(cleanName);
                 setProductHistory(prev => ({ ...prev, [cleanName]: newUnitPrice }));
                 setOrders(prev => prev.map(o => (o.product && o.product.trim() === cleanName) ? { ...o, price: o.quantity * newUnitPrice } : o));
-                showToast(isUpdate ? "단가 업데이트 완료" : "상품 등록 완료");
+                showToast(isUpdate ? "단가 업데이트" : "상품 등록 완료");
                 setName(''); setPrice('');
             };
             const handleDelete = (key) => { if(window.confirm('삭제?')) setProductHistory(prev => { const n = {...prev}; delete n[key]; return n; }) };
             const handleItemClick = (n, p) => { setName(n); setPrice(p); };
-
             return (
                 <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-md p-2 flex flex-col h-full shadow-soft">
                     <div className="flex gap-1 mb-1.5">
@@ -230,7 +212,7 @@
             );
         };
 
-        const ActionButton = React.memo(({ onClick, color, icon, text, active, className }) => {
+        const ActionButton = React.memo(({ onClick, color, icon, text, active, className, loading }) => {
             const base = "px-2 py-1 rounded-sm text-xs font-bold flex items-center gap-1 transition-all border shadow-sm h-7";
             const colors = {
                 brand: "bg-brand-600 text-white border-brand-700 hover:bg-brand-700",
@@ -238,7 +220,11 @@
                 dark: "bg-brand-800 text-white border-brand-900 hover:bg-brand-900",
                 ghost: "bg-transparent text-slate-500 border-transparent hover:bg-slate-100 dark:hover:bg-slate-800",
             };
-            return <button onClick={onClick} className={`${base} ${colors[color] || colors.white} ${active ? 'ring-1 ring-brand-500' : ''} ${className}`}><Icon name={icon} size={12} weight="bold"/> {text}</button>;
+            return (
+                <button onClick={onClick} disabled={loading} className={`${base} ${colors[color] || colors.white} ${active ? 'ring-1 ring-brand-500' : ''} ${className} ${loading ? 'opacity-70 cursor-wait' : ''}`}>
+                    {loading ? <Icon name="Spinner" size={12} spin={true}/> : <Icon name={icon} size={12} weight="bold"/>} {text}
+                </button>
+            );
         });
 
         const ProductAutocomplete = ({ id, value, onChange, onSelect, onDeleteProduct, onKeyDown, priceMap }) => {
@@ -266,11 +252,15 @@
             const [isDarkMode, setIsDarkMode] = useState(() => window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
             const [rawInput, setRawInput] = useState('');
             const [globalMemo, setGlobalMemo] = useState(() => localStorage.getItem('globalMemo') || '');
+            
+            // Data Persistence
             const [productHistory, setProductHistory] = useState(() => { try { return JSON.parse(localStorage.getItem('productHistory')) || {}; } catch { return {}; } });
             const [customerDB, setCustomerDB] = useState(() => { try { return JSON.parse(localStorage.getItem('customerDB')) || {}; } catch { return {}; } }); 
             const [orders, setOrders] = useState(() => { try { const stored = JSON.parse(localStorage.getItem('youtubeOrders')); if (Array.isArray(stored)) return stored.map(sanitizeOrder).filter(o => o !== null); return []; } catch { return []; } });
+            const [googleScriptUrl, setGoogleScriptUrl] = useState(() => localStorage.getItem('googleScriptUrl') || '');
             
             const [isProcessing, setIsProcessing] = useState(false);
+            const [isSyncing, setIsSyncing] = useState(false);
             const [toast, setToast] = useState(null);
             const [pricePerUnit, setPricePerUnit] = useState('');
             const [shippingFee, setShippingFee] = useState(4000);
@@ -291,16 +281,108 @@
             useEffect(() => { localStorage.setItem('globalMemo', globalMemo); }, [globalMemo]);
             useEffect(() => { localStorage.setItem('productHistory', JSON.stringify(productHistory)); }, [productHistory]);
             useEffect(() => { localStorage.setItem('customerDB', JSON.stringify(customerDB)); }, [customerDB]);
+            useEffect(() => { localStorage.setItem('googleScriptUrl', googleScriptUrl); }, [googleScriptUrl]);
             useEffect(() => { const handleClickOutside = (event) => { if (excelMenuRef.current && !excelMenuRef.current.contains(event.target)) { setIsExcelMenuOpen(false); } }; document.addEventListener("mousedown", handleClickOutside); return () => document.removeEventListener("mousedown", handleClickOutside); }, []);
 
             const getCSVString = (listData, mode) => { const list = [...listData].map(sanitizeOrder).sort((a, b) => (a.customer || '').localeCompare(b.customer || '')); const firstIds = {}; list.forEach(o => { if (o.customer && !firstIds[o.customer]) firstIds[o.customer] = o.id; }); const clean = (val) => '"' + String(val || '').replace(/"/g, '""') + '"'; const cleanPhone = (val) => { if (!val) return '""'; const strVal = String(val); return '"\u200B' + strVal + '"'; }; if (mode === 'invoice') { const excelHeaders = ['', '', '', '', '상품명', '수령인', '연락처', '주소', '배송메모', '', '메모', '우편번호', '']; const csv = [excelHeaders.join(',')].concat(list.map(o => { let quantitySuffix = ''; if (o.quantity >= 2) { quantitySuffix = ` ★${o.quantity}`; } const productName = `[${o.customer || '미지정'}] ${o.product}${quantitySuffix}`; return ['', '', '', '', clean(productName), clean(o.recipientName), cleanPhone(o.phone), clean(o.addressText), clean(o.shippingMemo), '', clean(o.memo), cleanPhone(o.zipCode), ''].join(','); })).join('\n'); return "\ufeff" + csv; } else { const headers = ['닉네임', '입금명', '상품명', '수량', '금액', '입금액(현금)', '카드결제액', '배송비', '미수금', '수령인', '연락처', '우편번호', '주소', '배송메모', '메모']; const csv = [headers.join(',')].concat(list.map(o => { const isFirst = firstIds[o.customer] === o.id; const ship = o.customShippingFee ?? shippingFee; const shipCharge = isFirst ? ship : 0; const unpaid = Math.max(0, (o.price + shipCharge) - (o.deposit + o.cardAmount + (isFirst && o.isShippingPaid ? ship : 0))); return [clean(o.customer), clean(o.phone), clean(o.product), o.quantity, o.price, clean(o.deposit), clean(o.cardAmount), clean(shipCharge), clean(unpaid), clean(o.recipientName), cleanPhone(o.phone), cleanPhone(o.zipCode), clean(o.addressText), clean(o.shippingMemo), clean(o.memo)].join(','); })).join('\n'); return "\ufeff" + csv; } };
             const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 2500); };
-            const handleDownloadCSV = (mode = 'invoice') => { if (ordersRef.current.length === 0) return; const csvContent = getCSVString(ordersRef.current, mode); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const typeName = mode === 'invoice' ? '송장용' : '전체내역'; const fileName = `강은지_주문서_${typeName}_${new Date().toLocaleDateString()}.csv`; a.download = fileName; a.click(); URL.revokeObjectURL(url); showToast(`${typeName} 엑셀 다운로드 완료!`); };
-            const handleDownloadProductCSV = () => { const targetOrders = filteredOrders.length > 0 ? filteredOrders : orders; if (targetOrders.length === 0) return; const summary = targetOrders.reduce((acc, curr) => { const name = curr.product; if (!acc[name]) acc[name] = 0; acc[name] += curr.quantity; return acc; }, {}); const csv = "\ufeff" + ["상품명,총수량"].concat(Object.entries(summary).map(([name, qty]) => `"${name}",${qty}`)).join('\n'); const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `강은지_주문서_발주내역_${new Date().toLocaleDateString()}.csv`; a.click(); URL.revokeObjectURL(url); showToast('발주 엑셀 다운로드 완료!'); };
+            
+            // --- CLOUD SYNC FUNCTIONS ---
+            const handleSetGoogleUrl = () => {
+                const url = window.prompt("Google Apps Script 웹 앱 URL을 입력하세요:\n(배포 후 '웹 앱 URL' 복사 붙여넣기)", googleScriptUrl);
+                if (url !== null) {
+                    setGoogleScriptUrl(url.trim());
+                    showToast("URL이 저장되었습니다.");
+                }
+            };
+            
+            const handleLoadFromGoogle = async () => {
+                if (!googleScriptUrl) { handleSetGoogleUrl(); return; }
+                setIsSyncing(true);
+                try {
+                    const res = await fetch(googleScriptUrl);
+                    const data = await res.json();
+                    if (data.orders) {
+                        const rows = JSON.parse(data.orders);
+                        const headers = rows[0];
+                        const loadedOrders = rows.slice(1).map(row => {
+                            const obj = {};
+                            headers.forEach((h, i) => obj[h] = row[i]);
+                            return sanitizeOrder(obj);
+                        });
+                        setOrders(loadedOrders);
+                    }
+                    if (data.products) setProductHistory(JSON.parse(data.products));
+                    if (data.customers) {
+                        const custRows = JSON.parse(data.customers);
+                        const newDB = {};
+                        custRows.slice(1).forEach(r => {
+                            newDB[r[0]] = { recipientName: r[1], phone: r[2], zipCode: r[3], addressText: r[4], shippingMemo: r[5] };
+                        });
+                        setCustomerDB(newDB);
+                    }
+                    showToast("구글 시트에서 데이터를 불러왔습니다.");
+                } catch (e) {
+                    showToast("불러오기 실패: " + e.message, "error");
+                } finally {
+                    setIsSyncing(false);
+                }
+            };
+
+            const handleSaveToGoogle = async () => {
+                if (!googleScriptUrl) { handleSetGoogleUrl(); return; }
+                setIsSyncing(true);
+                try {
+                    const payload = {
+                        orders: JSON.stringify(orders),
+                        products: JSON.stringify(productHistory),
+                        customers: JSON.stringify(customerDB)
+                    };
+                    const res = await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify(payload) });
+                    const json = await res.json();
+                    if (json.status === 'success') showToast("구글 시트에 저장되었습니다.");
+                    else throw new Error(json.message || "Unknown Error");
+                } catch (e) {
+                    showToast("저장 실패 (URL 확인 필요)", "error");
+                    console.error(e);
+                } finally {
+                    setIsSyncing(false);
+                }
+            };
+
             const handleDownloadHTML = () => { const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const date = new Date(); const timestamp = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}`; a.download = `강은지_주문서_백업_${timestamp}.html`; a.click(); URL.revokeObjectURL(url); showToast('앱 파일이 안전하게 백업(저장)되었습니다!'); };
             const handleUploadClick = () => fileInputRef.current && fileInputRef.current.click();
-            const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const uploaded = results.data.map((row, i) => sanitizeOrder({ id: Date.now() + i, originalText: `UPLOAD: ${row['상품명']}`, customer: row['닉네임']?.trim(), product: row['상품명'], quantity: Number(row['수량']) || 1, price: Number(row['금액']?.replace(/,/g, '')) || 0, deposit: Number(row['입금액(현금)']), cardAmount: Number(row['카드결제액']), recipientName: row['수령인'], phone: row['연락처'], zipCode: row['우편번호'], addressText: row['주소'], shippingMemo: row['배송메모'], memo: row['메모'] })).filter(o => o.customer); setOrders(prev => [...uploaded, ...prev]); showToast(`${uploaded.length}건 업로드 완료!`); }}); e.target.value = null; };
-            const handleReset = () => { if (window.confirm("정말로 모든 주문 내역을 삭제하시겠습니까? (고객 데이터는 유지됩니다)")) { setOrders([]); showToast("초기화 완료", "error"); } };
+            
+            const handleFileUpload = (e) => { 
+                const file = e.target.files[0]; 
+                if (!file) return; 
+                Papa.parse(file, { 
+                    header: true, 
+                    skipEmptyLines: true, 
+                    complete: (results) => { 
+                        const uploaded = results.data.map((row, i) => sanitizeOrder({ 
+                            id: Date.now() + i, 
+                            originalText: `UPLOAD: ${row['상품명']}`, 
+                            customer: row['닉네임']?.trim(), 
+                            product: row['상품명'], 
+                            quantity: Number(row['수량']) || 1, 
+                            price: Number(row['금액']?.replace(/,/g, '')) || 0, 
+                            deposit: Number(row['입금액(현금)']), 
+                            cardAmount: Number(row['카드결제액']), 
+                            recipientName: row['수령인'], 
+                            phone: row['연락처'], 
+                            zipCode: row['우편번호'], 
+                            addressText: row['주소'], 
+                            shippingMemo: row['배송메모'], 
+                            memo: row['메모'] 
+                        })).filter(o => o.customer); 
+                        setOrders(prev => [...uploaded, ...prev]); 
+                        showToast(`${uploaded.length}건 업로드 완료!`); 
+                    }
+                }); 
+                e.target.value = null; 
+            };
+            
             const handleCustomerUploadClick = () => customerFileRef.current && customerFileRef.current.click();
             const handleCustomerFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const newDB = { ...customerDB }; let count = 0; results.data.forEach(row => { const nick = row['닉네임'] || row['Nickname'] || row['이름'] || row['성함']; if (nick && nick.trim()) { newDB[nick.trim()] = { recipientName: row['수령인'] || row['받는분'] || row['이름'] || nick.trim(), phone: row['연락처'] || row['전화번호'] || row['휴대폰'] || '', zipCode: row['우편번호'] || row['Zip'] || '', addressText: row['주소'] || row['Address'] || row['기본주소'] || '', shippingMemo: row['배송메모'] || row['배송요청사항'] || row['메모'] || '' }; count++; } }); setCustomerDB(newDB); showToast(`총 ${count}명의 고객 정보를 등록했습니다!`, 'success'); } }); e.target.value = null; };
             const getNicknameColor = (name) => { if (!name) return 'text-slate-700 dark:text-slate-300'; const colors = ['text-brand-600 dark:text-brand-400', 'text-slate-700 dark:text-slate-300']; let hash = 0; for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash); return colors[Math.abs(hash) % colors.length]; };
@@ -317,109 +399,7 @@
             const handleKeyDown = (e, index, field) => { if (e.key === 'Enter') { e.preventDefault(); const nextIndex = index + 1; if (nextIndex < filteredOrders.length) { const nextElement = document.getElementById(`${field}-${nextIndex}`); if (nextElement) { nextElement.focus(); if (nextElement.select) nextElement.select(); } } } };
             const handleMemoKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const textarea = e.target; const start = textarea.selectionStart; const end = textarea.selectionEnd; const value = globalMemo; const newValue = value.substring(0, start) + "\n▫ " + value.substring(end); setGlobalMemo(newValue); setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = start + 3; }, 0); } };
             
-            // --- ADDRESS EDITOR (COMPACT & SMART PARSING) ---
-            const AddressEditor = ({ order, handleUpdateOrder, handleUpdateOrderBatch, setEditingAddressId, showToast }) => {
-                const [rawAddressText, setRawAddressText] = useState('');
-                const handleOpenAddressSearch = () => { if (window.daum && window.daum.Postcode) { try { new daum.Postcode({ oncomplete: function(data) { let fullAddress = data.roadAddress || data.jibunAddress; let extraAddress = ''; if(data.userSelectedType === 'R'){ if(data.bname !== '') extraAddress += data.bname; if(data.buildingName !== '') extraAddress += (extraAddress !== '' ? `, ${data.buildingName}` : data.buildingName); if(extraAddress !== '') fullAddress += ` (${extraAddress})`; } handleUpdateOrderBatch(order.id, { zipCode: data.zonecode, addressText: fullAddress }); showToast('주소 입력 완료'); } }).open(); } catch (error) { fallbackToNaver(); } } else { fallbackToNaver(); } };
-                const fallbackToNaver = () => { showToast('네이버 주소검색을 엽니다.', 'error'); window.open('https://search.naver.com/search.naver?query=%EC%9A%B0%ED%8E%B8%EB%B2%88%ED%98%B8%EA%B2%80%EC%83%89', '_blank'); };
-                
-                // Updated Parsing Logic for "Name, Phone, (Zip)Address, Memo"
-                const parseAddressInfo = (text) => { 
-                    const result = { recipientName: '', phone: '', zipCode: '', addressText: '', shippingMemo: '' }; 
-                    let raw = text.trim(); 
-                    
-                    // 1. Extract Zip Code from (12345) format
-                    const zipParenMatch = raw.match(/\((\d{5,6})\)/);
-                    if (zipParenMatch) {
-                        result.zipCode = zipParenMatch[1];
-                        raw = raw.replace(zipParenMatch[0], '').trim(); // Remove zip from text to avoid confusion
-                    }
-
-                    // 2. Comma-separated Logic (User preference)
-                    if (raw.includes(',')) {
-                         const parts = raw.split(',').map(s => s.trim());
-                         // Attempt to identify parts by looking for Phone Number pattern (010)
-                         const phoneIdx = parts.findIndex(p => /010/.test(p));
-                         
-                         if (phoneIdx !== -1) {
-                             result.phone = parts[phoneIdx];
-                             // Assuming Name comes before Phone
-                             if (phoneIdx > 0) result.recipientName = parts[phoneIdx - 1];
-                             // Assuming Address comes after Phone
-                             if (phoneIdx + 1 < parts.length) {
-                                 let addr = parts[phoneIdx + 1];
-                                 // Cleanup if (zip) was inside this part
-                                 if (zipParenMatch && addr.includes(zipParenMatch[0])) addr = addr.replace(zipParenMatch[0], '').trim(); 
-                                 result.addressText = addr;
-                             }
-                             // Assuming Memo is last
-                             if (phoneIdx + 2 < parts.length) result.shippingMemo = parts.slice(phoneIdx + 2).join(' ');
-                             
-                             return result;
-                         }
-                    }
-
-                    // 3. Fallback Logic (If no commas or phone not found in split)
-                    // Phone
-                    const phoneMatch = raw.match(/010[.\-\s]*\d{3,4}[.\-\s]*\d{4}/); 
-                    if (phoneMatch) { 
-                        result.phone = phoneMatch[0].replace(/[^0-9-]/g, ''); 
-                        raw = raw.replace(phoneMatch[0], ' ').trim();
-                    } 
-                    // Zip (Fallback if no parens)
-                    if (!result.zipCode) {
-                        const zipMatch = raw.match(/\d{5,6}/); 
-                        if (zipMatch) { result.zipCode = zipMatch[0]; raw = raw.replace(zipMatch[0], ' '); } 
-                    }
-                    // Name (Heuristic: short string)
-                    const words = raw.split(/\s+/).filter(w => w.length > 0); 
-                    if (words.length > 0) { 
-                        const potentialName = words.find(w => /^[가-힣]{2,4}$/.test(w)); 
-                        if (potentialName) { 
-                            result.recipientName = potentialName; 
-                            raw = raw.replace(potentialName, ' '); 
-                        } 
-                    } 
-                    // Address keyword check
-                    const addressKeywords = ['시', '도', '특별시', '광역시', '특별자치시', '특별자치도', '구', '군', '읍', '면', '동', '가', '로', '길', '번지', '아파트', '산단']; 
-                    let addressMatch = raw.match(new RegExp(`([가-힣0-9\\s-]*(${addressKeywords.join('|')})[가-힣0-9\\s,-]*)`, 'g')); 
-                    if (addressMatch) { 
-                        let bestMatch = addressMatch.reduce((a, b) => a.length > b.length ? a : b, ''); 
-                        if (bestMatch.length > 2) { 
-                            result.addressText = bestMatch.trim(); 
-                            raw = raw.replace(bestMatch, ' '); 
-                        } 
-                    } 
-                    // Remaining text is memo
-                    result.shippingMemo = raw.replace(/(배송|요청|메모|사항)[:\s]*/g, '').trim(); 
-                    
-                    return result; 
-                };
-                
-                const handleParse = () => { if (!rawAddressText.trim()) { showToast('텍스트를 입력해주세요.', 'error'); return; } const parsed = parseAddressInfo(rawAddressText); const updates = { recipientName: parsed.recipientName || order.recipientName, phone: parsed.phone || order.phone, zipCode: parsed.zipCode || order.zipCode, addressText: parsed.addressText || order.addressText, shippingMemo: parsed.shippingMemo || order.shippingMemo }; handleUpdateOrderBatch(order.id, updates); showToast('자동 입력 완료'); setRawAddressText(''); };
-                const handleChange = (field, value) => { handleUpdateOrderBatch(order.id, { [field]: value }); };
-                const inputClass = "w-full p-1.5 border border-slate-200 dark:border-dark-border rounded-sm text-xs dark:bg-dark-input dark:text-dark-text focus:border-brand-500 transition-all bg-white dark:bg-dark-card";
-                return (
-                    <div className="col-span-full p-3 bg-slate-50 dark:bg-dark-input rounded-md border border-slate-200 dark:border-dark-border mt-1 mb-1 animate-fade-in shadow-inner">
-                        <div className="flex justify-between items-center pb-2 mb-2 border-b border-slate-200 dark:border-dark-border">
-                            <h3 className="text-xs font-bold text-slate-700 dark:text-white flex items-center gap-1"><Icon name="MapPin" size={12}/> 배송지 수정</h3>
-                            <div className="flex gap-1"><ActionButton onClick={handleOpenAddressSearch} color="white" icon="Search" text="검색" /><ActionButton onClick={() => setEditingAddressId(null)} color="brand" icon="FloppyDisk" text="완료" /></div>
-                        </div>
-                        <div className="flex gap-1 mb-2">
-                            <textarea className="flex-1 p-1.5 border border-slate-200 dark:border-dark-border rounded-sm text-xs focus:border-brand-500 resize-none h-8 bg-white dark:bg-dark-card" placeholder="[이름, 전화번호, (12345)주소, 메모] 붙여넣기" value={rawAddressText} onChange={(e) => setRawAddressText(e.target.value)}/>
-                            <button onClick={handleParse} className="px-2 bg-slate-800 text-white rounded-sm text-xs font-bold">자동</button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
-                            <div><label className="block text-[9px] font-bold mb-0.5 text-slate-400">수령인</label><input type="text" value={order.recipientName} onChange={(e) => handleChange('recipientName', e.target.value)} className={inputClass} /></div>
-                            <div><label className="block text-[9px] font-bold mb-0.5 text-slate-400">연락처</label><input type="text" value={order.phone} onChange={(e) => handleChange('phone', e.target.value)} className={inputClass} /></div>
-                            <div><label className="block text-[9px] font-bold mb-0.5 text-slate-400">우편번호</label><input type="text" value={order.zipCode} onChange={(e) => handleChange('zipCode', e.target.value)} className={inputClass} /></div>
-                            <div><label className="block text-[9px] font-bold mb-0.5 text-slate-400">메모</label><input type="text" value={order.shippingMemo} onChange={(e) => handleChange('shippingMemo', e.target.value)} className={inputClass} /></div>
-                        </div>
-                        <div><label className="block text-[9px] font-bold mb-0.5 text-slate-400">상세주소</label><input type="text" value={order.addressText} onChange={(e) => handleChange('addressText', e.target.value)} className={inputClass} /></div>
-                    </div>
-                );
-            };
-
+            // --- PARSE ORDERS ---
             const handleParseOrders = () => {
                 if (!rawInput.trim()) { showToast('입력 내용이 없습니다.', 'error'); return; }
                 setIsProcessing(true);
@@ -474,14 +454,27 @@
                 setOrders(prev => {
                     const targetOrder = prev.find(o => o.id === id);
                     if (!targetOrder || !targetOrder.customer) return prev;
+                    
                     const isAddressUpdate = ['recipientName', 'phone', 'zipCode', 'addressText', 'shippingMemo'].some(key => key in updates);
                     const targetCustomer = targetOrder.customer.trim();
+                    
+                    // CRM: Auto-save to DB if address info is updated
                     if (isAddressUpdate) {
                         const mergedOrder = { ...targetOrder, ...updates };
                         if (mergedOrder.recipientName && mergedOrder.addressText) {
-                            setCustomerDB(prevDB => ({ ...prevDB, [targetCustomer]: { recipientName: mergedOrder.recipientName, phone: mergedOrder.phone, zipCode: mergedOrder.zipCode, addressText: mergedOrder.addressText, shippingMemo: mergedOrder.shippingMemo } }));
+                            setCustomerDB(prevDB => ({
+                                ...prevDB,
+                                [targetCustomer]: {
+                                    recipientName: mergedOrder.recipientName,
+                                    phone: mergedOrder.phone,
+                                    zipCode: mergedOrder.zipCode,
+                                    addressText: mergedOrder.addressText,
+                                    shippingMemo: mergedOrder.shippingMemo
+                                }
+                            }));
                         }
                     }
+
                     return prev.map(o => {
                         if (o.id === id) return sanitizeOrder({ ...o, ...updates });
                         if (isAddressUpdate && o.customer && o.customer.trim() === targetCustomer) return sanitizeOrder({ ...o, ...updates, isCRM: true });
@@ -494,6 +487,7 @@
             const handleAutoDepositFull = (id) => { setOrders(prev => { return prev.map(o => { if (o.id === id) { if (o.isPaid) { return sanitizeOrder({ ...o, deposit: 0, cardAmount: 0, isPaid: false, isCardPaid: false }); } else { return sanitizeOrder({ ...o, deposit: o.price, cardAmount: 0, isPaid: true, isCardPaid: false }); } } return o; }); }); setEditingAmountId(null); setEditingShippingId(null); };
             const handleAutoCardFull = (id) => { setOrders(prev => prev.map(o => o.id === id ? sanitizeOrder({ ...o, deposit: 0, cardAmount: o.price, isPaid: true, isCardPaid: true }) : o)); setEditingAmountId(null); setEditingShippingId(null); };
             const handleUnpaidFilterClick = (type) => { if (unpaidFilter === type) { setUnpaidFilter(null); } else { setUnpaidFilter(type); } };
+            const handleReset = () => { if (window.confirm("정말로 모든 주문 내역을 삭제하시겠습니까? (고객 데이터는 유지됩니다)")) { setOrders([]); showToast("초기화 완료", "error"); } };
 
             return (
                 <div className="flex flex-col h-screen overflow-hidden text-slate-700 dark:text-gray-300">
@@ -504,12 +498,17 @@
                             <span className="font-bold text-xs tracking-tight text-slate-800 dark:text-white">주문관리 PRO</span>
                         </div>
                         <div className="flex items-center gap-2">
+                            <div className="flex items-center bg-slate-100 dark:bg-dark-input rounded-sm p-0.5">
+                                <ActionButton onClick={handleSetGoogleUrl} color="ghost" icon="Gear" text="" className="!px-1.5"/>
+                                <ActionButton onClick={handleSaveToGoogle} color="ghost" icon="CloudArrowUp" text="저장" loading={isSyncing}/>
+                                <div className="w-px h-3 bg-slate-300 dark:bg-slate-600 mx-0.5"></div>
+                                <ActionButton onClick={handleLoadFromGoogle} color="ghost" icon="CloudArrowDown" text="불러오기" loading={isSyncing}/>
+                            </div>
+                            <div className="h-3 w-px bg-slate-300 dark:bg-slate-700 mx-1"></div>
                             <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-500"><Icon name={isDarkMode ? "Sun" : "Moon"} size={14} /></button>
                             <div className="h-3 w-px bg-slate-300 dark:bg-slate-700 mx-1"></div>
-                            
                             <ActionButton onClick={handleCustomerUploadClick} color="brand" icon="AddressBook" text="고객" />
                             <input type="file" ref={customerFileRef} onChange={handleCustomerFileUpload} accept=".csv" style={{display:'none'}} />
-
                             <div className="relative" ref={excelMenuRef}>
                                 <ActionButton onClick={() => setIsExcelMenuOpen(!isExcelMenuOpen)} color="ghost" icon="FileXls" text="엑셀" />
                                 {isExcelMenuOpen && (
@@ -520,7 +519,6 @@
                                     </div>
                                 )}
                             </div>
-                            
                             <ActionButton onClick={handleDownloadHTML} color="white" icon="FloppyDisk" text="백업" />
                             <ActionButton onClick={handleUploadClick} color="white" icon="UploadSimple" text="복원" />
                             <ActionButton onClick={handleReset} color="ghost" icon="Eraser" text="초기화" />
@@ -532,7 +530,7 @@
                     <main className="flex-1 flex flex-col p-2 gap-2 overflow-hidden">
                         <div className="shrink-0"><SummarySection stats={stats} handleUnpaidFilterClick={handleUnpaidFilterClick} unpaidFilter={unpaidFilter} /></div>
 
-                        {/* Middle: Editor Panels (Height Reduced to h-64 / 250px) */}
+                        {/* Middle: Editor Panels */}
                         <div className="shrink-0 grid grid-cols-1 lg:grid-cols-3 gap-2 h-64">
                             <div className="lg:col-span-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col shadow-soft">
                                 <div className="flex justify-between items-center mb-1 px-1">
