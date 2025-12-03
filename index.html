@@ -1,21 +1,24 @@
-<!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" class="antialiased">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 자동화 v1.4 </title>
+    <title>강은지 주문서 PRO (Compact Edition)</title>
     
-    <!-- Daum Postcode 정적 로딩 -->
-    <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+    <!-- Daum Postcode -->
+    <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 
-    <!-- 리액트 및 필수 라이브러리 -->
+    <!-- React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@phosphor-icons/web" crossorigin="anonymous"></script>
     
-    <!-- PapaParse CDN for CSV parsing -->
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- PapaParse -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" crossorigin="anonymous"></script>
     
     <script>
@@ -24,25 +27,40 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'sans-serif'],
+                        sans: ['NanumSquareNeo', 'Pretendard', 'sans-serif'],
+                        mono: ['Pretendard', 'monospace'],
                     },
                     colors: {
                         brand: {
-                            50: '#eef2ff',
-                            100: '#e0e7ff',
-                            500: '#6366f1',
-                            600: '#4f46e5',
-                            700: '#4338ca',
-                            900: '#312e81',
+                            50: '#f0f4f8',
+                            100: '#d9e2ec',
+                            200: '#bcccdc',
+                            300: '#9fb3c8',
+                            400: '#829ab1',
+                            500: '#627d98',
+                            600: '#486581',
+                            700: '#334e68',
+                            800: '#243b53',
+                            900: '#102a43',
+                        },
+                        accent: {
+                            rose: '#d64545',
+                            teal: '#3ebd93',
+                            amber: '#f0b429',
                         },
                         dark: {
-                            bg: '#0f172a',
-                            card: '#1e293b',
-                            input: '#334155',
-                            text: '#e2e8f0',
-                            muted: '#94a3b8',
-                            border: '#334155',
+                            bg: '#121212',       
+                            card: '#1e1e1e',     
+                            border: '#2c2c2c',
+                            input: '#252525'
                         }
+                    },
+                    boxShadow: {
+                        'soft': '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+                        'inner-soft': 'inset 0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+                    },
+                    fontSize: {
+                        'xxs': '0.65rem',
                     }
                 }
             }
@@ -50,38 +68,39 @@
     </script>
     
     <style>
-        body { font-family: 'Pretendard', sans-serif; -webkit-font-smoothing: antialiased; }
+        @import url("https://cdn.jsdelivr.net/gh/moonspam/NanumSquareNeo/nanumsquareneo.css");
+        @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css");
+        
+        body { 
+            font-family: 'NanumSquareNeo', sans-serif; 
+            -webkit-font-smoothing: antialiased; 
+            background-color: #f5f7fa;
+        }
+        
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .dark ::-webkit-scrollbar-thumb { background: #4b5563; }
+
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
         
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .dark ::-webkit-scrollbar-thumb { background: #475569; }
-        .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
-
-        .animate-fade-in { animation: fadeIn 0.2s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        *:focus { outline: none !important; }
         
-        /* Glassmorphism utilities */
-        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
-        .dark .glass { background: rgba(30, 41, 59, 0.7); }
+        .grid-rows-compact {
+            grid-template-columns: 40px 1.2fr 3fr 0.5fr 1fr 1.5fr 2fr 30px;
+        }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-dark-bg text-slate-900 dark:text-dark-text transition-colors duration-300 selection:bg-brand-100 dark:selection:bg-brand-900">
-
-    <div id="root"></div>
+<body class="bg-[#f5f7fa] dark:bg-dark-bg text-slate-700 dark:text-gray-300 transition-colors duration-200 min-h-screen flex flex-col overflow-hidden">
+    <div id="root" class="h-full flex flex-col"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
         // --- GLOBAL UTILITIES ---
-
         const sanitizeOrder = (order) => {
             if (!order || typeof order !== 'object') return null;
-            
             const sanitized = {
                 id: order.id || Date.now() + Math.random(),
                 customer: order.customer || '',
@@ -101,14 +120,14 @@
                 zipCode: order.zipCode || '',
                 addressText: order.addressText || '',
                 shippingMemo: order.shippingMemo || '',
+                isCRM: !!order.isCRM,
             };
-            
             sanitized.isAddressFilled = !!sanitized.recipientName && !!sanitized.phone && !!sanitized.addressText;
             return sanitized;
         };
 
-        const Icon = React.memo(({ name, size = 20, className = "" }) => {
-            const map = {
+        const Icon = React.memo(({ name, size = 14, className = "", weight = "regular" }) => {
+             const map = {
                 ClipboardList: "ph-clipboard-text", FileDown: "ph-download-simple", Trash2: "ph-trash", Plus: "ph-plus",
                 Search: "ph-magnifying-glass", Youtube: "ph-youtube-logo", CheckCircle: "ph-check-circle", 
                 ShoppingCart: "ph-shopping-cart", DollarSign: "ph-currency-dollar", CreditCard: "ph-credit-card",
@@ -118,324 +137,123 @@
                 Address: "ph-map-pin", User: "ph-user", Brain: "ph-brain", ChartBar: "ph-chart-bar", WarningCircle: "ph-warning-circle",
                 Wallet: "ph-wallet", TrendUp: "ph-trend-up", Coins: "ph-coins", Bank: "ph-bank", Receipt: "ph-receipt",
                 HandCoins: "ph-hand-coins", Calculator: "ph-calculator", Eraser: "ph-eraser", List: "ph-list",
-                CaretDown: "ph-caret-down", FileXls: "ph-file-xls"
+                CaretDown: "ph-caret-down", FileXls: "ph-file-xls", Sun: "ph-sun", Lightning: "ph-lightning",
+                Star: "ph-star", Users: "ph-users", AddressBook: "ph-address-book"
             };
-            return <i className={`ph-bold ${map[name] || 'ph-question'} ${className}`} style={{ fontSize: size }}></i>;
+            const weightClass = weight === 'bold' ? 'ph-bold' : (weight === 'fill' ? 'ph-fill' : 'ph');
+            return <i className={`${weightClass} ${map[name] || 'ph-question'} ${className}`} style={{ fontSize: size }}></i>;
         });
 
-        // --- COMPONENT: Top Summary Card ---
-        const SummaryDashboardCard = React.memo(({ totalRevenue, orderCount, shippingCount }) => {
-            return (
-                <div className="bg-gradient-to-br from-indigo-600 to-violet-600 dark:from-indigo-900 dark:to-violet-900 px-8 py-5 rounded-2xl shadow-lg text-white relative overflow-hidden border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="text-center md:text-left z-10">
-                        <p className="text-indigo-200 text-xs font-bold mb-1 tracking-wide uppercase">전체 매출 (예상)</p>
-                        <p className="text-4xl font-black tracking-tight leading-none drop-shadow-md">
-                            {totalRevenue.toLocaleString()}
-                            <span className="text-xl ml-1 font-medium opacity-70 align-baseline">원</span>
-                        </p>
+        // --- COMPONENT: Compact Stat Card ---
+        const CompactStat = ({ label, value, subValue, icon, colorClass, borderClass }) => (
+            <div className={`flex items-center justify-between p-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border shadow-soft rounded-md h-full`}>
+                <div>
+                    <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mb-0.5">{label}</p>
+                    <div className="flex items-baseline gap-0.5">
+                        <span className={`text-sm font-bold font-mono ${colorClass}`}>{value}</span>
+                        {subValue && <span className="text-[9px] text-slate-400">{subValue}</span>}
                     </div>
-                    <div className="flex gap-10 z-10 border-t md:border-t-0 border-white/20 pt-3 md:pt-0 w-full md:w-auto justify-around md:justify-end">
-                        <div className="text-center md:text-right">
-                            <p className="text-indigo-200 text-[10px] font-bold uppercase mb-0.5 opacity-80">총 주문수량</p>
-                            <p className="text-xl font-bold leading-none">{orderCount}<span className="text-xs ml-0.5 opacity-70 font-normal">개</span></p>
+                </div>
+                <div className={`p-1 rounded-md bg-slate-50 dark:bg-dark-bg`}>
+                    <Icon name={icon} size={14} className={colorClass} weight="fill"/>
+                </div>
+            </div>
+        );
+
+        // --- COMPONENT: Summary Section ---
+        const SummarySection = React.memo(({ stats, handleUnpaidFilterClick, unpaidFilter }) => {
+            return (
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 w-full">
+                    <div className="col-span-2 bg-brand-700 dark:bg-brand-900 text-white p-2.5 rounded-md shadow-soft flex flex-col justify-center min-h-[56px]">
+                        <div className="flex items-center gap-1.5 mb-0.5 opacity-90">
+                            <Icon name="TrendUp" size={12} className="text-white"/>
+                            <span className="text-[9px] font-bold uppercase tracking-widest">총 예상 매출</span>
                         </div>
-                        <div className="text-center md:text-right">
-                            <p className="text-indigo-200 text-[10px] font-bold uppercase mb-0.5 opacity-80">배송 예정</p>
-                            <p className="text-xl font-bold leading-none">{shippingCount}<span className="text-xs ml-0.5 opacity-70 font-normal">건</span></p>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-lg font-bold font-mono tracking-tight">{stats.totalRev.toLocaleString()}</span>
+                            <span className="text-[10px] opacity-70">원</span>
                         </div>
+                    </div>
+
+                    <CompactStat label="총 주문" value={stats.qty} subValue="개" icon="Package" colorClass="text-slate-600 dark:text-slate-300" borderClass="" />
+                    <CompactStat label="배송 예정" value={stats.shippingCount} subValue="건" icon="Truck" colorClass="text-brand-600 dark:text-brand-400" borderClass="" />
+                    
+                    <div className={`col-span-1 cursor-pointer transition-all ${unpaidFilter === 'cash' ? 'ring-1 ring-accent-rose' : 'hover:bg-slate-50'}`} onClick={() => handleUnpaidFilterClick('cash')}>
+                        <CompactStat label="현금 미수금" value={stats.cashUnpaid.toLocaleString()} subValue="" icon="WarningCircle" colorClass="text-accent-rose" borderClass="" />
+                    </div>
+                    <div className={`col-span-1 cursor-pointer transition-all ${unpaidFilter === 'ship' ? 'ring-1 ring-accent-amber' : 'hover:bg-slate-50'}`} onClick={() => handleUnpaidFilterClick('ship')}>
+                        <CompactStat label="배송 미수금" value={stats.shipUnpaid.toLocaleString()} subValue="" icon="WarningCircle" colorClass="text-accent-amber" borderClass="" />
                     </div>
                 </div>
             );
         });
 
-        // --- COMPONENT: Standard Dashboard Card ---
-        const DashboardCard = React.memo(({ icon, color, title, value, subTitle, isCurrency = true, isUnpaid = false, onClick, isActive }) => {
-            const iconBgColor = {
-                pink: 'bg-pink-50 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400',
-                emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
-                cyan: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
-                red: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400', 
-                orange: 'bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
-                amber: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
-            }[color] || 'bg-slate-100 text-slate-600';
-
-            return (
-                <div 
-                    onClick={onClick}
-                    className={`bg-white dark:bg-dark-card px-4 py-2.5 rounded-xl shadow-sm border flex items-center gap-3 transition-all hover:shadow-md cursor-pointer h-[64px]
-                    ${isUnpaid ? 'border-red-100 dark:border-red-900/30' : 'border-slate-200 dark:border-dark-border'}
-                    ${isActive ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''}
-                    `}
-                >
-                    <div className={`flex-none p-2 rounded-lg flex items-center justify-center h-10 w-10 ${iconBgColor}`}>
-                        <Icon name={icon} size={20} />
-                    </div>
-                    <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <div className="flex justify-between items-baseline">
-                             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 truncate">{title}</span>
-                        </div>
-                        <div className="text-right -mt-0.5">
-                            <p className={`text-xl font-extrabold tracking-tight leading-none ${isUnpaid ? 'text-red-600 dark:text-red-500' : 'text-slate-800 dark:text-slate-200'}`}>
-                                {typeof value === 'number' ? value.toLocaleString() : value}
-                                {isCurrency && <span className={`text-[10px] font-medium ml-0.5 align-top ${isUnpaid ? 'text-red-400' : 'text-slate-400'}`}>원</span>}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            );
-        });
-
-        // --- COMPONENT: Product Manager (Updated for Order Updates) ---
-        const ProductManager = ({ isOpen, onClose, productHistory, setProductHistory, setOrders, showToast }) => {
-            if (!isOpen) return null;
+        // --- COMPONENT: Inline Product Manager ---
+        const InlineProductManager = ({ productHistory, setProductHistory, setOrders, showToast }) => {
             const [name, setName] = useState('');
             const [price, setPrice] = useState('');
 
-            const handleAdd = () => {
-                if (!name.trim()) {
-                    showToast("상품명을 입력해주세요.", "error");
-                    return;
-                }
+            const handleSave = () => {
+                if (!name.trim()) { showToast("입력 필요", "error"); return; }
                 const cleanName = name.trim();
                 const newUnitPrice = Number(price);
-
-                // 1. Update Product History
+                const isUpdate = productHistory.hasOwnProperty(cleanName);
                 setProductHistory(prev => ({ ...prev, [cleanName]: newUnitPrice }));
-                
-                // 2. Update Existing Orders
-                let updatedCount = 0;
-                setOrders(prevOrders => {
-                    return prevOrders.map(order => {
-                        // Check if order product name matches (case-insensitive or exact, let's do exact trim)
-                        if (order.product && order.product.trim() === cleanName) {
-                            updatedCount++;
-                            return {
-                                ...order,
-                                price: order.quantity * newUnitPrice
-                            };
-                        }
-                        return order;
-                    });
-                });
-
-                if (updatedCount > 0) {
-                    showToast(`${updatedCount}건의 주문 금액이 변경되었습니다.`);
-                } else {
-                    showToast("상품이 등록/수정되었습니다.");
-                }
-
+                setOrders(prev => prev.map(o => (o.product && o.product.trim() === cleanName) ? { ...o, price: o.quantity * newUnitPrice } : o));
+                showToast(isUpdate ? "단가 업데이트 완료" : "상품 등록 완료");
                 setName(''); setPrice('');
             };
-
-            const handleDelete = (key) => {
-                setProductHistory(prev => {
-                    const next = { ...prev };
-                    delete next[key];
-                    return next;
-                });
-            };
-            
-            const handleDeleteAll = () => {
-                if (window.confirm("정말로 모든 상품 목록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) {
-                    setProductHistory({});
-                }
-            };
-
-            const handleEditClick = (pName, pPrice) => {
-                setName(pName);
-                setPrice(pPrice);
-            };
+            const handleDelete = (key) => { if(window.confirm('삭제?')) setProductHistory(prev => { const n = {...prev}; delete n[key]; return n; }) };
+            const handleItemClick = (n, p) => { setName(n); setPrice(p); };
 
             return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white dark:bg-dark-card w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-dark-border flex flex-col max-h-[80vh]">
-                        <div className="p-4 border-b border-slate-100 dark:border-dark-border flex justify-between items-center bg-slate-50/50 dark:bg-dark-card">
-                            <h3 className="font-bold text-lg text-slate-800 dark:text-dark-text flex items-center gap-2"><Icon name="List" size={20} className="text-brand-500"/> 상품 관리</h3>
-                            <div className="flex gap-2">
-                                <button onClick={handleDeleteAll} className="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition-colors">전체 삭제</button>
-                                <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full"><Icon name="X" size={18} /></button>
-                            </div>
-                        </div>
-                        <div className="p-4 border-b border-slate-100 dark:border-dark-border bg-white dark:bg-dark-card">
-                            <div className="flex gap-2">
-                                <input className="flex-1 p-2 border border-slate-200 dark:border-dark-border rounded-lg text-sm dark:bg-dark-input dark:text-dark-text" placeholder="상품명" value={name} onChange={e => setName(e.target.value)} />
-                                <input className="w-24 p-2 border border-slate-200 dark:border-dark-border rounded-lg text-sm dark:bg-dark-input dark:text-dark-text" type="number" placeholder="단가" value={price} onChange={e => setPrice(e.target.value)} />
-                                <button onClick={handleAdd} className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700">등록/수정</button>
-                            </div>
-                            <p className="text-[10px] text-slate-400 mt-1 text-center">* 목록을 클릭하면 수정할 수 있습니다.</p>
-                        </div>
-                        <div className="overflow-y-auto p-2 flex-1 bg-slate-50 dark:bg-dark-bg">
-                            {Object.entries(productHistory).length === 0 ? (
-                                <p className="text-center text-slate-400 text-sm py-8">등록된 상품이 없습니다.</p>
-                            ) : (
-                                <ul className="space-y-1">
-                                    {Object.entries(productHistory).map(([pName, pPrice]) => (
-                                        <li 
-                                            key={pName} 
-                                            className="flex justify-between items-center p-3 bg-white dark:bg-dark-card rounded-lg border border-slate-100 dark:border-dark-border shadow-sm hover:border-brand-300 cursor-pointer transition-colors"
-                                            onClick={() => handleEditClick(pName, pPrice)}
-                                        >
-                                            <span className="font-medium text-slate-700 dark:text-dark-text">{pName}</span>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-sm text-slate-500 dark:text-slate-400 font-mono">{pPrice.toLocaleString()}원</span>
-                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(pName); }} className="text-red-400 hover:text-red-600 p-1"><Icon name="Trash2" size={16}/></button>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
+                <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-md p-2 flex flex-col h-full shadow-soft">
+                    <div className="flex gap-1 mb-1.5">
+                        <input className="flex-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-2 py-1 text-xs outline-none focus:border-brand-500 text-slate-700 dark:text-gray-200" placeholder="상품명" value={name} onChange={e=>setName(e.target.value)} />
+                        <input className="w-14 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-2 py-1 text-xs outline-none focus:border-brand-500 text-right text-slate-700 dark:text-gray-200 font-mono" type="number" placeholder="단가" value={price} onChange={e=>setPrice(e.target.value)} />
+                        <button onClick={handleSave} className="bg-brand-700 hover:bg-brand-800 text-white px-2 py-1 rounded-sm text-xs font-bold transition-colors">저장</button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-dark-bg border border-slate-100 dark:border-dark-border rounded-sm p-0.5">
+                        <ul className="space-y-px">
+                            {Object.entries(productHistory).map(([n, p]) => (
+                                <li key={n} onClick={() => handleItemClick(n, p)} className="flex justify-between items-center px-2 py-1 hover:bg-white hover:shadow-sm dark:hover:bg-dark-card cursor-pointer text-xs border border-transparent hover:border-slate-100 dark:hover:border-dark-border rounded-sm group transition-all">
+                                    <span className="font-medium text-slate-600 dark:text-slate-300 truncate w-24">{n}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-mono text-slate-400 dark:text-slate-500">{p.toLocaleString()}</span>
+                                        <button onClick={(e)=>{e.stopPropagation(); handleDelete(n)}} className="text-slate-300 hover:text-accent-rose opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="X" size={10} /></button>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 </div>
             );
         };
 
-        const ActionButton = React.memo(({ onClick, color, icon, text, className='' }) => {
-            const baseClass = "px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all shadow-sm active:scale-95";
-            const colorClass = color === 'blue' 
-                ? 'bg-brand-600 hover:bg-brand-700 text-white shadow-brand-500/30' 
-                : color === 'white'
-                    ? 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 dark:bg-dark-card dark:border-dark-border dark:text-slate-300 dark:hover:bg-slate-800'
-                    : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 dark:bg-dark-card dark:border-dark-border dark:text-slate-300 dark:hover:bg-slate-800';
-            
-            return (
-                <button onClick={onClick} className={`${baseClass} ${colorClass} ${className}`}>
-                    <Icon name={icon} size={14}/> {text}
-                </button>
-            );
+        const ActionButton = React.memo(({ onClick, color, icon, text, active, className }) => {
+            const base = "px-2 py-1 rounded-sm text-xs font-bold flex items-center gap-1 transition-all border shadow-sm h-7";
+            const colors = {
+                brand: "bg-brand-600 text-white border-brand-700 hover:bg-brand-700",
+                white: "bg-white dark:bg-dark-card text-slate-600 dark:text-slate-300 border-slate-200 dark:border-dark-border hover:bg-slate-50 hover:text-brand-700",
+                dark: "bg-brand-800 text-white border-brand-900 hover:bg-brand-900",
+                ghost: "bg-transparent text-slate-500 border-transparent hover:bg-slate-100 dark:hover:bg-slate-800",
+            };
+            return <button onClick={onClick} className={`${base} ${colors[color] || colors.white} ${active ? 'ring-1 ring-brand-500' : ''} ${className}`}><Icon name={icon} size={12} weight="bold"/> {text}</button>;
         });
 
-        // --- PARSERS & HELPERS ---
-        const parseAddressInfo = (text) => {
-            const result = { recipientName: '', phone: '', zipCode: '', addressText: '', shippingMemo: '' };
-            let remainingText = text.replace(/\n/g, ' ').trim();
-            const phoneMatch = remainingText.match(/010[.\-\s/]*\d{3,4}[.\-\s/]*\d{4}/);
-            if (phoneMatch) {
-                const rawPhone = phoneMatch[0];
-                const digitsOnly = rawPhone.replace(/\D/g, '');
-                if (digitsOnly.startsWith('010') && (digitsOnly.length === 10 || digitsOnly.length === 11)) {
-                     result.phone = digitsOnly; 
-                     remainingText = remainingText.replace(rawPhone, ' ').trim();
-                }
-            }
-            const zipMatch = remainingText.match(/\d{5,6}/);
-            if (zipMatch) {
-                result.zipCode = zipMatch[0];
-                remainingText = remainingText.replace(zipMatch[0], ' ');
-            }
-            const words = remainingText.split(/\s+/).filter(w => w.length > 0);
-            if (words.length > 0) {
-                const potentialName = words.find(w => /^[가-힣]{2,4}$/.test(w));
-                if (potentialName) {
-                    result.recipientName = potentialName;
-                    remainingText = remainingText.replace(potentialName, ' ');
-                } else {
-                    const firstWord = words[0];
-                    const isAddressKeyword = ['시', '도', '구', '군', '읍', '면', '동', '가', '로', '길'].some(kw => firstWord.endsWith(kw));
-                    if (!isAddressKeyword) {
-                        result.recipientName = firstWord;
-                         remainingText = remainingText.replace(firstWord, ' ');
-                    }
-                }
-            }
-            const addressKeywords = ['시', '도', '특별시', '광역시', '특별자치시', '특별자치도', '구', '군', '읍', '면', '동', '가', '로', '길', '번지', '아파트', '산단'];
-            let addressMatch = remainingText.match(new RegExp(`([가-힣0-9\\s-]*(${addressKeywords.join('|')})[가-힣0-9\\s,-]*)`, 'g'));
-            if (addressMatch) {
-                let bestMatch = addressMatch.reduce((a, b) => a.length > b.length ? a : b, '');
-                if (bestMatch.length > 2) { 
-                    result.addressText = bestMatch.trim();
-                    remainingText = remainingText.replace(bestMatch, ' ');
-                }
-            }
-            result.shippingMemo = remainingText.replace(/(배송|요청|메모|사항)[:\s]*/g, '').trim();
-            return result;
-        };
-
-        const AddressEditor = ({ order, handleUpdateOrder, handleUpdateOrderBatch, setEditingAddressId, showToast }) => {
-            const [rawAddressText, setRawAddressText] = useState('');
-            const handleOpenAddressSearch = () => {
-                if (window.daum && window.daum.Postcode) {
-                    try {
-                        new daum.Postcode({
-                            oncomplete: function(data) {
-                                let fullAddress = data.roadAddress || data.jibunAddress;
-                                let extraAddress = '';
-                                if(data.userSelectedType === 'R'){
-                                    if(data.bname !== '') extraAddress += data.bname;
-                                    if(data.buildingName !== '') extraAddress += (extraAddress !== '' ? `, ${data.buildingName}` : data.buildingName);
-                                    if(extraAddress !== '') fullAddress += ` (${extraAddress})`;
-                                }
-                                const updates = { zipCode: data.zonecode, addressText: fullAddress };
-                                handleUpdateOrderBatch(order.id, updates);
-                                showToast('주소가 입력되었습니다.');
-                            }
-                        }).open();
-                    } catch (error) { fallbackToNaver(); }
-                } else { fallbackToNaver(); }
-            };
-            const fallbackToNaver = () => {
-                showToast('네이버 검색 창을 엽니다.', 'error');
-                window.open('https://search.naver.com/search.naver?query=%EC%9A%B0%ED%8E%B8%EB%B2%88%ED%98%B8%EA%B2%80%EC%83%89', '_blank');
-            }
-            const handleParse = () => {
-                if (!rawAddressText.trim()) { showToast('텍스트를 입력해주세요.', 'error'); return; }
-                const parsed = parseAddressInfo(rawAddressText);
-                const updates = {
-                    recipientName: parsed.recipientName || order.recipientName,
-                    phone: parsed.phone || order.phone,
-                    zipCode: parsed.zipCode || order.zipCode,
-                    addressText: parsed.addressText || order.addressText,
-                    shippingMemo: parsed.shippingMemo || order.shippingMemo,
-                };
-                handleUpdateOrderBatch(order.id, updates);
-                showToast('변환 완료! (같은 닉네임 일괄 적용)');
-                setRawAddressText('');
-            };
-            const handleChange = (field, value) => { handleUpdateOrderBatch(order.id, { [field]: value }); };
-            const inputClass = "w-full p-2 border border-slate-200 dark:border-dark-border rounded-lg text-sm dark:bg-dark-input dark:text-dark-text focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all";
-            return (
-                <div className="col-span-full p-4 bg-slate-50/80 dark:bg-dark-card rounded-xl shadow-inner mt-2 mb-2 border border-slate-200 dark:border-dark-border animate-fade-in">
-                    <div className="flex justify-between items-center pb-3 border-b border-slate-200 dark:border-dark-border mb-3">
-                        <h3 className="text-sm font-bold text-slate-700 dark:text-dark-text flex items-center gap-2"><Icon name="MapPin" size={18} className="text-brand-600"/> 배송 정보 편집</h3>
-                        <div className="flex gap-2"><ActionButton onClick={handleOpenAddressSearch} color="white" icon="Search" text="주소 검색" /><ActionButton onClick={() => setEditingAddressId(null)} color="blue" icon="FloppyDisk" text="완료" /></div>
-                    </div>
-                    <div className="flex gap-2 mb-3">
-                        <textarea className="flex-1 p-3 border border-slate-200 dark:border-dark-border rounded-lg text-xs dark:bg-dark-input dark:text-dark-text focus:ring-2 focus:ring-brand-500 resize-none h-14" placeholder="텍스트 붙여넣기 (예: 강은지 010-1234-5678 서울시 강남구...)" value={rawAddressText} onChange={(e) => setRawAddressText(e.target.value)}/>
-                        <button onClick={handleParse} className="w-16 flex-none bg-brand-50 text-brand-600 hover:bg-brand-100 dark:bg-slate-700 dark:text-white rounded-lg text-xs font-bold border border-brand-200 dark:border-slate-600 transition-colors">자동<br/>입력</button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
-                        <div><label className="block text-[10px] font-bold mb-1 text-slate-500 uppercase tracking-wider">수령인</label><input type="text" value={order.recipientName} onChange={(e) => handleChange('recipientName', e.target.value)} className={inputClass} /></div>
-                        <div><label className="block text-[10px] font-bold mb-1 text-slate-500 uppercase tracking-wider">연락처</label><input type="text" value={order.phone} onChange={(e) => handleChange('phone', e.target.value)} className={inputClass} /></div>
-                        <div><label className="block text-[10px] font-bold mb-1 text-slate-500 uppercase tracking-wider">우편번호</label><input type="text" value={order.zipCode} onChange={(e) => handleChange('zipCode', e.target.value)} className={inputClass} /></div>
-                        <div><label className="block text-[10px] font-bold mb-1 text-slate-500 uppercase tracking-wider">배송 메모</label><input type="text" value={order.shippingMemo} onChange={(e) => handleChange('shippingMemo', e.target.value)} className={inputClass} /></div>
-                    </div>
-                    <div><label className="block text-[10px] font-bold mb-1 text-slate-500 uppercase tracking-wider">주소</label><input type="text" value={order.addressText} onChange={(e) => handleChange('addressText', e.target.value)} className={inputClass} /></div>
-                </div>
-            );
-        };
-
         const ProductAutocomplete = ({ id, value, onChange, onSelect, onDeleteProduct, onKeyDown, priceMap }) => {
-            const [showSuggestions, setShowSuggestions] = useState(false);
-            const wrapperRef = useRef(null);
-            useEffect(() => {
-                const handleClickOutside = (event) => {
-                    if (wrapperRef.current && !wrapperRef.current.contains(event.target)) { setShowSuggestions(false); }
-                };
-                document.addEventListener("mousedown", handleClickOutside);
-                return () => document.removeEventListener("mousedown", handleClickOutside);
-            }, []);
-            const filtered = Object.entries(priceMap).filter(([name]) => name.toLowerCase().includes(value.toLowerCase()));
-            const handleSelect = (name, price) => { onSelect(name, price); setShowSuggestions(false); };
-            const handleDelete = (e, name) => { e.stopPropagation(); onDeleteProduct(name); };
+            const [show, setShow] = useState(false);
+            const ref = useRef(null);
+            useEffect(() => { const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setShow(false); }; document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h); }, []);
+            const filtered = Object.entries(priceMap).filter(([k]) => k.toLowerCase().includes(value.toLowerCase()));
             return (
-                <div className="relative w-full" ref={wrapperRef}>
-                    <input id={id} className="w-full bg-transparent outline-none text-slate-900 dark:text-dark-text text-sm font-medium tracking-tight font-sans placeholder-slate-400" value={value} onChange={(e) => { onChange(e); setShowSuggestions(true); }} onFocus={() => setShowSuggestions(true)} onKeyDown={onKeyDown} placeholder="상품명 입력" autoComplete="off" />
-                    {showSuggestions && filtered.length > 0 && (
-                        <ul className="absolute z-50 left-0 mt-1 w-full bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-xl max-h-48 overflow-y-auto py-1">
-                            {filtered.map(([name, price]) => (
-                                <li key={name} className="px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer flex justify-between items-center text-sm border-b border-slate-50 dark:border-dark-border last:border-0 group transition-colors" onClick={() => handleSelect(name, price)}>
-                                    <div className="flex items-center flex-1 min-w-0 gap-2"><span className="font-medium text-slate-700 dark:text-dark-text truncate">{name}</span><span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full">{price.toLocaleString()}</span></div>
-                                    <button onClick={(e) => handleDelete(e, name)} className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"><Icon name="Trash2" size={14} /></button>
+                <div className="relative w-full" ref={ref}>
+                    <input id={id} className="w-full bg-transparent outline-none text-xs font-bold text-slate-700 dark:text-slate-200 placeholder-slate-300 py-0.5" value={value} onChange={e => { onChange(e); setShow(true); }} onFocus={() => setShow(true)} onKeyDown={onKeyDown} placeholder="상품명" autoComplete="off" />
+                    {show && filtered.length > 0 && (
+                        <ul className="absolute z-50 left-0 top-full mt-0.5 w-full bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border shadow-lg max-h-32 overflow-y-auto rounded-sm text-xs">
+                            {filtered.map(([n, p]) => (
+                                <li key={n} className="px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-dark-input cursor-pointer flex justify-between border-b border-slate-50 dark:border-dark-border last:border-0 text-slate-700 dark:text-slate-300" onClick={() => { onSelect(n, p); setShow(false); }}>
+                                    <span className="font-medium">{n}</span><span className="font-mono text-slate-400">{p.toLocaleString()}</span>
                                 </li>
                             ))}
                         </ul>
@@ -449,7 +267,9 @@
             const [rawInput, setRawInput] = useState('');
             const [globalMemo, setGlobalMemo] = useState(() => localStorage.getItem('globalMemo') || '');
             const [productHistory, setProductHistory] = useState(() => { try { return JSON.parse(localStorage.getItem('productHistory')) || {}; } catch { return {}; } });
+            const [customerDB, setCustomerDB] = useState(() => { try { return JSON.parse(localStorage.getItem('customerDB')) || {}; } catch { return {}; } }); 
             const [orders, setOrders] = useState(() => { try { const stored = JSON.parse(localStorage.getItem('youtubeOrders')); if (Array.isArray(stored)) return stored.map(sanitizeOrder).filter(o => o !== null); return []; } catch { return []; } });
+            
             const [isProcessing, setIsProcessing] = useState(false);
             const [toast, setToast] = useState(null);
             const [pricePerUnit, setPricePerUnit] = useState('');
@@ -460,269 +280,148 @@
             const [editingAddressId, setEditingAddressId] = useState(null); 
             const [editingShippingId, setEditingShippingId] = useState(null); 
             const [unpaidFilter, setUnpaidFilter] = useState(null); 
-            const [isProductManagerOpen, setIsProductManagerOpen] = useState(false);
             const [isExcelMenuOpen, setIsExcelMenuOpen] = useState(false);
-            
             const ordersRef = useRef(orders);
             const fileInputRef = useRef(null);
-            const excelMenuRef = useRef(null); // Ref for dropdown
+            const customerFileRef = useRef(null);
+            const excelMenuRef = useRef(null); 
 
             useEffect(() => { if (isDarkMode) document.documentElement.classList.add('dark'); else document.documentElement.classList.remove('dark'); }, [isDarkMode]);
             useEffect(() => { localStorage.setItem('youtubeOrders', JSON.stringify(orders)); ordersRef.current = orders; }, [orders]);
             useEffect(() => { localStorage.setItem('globalMemo', globalMemo); }, [globalMemo]);
             useEffect(() => { localStorage.setItem('productHistory', JSON.stringify(productHistory)); }, [productHistory]);
+            useEffect(() => { localStorage.setItem('customerDB', JSON.stringify(customerDB)); }, [customerDB]);
+            useEffect(() => { const handleClickOutside = (event) => { if (excelMenuRef.current && !excelMenuRef.current.contains(event.target)) { setIsExcelMenuOpen(false); } }; document.addEventListener("mousedown", handleClickOutside); return () => document.removeEventListener("mousedown", handleClickOutside); }, []);
 
-            // Click outside to close Excel menu
-            useEffect(() => {
-                const handleClickOutside = (event) => {
-                    if (excelMenuRef.current && !excelMenuRef.current.contains(event.target)) {
-                        setIsExcelMenuOpen(false);
-                    }
-                };
-                document.addEventListener("mousedown", handleClickOutside);
-                return () => document.removeEventListener("mousedown", handleClickOutside);
-            }, []);
-
-            // --- FIX: Using invisible char to force text in Excel (most robust method) ---
-            const getCSVString = (listData, mode) => {
-                 const list = [...listData].map(sanitizeOrder).sort((a, b) => (a.customer || '').localeCompare(b.customer || ''));
-                const firstIds = {};
-                list.forEach(o => { if (o.customer && !firstIds[o.customer]) firstIds[o.customer] = o.id; });
-                const clean = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
-                
-                const cleanPhone = (val) => {
-                    if (!val) return '""';
-                    const strVal = String(val);
-                    // Using Zero Width Space to force Excel to treat as text without ugly characters
-                    return `"\u200B${strVal}"`; 
-                };
-
-                if (mode === 'invoice') {
-                    const excelHeaders = ['', '', '', '', '상품명', '수령인', '연락처', '주소', '배송메모', '', '메모', '우편번호', ''];
-                    const csv = [excelHeaders.join(',')].concat(list.map(o => {
-                            let quantitySuffix = '';
-                            if (o.quantity >= 2) { quantitySuffix = ` ★${o.quantity}`; }
-                            const productName = `[${o.customer || '미지정'}] ${o.product}${quantitySuffix}`;
-                            return ['', '', '', '', clean(productName), clean(o.recipientName), cleanPhone(o.phone), clean(o.addressText), clean(o.shippingMemo), '', clean(o.memo), cleanPhone(o.zipCode), ''].join(',');
-                        })).join('\n');
-                    return "\ufeff" + csv;
-                } else {
-                    const headers = ['닉네임', '입금명', '상품명', '수량', '금액', '입금액(현금)', '카드결제액', '배송비', '미수금', '수령인', '연락처', '우편번호', '주소', '배송메모', '메모'];
-                    const csv = [headers.join(',')].concat(list.map(o => {
-                            const isFirst = firstIds[o.customer] === o.id;
-                            const ship = o.customShippingFee ?? shippingFee;
-                            const shipCharge = isFirst ? ship : 0;
-                            const unpaid = Math.max(0, (o.price + shipCharge) - (o.deposit + o.cardAmount + (isFirst && o.isShippingPaid ? ship : 0)));
-                            const productName = `${o.product}`; 
-                            return [clean(o.customer), clean(o.phone), clean(productName), o.quantity, o.price, clean(o.deposit), clean(o.cardAmount), clean(shipCharge), clean(unpaid), clean(o.recipientName), cleanPhone(o.phone), cleanPhone(o.zipCode), clean(o.addressText), clean(o.shippingMemo), clean(o.memo)].join(',');
-                        })).join('\n');
-                    return "\ufeff" + csv;
-                }
-            };
-
-            const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
+            const getCSVString = (listData, mode) => { const list = [...listData].map(sanitizeOrder).sort((a, b) => (a.customer || '').localeCompare(b.customer || '')); const firstIds = {}; list.forEach(o => { if (o.customer && !firstIds[o.customer]) firstIds[o.customer] = o.id; }); const clean = (val) => '"' + String(val || '').replace(/"/g, '""') + '"'; const cleanPhone = (val) => { if (!val) return '""'; const strVal = String(val); return '"\u200B' + strVal + '"'; }; if (mode === 'invoice') { const excelHeaders = ['', '', '', '', '상품명', '수령인', '연락처', '주소', '배송메모', '', '메모', '우편번호', '']; const csv = [excelHeaders.join(',')].concat(list.map(o => { let quantitySuffix = ''; if (o.quantity >= 2) { quantitySuffix = ` ★${o.quantity}`; } const productName = `[${o.customer || '미지정'}] ${o.product}${quantitySuffix}`; return ['', '', '', '', clean(productName), clean(o.recipientName), cleanPhone(o.phone), clean(o.addressText), clean(o.shippingMemo), '', clean(o.memo), cleanPhone(o.zipCode), ''].join(','); })).join('\n'); return "\ufeff" + csv; } else { const headers = ['닉네임', '입금명', '상품명', '수량', '금액', '입금액(현금)', '카드결제액', '배송비', '미수금', '수령인', '연락처', '우편번호', '주소', '배송메모', '메모']; const csv = [headers.join(',')].concat(list.map(o => { const isFirst = firstIds[o.customer] === o.id; const ship = o.customShippingFee ?? shippingFee; const shipCharge = isFirst ? ship : 0; const unpaid = Math.max(0, (o.price + shipCharge) - (o.deposit + o.cardAmount + (isFirst && o.isShippingPaid ? ship : 0))); return [clean(o.customer), clean(o.phone), clean(o.product), o.quantity, o.price, clean(o.deposit), clean(o.cardAmount), clean(shipCharge), clean(unpaid), clean(o.recipientName), cleanPhone(o.phone), cleanPhone(o.zipCode), clean(o.addressText), clean(o.shippingMemo), clean(o.memo)].join(','); })).join('\n'); return "\ufeff" + csv; } };
+            const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 2500); };
             const handleDownloadCSV = (mode = 'invoice') => { if (ordersRef.current.length === 0) return; const csvContent = getCSVString(ordersRef.current, mode); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const typeName = mode === 'invoice' ? '송장용' : '전체내역'; const fileName = `강은지_주문서_${typeName}_${new Date().toLocaleDateString()}.csv`; a.download = fileName; a.click(); URL.revokeObjectURL(url); showToast(`${typeName} 엑셀 다운로드 완료!`); };
-
-            const handleDownloadProductCSV = () => {
-                const targetOrders = filteredOrders.length > 0 ? filteredOrders : orders;
-                if (targetOrders.length === 0) return;
-                const summary = targetOrders.reduce((acc, curr) => {
-                    const name = curr.product;
-                    if (!acc[name]) acc[name] = 0;
-                    acc[name] += curr.quantity;
-                    return acc;
-                }, {});
-                const csv = "\ufeff" + ["상품명,총수량"].concat(Object.entries(summary).map(([name, qty]) => `"${name}",${qty}`)).join('\n');
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `강은지_주문서_발주내역_${new Date().toLocaleDateString()}.csv`;
-                a.click();
-                URL.revokeObjectURL(url);
-                showToast('발주 엑셀 다운로드 완료!');
-            };
-
+            const handleDownloadProductCSV = () => { const targetOrders = filteredOrders.length > 0 ? filteredOrders : orders; if (targetOrders.length === 0) return; const summary = targetOrders.reduce((acc, curr) => { const name = curr.product; if (!acc[name]) acc[name] = 0; acc[name] += curr.quantity; return acc; }, {}); const csv = "\ufeff" + ["상품명,총수량"].concat(Object.entries(summary).map(([name, qty]) => `"${name}",${qty}`)).join('\n'); const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `강은지_주문서_발주내역_${new Date().toLocaleDateString()}.csv`; a.click(); URL.revokeObjectURL(url); showToast('발주 엑셀 다운로드 완료!'); };
             const handleDownloadHTML = () => { const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const date = new Date(); const timestamp = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}`; a.download = `강은지_주문서_백업_${timestamp}.html`; a.click(); URL.revokeObjectURL(url); showToast('앱 파일이 안전하게 백업(저장)되었습니다!'); };
             const handleUploadClick = () => fileInputRef.current && fileInputRef.current.click();
             const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const uploaded = results.data.map((row, i) => sanitizeOrder({ id: Date.now() + i, originalText: `UPLOAD: ${row['상품명']}`, customer: row['닉네임']?.trim(), product: row['상품명'], quantity: Number(row['수량']) || 1, price: Number(row['금액']?.replace(/,/g, '')) || 0, deposit: Number(row['입금액(현금)']), cardAmount: Number(row['카드결제액']), recipientName: row['수령인'], phone: row['연락처'], zipCode: row['우편번호'], addressText: row['주소'], shippingMemo: row['배송메모'], memo: row['메모'] })).filter(o => o.customer); setOrders(prev => [...uploaded, ...prev]); showToast(`${uploaded.length}건 업로드 완료!`); }}); e.target.value = null; };
-            
-            // --- NEW: Reset Confirmation ---
-            const handleReset = () => {
-                if (window.confirm("정말로 모든 주문 내역을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.")) {
-                    setOrders([]);
-                    showToast("모든 데이터가 초기화되었습니다.", "error");
-                }
-            };
-
-            // --- HELPER FUNCTIONS ---
-            const getNicknameColor = (name) => {
-                if (!name) return 'text-slate-900 dark:text-dark-text';
-                const colors = ['text-red-600 dark:text-red-400', 'text-orange-600 dark:text-orange-400', 'text-amber-600 dark:text-amber-400', 'text-green-600 dark:text-green-400', 'text-emerald-600 dark:text-emerald-400', 'text-teal-600 dark:text-teal-400', 'text-cyan-600 dark:text-cyan-400', 'text-blue-600 dark:text-blue-400', 'text-indigo-600 dark:text-indigo-400', 'text-violet-600 dark:text-violet-400', 'text-purple-600 dark:text-purple-400', 'text-fuchsia-600 dark:text-fuchsia-400', 'text-pink-600 dark:text-pink-400', 'text-rose-600 dark:text-rose-400'];
-                let hash = 0;
-                for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-                return colors[Math.abs(hash) % colors.length];
-            };
-            
-            const handleCopyMemo = () => {
-                if (!globalMemo) { showToast('복사할 메모가 없습니다.', 'error'); return; }
-                const ta = document.createElement("textarea"); ta.value = globalMemo; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-                showToast('메모가 복사되었습니다!');
-            };
-
-            const handleCopyResults = () => { 
-                if (filteredOrders.length === 0) return; 
-                let text = ''; 
-                const grouped = filteredOrders.reduce((acc, o) => { (acc[o.customer] = acc[o.customer] || []).push(o); return acc; }, {}); 
-                Object.entries(grouped).forEach(([name, items]) => { 
-                    text += `💙 ${name} 님 💙\n\n`; 
-                    items.forEach(o => { const qtyText = o.quantity > 1 ? ` (${o.quantity})` : ''; text += `${o.product}${qtyText} ${o.price.toLocaleString()}\n` }); 
-                    
-                    const shipFee = items[0].customShippingFee ?? shippingFee; 
-                    if (shipFee > 0) text += `배송비 ${shipFee.toLocaleString()}\n`; 
-                    text += `-\n`; 
-                    
-                    const cardTotal = items.reduce((s, o) => s + o.cardAmount, 0); 
-                    const depositTotal = items.reduce((s, o) => s + o.deposit, 0); 
-                    const itemTotal = items.reduce((s, o) => s + o.price, 0); 
-                    const paidTotal = depositTotal + cardTotal;
-                    const totalRequired = itemTotal + shipFee;
-                    const isShipPaid = items.some(o => o.isShippingPaid);
-                    
-                    if (cardTotal > 0) { 
-                        const cardFee = Math.round(cardTotal * 0.10); 
-                        const totalCardPayment = cardTotal + cardFee; 
-                        text += `입금 ${depositTotal.toLocaleString()}\n`; 
-                        text += `카드 ${cardTotal.toLocaleString()}\n`; 
-                        text += `총 카드결제 (10%) \n${totalCardPayment.toLocaleString()} 예정\n`; 
-                    } else if (depositTotal > 0) { 
-                        const displayDepositTotal = isShipPaid ? (depositTotal + shipFee) : depositTotal;
-                        text += `입금 ${displayDepositTotal.toLocaleString()}\n`; 
-                    } 
-                    text += ` -\n`; 
-                    
-                    const shippingCredit = isShipPaid ? shipFee : 0;
-                    const totalUnpaid = Math.max(0, totalRequired - paidTotal - shippingCredit);
-                    
-                    if (totalUnpaid > 0) { 
-                        text += `미입금: ${totalUnpaid.toLocaleString()}원\n\n`; 
-                    } else { 
-                        text += `감사합니다 😍\n\n`; 
-                    } 
-                }); 
-                const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('주문 내역 복사 완료!'); 
-            };
-
+            const handleReset = () => { if (window.confirm("정말로 모든 주문 내역을 삭제하시겠습니까? (고객 데이터는 유지됩니다)")) { setOrders([]); showToast("초기화 완료", "error"); } };
+            const handleCustomerUploadClick = () => customerFileRef.current && customerFileRef.current.click();
+            const handleCustomerFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const newDB = { ...customerDB }; let count = 0; results.data.forEach(row => { const nick = row['닉네임'] || row['Nickname'] || row['이름'] || row['성함']; if (nick && nick.trim()) { newDB[nick.trim()] = { recipientName: row['수령인'] || row['받는분'] || row['이름'] || nick.trim(), phone: row['연락처'] || row['전화번호'] || row['휴대폰'] || '', zipCode: row['우편번호'] || row['Zip'] || '', addressText: row['주소'] || row['Address'] || row['기본주소'] || '', shippingMemo: row['배송메모'] || row['배송요청사항'] || row['메모'] || '' }; count++; } }); setCustomerDB(newDB); showToast(`총 ${count}명의 고객 정보를 등록했습니다!`, 'success'); } }); e.target.value = null; };
+            const getNicknameColor = (name) => { if (!name) return 'text-slate-700 dark:text-slate-300'; const colors = ['text-brand-600 dark:text-brand-400', 'text-slate-700 dark:text-slate-300']; let hash = 0; for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash); return colors[Math.abs(hash) % colors.length]; };
+            const handleCopyMemo = () => { if (!globalMemo) { showToast('복사할 메모가 없습니다.', 'error'); return; } const ta = document.createElement("textarea"); ta.value = globalMemo; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('메모 복사 완료'); };
+            const handleCopyResults = () => { if (filteredOrders.length === 0) return; let text = ''; const grouped = filteredOrders.reduce((acc, o) => { (acc[o.customer] = acc[o.customer] || []).push(o); return acc; }, {}); Object.entries(grouped).forEach(([name, items]) => { text += `💙 ${name} 님 💙\n\n`; items.forEach(o => { const qtyText = o.quantity > 1 ? ` (${o.quantity})` : ''; text += `${o.product}${qtyText} ${o.price.toLocaleString()}\n` }); const shipFee = items[0].customShippingFee ?? shippingFee; if (shipFee > 0) text += `배송비 ${shipFee.toLocaleString()}\n`; text += `-\n`; const cardTotal = items.reduce((s, o) => s + o.cardAmount, 0); const depositTotal = items.reduce((s, o) => s + o.deposit, 0); const itemTotal = items.reduce((s, o) => s + o.price, 0); const paidTotal = depositTotal + cardTotal; const totalRequired = itemTotal + shipFee; const isShipPaid = items.some(o => o.isShippingPaid); if (cardTotal > 0) { const cardFee = Math.round(cardTotal * 0.10); const totalCardPayment = cardTotal + cardFee; text += `입금 ${depositTotal.toLocaleString()}\n`; text += `카드 ${cardTotal.toLocaleString()}\n`; text += `총 카드결제 (10%) \n${totalCardPayment.toLocaleString()} 예정\n`; } else if (depositTotal > 0) { const displayDepositTotal = isShipPaid ? (depositTotal + shipFee) : depositTotal; text += `입금 ${displayDepositTotal.toLocaleString()}\n`; } text += ` -\n`; const shippingCredit = isShipPaid ? shipFee : 0; const totalUnpaid = Math.max(0, totalRequired - paidTotal - shippingCredit); if (totalUnpaid > 0) { text += `미입금: ${totalUnpaid.toLocaleString()}원\n\n`; text += `카카오뱅크 김선정\n7942 18 01611 \n\n입금 부탁드립니다 🙏\n\n`; } else { text += `완납 확인! 감사합니다 😍\n\n`; } }); const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('주문 내역 복사 완료'); };
             const firstOrderIds = useMemo(() => { const ids = {}; orders.forEach(o => { if (o.customer && !ids[o.customer]) ids[o.customer] = o.id; }); return ids; }, [orders]);
             const customerCounts = useMemo(() => orders.reduce((acc, o) => { if(o.customer) acc[o.customer] = (acc[o.customer] || 0) + 1; return acc; }, {}), [orders]);
-            const filteredOrders = useMemo(() => { 
-                let result = orders;
-                if (filterText) {
-                    const lower = filterText.toLowerCase(); 
-                    result = result.filter(o => (o.customer && o.customer.toLowerCase().includes(lower)) || (o.product && o.product.toLowerCase().includes(lower))); 
-                }
-
-                if (unpaidFilter) {
-                    const grouped = orders.reduce((acc, o) => { 
-                        const k = o.customer || 'u'; 
-                        if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null}; 
-                        acc[k].p += o.price; 
-                        acc[k].d += o.deposit; 
-                        acc[k].c += o.cardAmount; 
-                        if(o.isShippingPaid) acc[k].ship = true; 
-                        if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; 
-                        return acc; 
-                    }, {});
-
-                    result = result.filter(o => {
-                        const g = grouped[o.customer || 'u'];
-                        if (!g) return false;
-                        const ship = g.fee ?? shippingFee;
-                        const totalRequired = g.p + ship;
-                        const totalPaid = g.d + g.c;
-                        const shippingCredit = g.ship ? ship : 0;
-                        const personUnpaid = Math.max(0, totalRequired - totalPaid - shippingCredit);
-
-                        if (unpaidFilter === 'ship') {
-                            return !g.ship && ship > 0;
-                        } 
-                        if (unpaidFilter === 'cash') {
-                            let cashUnpaid = 0;
-                             if (g.ship) {
-                                cashUnpaid = personUnpaid;
-                            } else {
-                                const unpaidAttribToShip = Math.min(personUnpaid, ship);
-                                cashUnpaid = personUnpaid - unpaidAttribToShip;
-                            }
-                            return cashUnpaid > 0;
-                        }
-                        return true;
-                    });
-                }
-                return result;
-            }, [orders, filterText, unpaidFilter, shippingFee]);
-
-            const stats = useMemo(() => {
-                const res = { 
-                    qty: 0, orderCount: 0, shippingCount: 0,
-                    cardRev: 0, cashRev: 0, shipRev: 0, totalRev: 0,
-                    cardUnpaid: 0, cashUnpaid: 0, shipUnpaid: 0,
-                    totalUnpaid: 0
-                };
-                
-                const grouped = filteredOrders.reduce((acc, o) => { 
-                    const k = o.customer || 'u'; 
-                    if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null, q:0}; 
-                    acc[k].p += o.price; 
-                    acc[k].d += o.deposit; 
-                    acc[k].c += o.cardAmount; 
-                    acc[k].q += o.quantity; 
-                    if(o.isShippingPaid) acc[k].ship = true; 
-                    if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; 
-                    return acc; 
-                }, {});
-
-                Object.values(grouped).forEach(g => {
-                    const ship = g.fee ?? shippingFee; 
-                    res.orderCount++; 
-                    res.shippingCount++; 
-                    
-                    res.cardRev += g.c; 
-                    res.cashRev += Math.max(0, g.p - g.c); 
-                    res.shipRev += ship;
-                    res.totalRev += (g.p + ship);
-
-                    res.qty += g.q; 
-                    
-                    const totalRequired = g.p + ship;
-                    const totalPaid = g.d + g.c;
-                    const shippingCredit = g.ship ? ship : 0;
-                    
-                    const personUnpaid = Math.max(0, totalRequired - totalPaid - shippingCredit);
-                    
-                    if (g.ship) {
-                        res.cashUnpaid += personUnpaid; 
-                    } else {
-                        const unpaidAttribToShip = Math.min(personUnpaid, ship);
-                        res.shipUnpaid += unpaidAttribToShip;
-                        res.cashUnpaid += (personUnpaid - unpaidAttribToShip);
-                    }
-
-                    res.totalUnpaid += personUnpaid;
-                });
-
-                return res;
-            }, [filteredOrders, shippingFee]);
-            
+            const filteredOrders = useMemo(() => { let result = orders; if (filterText) { const lower = filterText.toLowerCase(); result = result.filter(o => (o.customer && o.customer.toLowerCase().includes(lower)) || (o.product && o.product.toLowerCase().includes(lower))); } if (unpaidFilter) { const grouped = orders.reduce((acc, o) => { const k = o.customer || 'u'; if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null}; acc[k].p += o.price; acc[k].d += o.deposit; acc[k].c += o.cardAmount; if(o.isShippingPaid) acc[k].ship = true; if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; return acc; }, {}); result = result.filter(o => { const g = grouped[o.customer || 'u']; if (!g) return false; const ship = g.fee ?? shippingFee; const totalRequired = g.p + ship; const totalPaid = g.d + g.c; const shippingCredit = g.ship ? ship : 0; const personUnpaid = Math.max(0, totalRequired - totalPaid - shippingCredit); if (unpaidFilter === 'ship') { return !g.ship && ship > 0; } if (unpaidFilter === 'cash') { let cashUnpaid = 0; if (g.ship) { cashUnpaid = personUnpaid; } else { const unpaidAttribToShip = Math.min(personUnpaid, ship); cashUnpaid = personUnpaid - unpaidAttribToShip; } return cashUnpaid > 0; } return true; }); } return result; }, [orders, filterText, unpaidFilter, shippingFee]);
+            const stats = useMemo(() => { const res = { qty: 0, orderCount: 0, shippingCount: 0, cardRev: 0, cashRev: 0, shipRev: 0, totalRev: 0, cardUnpaid: 0, cashUnpaid: 0, shipUnpaid: 0, totalUnpaid: 0 }; const grouped = filteredOrders.reduce((acc, o) => { const k = o.customer || 'u'; if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null, q:0}; acc[k].p += o.price; acc[k].d += o.deposit; acc[k].c += o.cardAmount; acc[k].q += o.quantity; if(o.isShippingPaid) acc[k].ship = true; if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; return acc; }, {}); Object.values(grouped).forEach(g => { const ship = g.fee ?? shippingFee; res.orderCount++; res.shippingCount++; res.cardRev += g.c; res.cashRev += Math.max(0, g.p - g.c); res.shipRev += ship; res.totalRev += (g.p + ship); res.qty += g.q; const totalRequired = g.p + ship; const totalPaid = g.d + g.c; const shippingCredit = g.ship ? ship : 0; const personUnpaid = Math.max(0, totalRequired - totalPaid - shippingCredit); if (g.ship) { res.cashUnpaid += personUnpaid; } else { const unpaidAttribToShip = Math.min(personUnpaid, ship); res.shipUnpaid += unpaidAttribToShip; res.cashUnpaid += (personUnpaid - unpaidAttribToShip); } res.totalUnpaid += personUnpaid; }); return res; }, [filteredOrders, shippingFee]);
             const filteredStats = useMemo(() => { return stats; }, [stats]);
-
             const handleToggleAmountEdit = (id) => { setEditingAmountId(id === editingAmountId ? null : id); setEditingShippingId(null); };
             const handleToggleShippingEdit = (id) => { setEditingShippingId(id === editingShippingId ? null : id); setEditingAmountId(null); };
             const handleToggleAddressEdit = (id) => { setEditingAddressId(id === editingAddressId ? null : id); };
             const handleKeyDown = (e, index, field) => { if (e.key === 'Enter') { e.preventDefault(); const nextIndex = index + 1; if (nextIndex < filteredOrders.length) { const nextElement = document.getElementById(`${field}-${nextIndex}`); if (nextElement) { nextElement.focus(); if (nextElement.select) nextElement.select(); } } } };
             const handleMemoKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const textarea = e.target; const start = textarea.selectionStart; const end = textarea.selectionEnd; const value = globalMemo; const newValue = value.substring(0, start) + "\n▫ " + value.substring(end); setGlobalMemo(newValue); setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = start + 3; }, 0); } };
+            
+            // --- ADDRESS EDITOR (COMPACT & SMART PARSING) ---
+            const AddressEditor = ({ order, handleUpdateOrder, handleUpdateOrderBatch, setEditingAddressId, showToast }) => {
+                const [rawAddressText, setRawAddressText] = useState('');
+                const handleOpenAddressSearch = () => { if (window.daum && window.daum.Postcode) { try { new daum.Postcode({ oncomplete: function(data) { let fullAddress = data.roadAddress || data.jibunAddress; let extraAddress = ''; if(data.userSelectedType === 'R'){ if(data.bname !== '') extraAddress += data.bname; if(data.buildingName !== '') extraAddress += (extraAddress !== '' ? `, ${data.buildingName}` : data.buildingName); if(extraAddress !== '') fullAddress += ` (${extraAddress})`; } handleUpdateOrderBatch(order.id, { zipCode: data.zonecode, addressText: fullAddress }); showToast('주소 입력 완료'); } }).open(); } catch (error) { fallbackToNaver(); } } else { fallbackToNaver(); } };
+                const fallbackToNaver = () => { showToast('네이버 주소검색을 엽니다.', 'error'); window.open('https://search.naver.com/search.naver?query=%EC%9A%B0%ED%8E%B8%EB%B2%88%ED%98%B8%EA%B2%80%EC%83%89', '_blank'); };
+                
+                // Updated Parsing Logic for "Name, Phone, (Zip)Address, Memo"
+                const parseAddressInfo = (text) => { 
+                    const result = { recipientName: '', phone: '', zipCode: '', addressText: '', shippingMemo: '' }; 
+                    let raw = text.trim(); 
+                    
+                    // 1. Extract Zip Code from (12345) format
+                    const zipParenMatch = raw.match(/\((\d{5,6})\)/);
+                    if (zipParenMatch) {
+                        result.zipCode = zipParenMatch[1];
+                        raw = raw.replace(zipParenMatch[0], '').trim(); // Remove zip from text to avoid confusion
+                    }
+
+                    // 2. Comma-separated Logic (User preference)
+                    if (raw.includes(',')) {
+                         const parts = raw.split(',').map(s => s.trim());
+                         // Attempt to identify parts by looking for Phone Number pattern (010)
+                         const phoneIdx = parts.findIndex(p => /010/.test(p));
+                         
+                         if (phoneIdx !== -1) {
+                             result.phone = parts[phoneIdx];
+                             // Assuming Name comes before Phone
+                             if (phoneIdx > 0) result.recipientName = parts[phoneIdx - 1];
+                             // Assuming Address comes after Phone
+                             if (phoneIdx + 1 < parts.length) {
+                                 let addr = parts[phoneIdx + 1];
+                                 // Cleanup if (zip) was inside this part
+                                 if (zipParenMatch && addr.includes(zipParenMatch[0])) addr = addr.replace(zipParenMatch[0], '').trim(); 
+                                 result.addressText = addr;
+                             }
+                             // Assuming Memo is last
+                             if (phoneIdx + 2 < parts.length) result.shippingMemo = parts.slice(phoneIdx + 2).join(' ');
+                             
+                             return result;
+                         }
+                    }
+
+                    // 3. Fallback Logic (If no commas or phone not found in split)
+                    // Phone
+                    const phoneMatch = raw.match(/010[.\-\s]*\d{3,4}[.\-\s]*\d{4}/); 
+                    if (phoneMatch) { 
+                        result.phone = phoneMatch[0].replace(/[^0-9-]/g, ''); 
+                        raw = raw.replace(phoneMatch[0], ' ').trim();
+                    } 
+                    // Zip (Fallback if no parens)
+                    if (!result.zipCode) {
+                        const zipMatch = raw.match(/\d{5,6}/); 
+                        if (zipMatch) { result.zipCode = zipMatch[0]; raw = raw.replace(zipMatch[0], ' '); } 
+                    }
+                    // Name (Heuristic: short string)
+                    const words = raw.split(/\s+/).filter(w => w.length > 0); 
+                    if (words.length > 0) { 
+                        const potentialName = words.find(w => /^[가-힣]{2,4}$/.test(w)); 
+                        if (potentialName) { 
+                            result.recipientName = potentialName; 
+                            raw = raw.replace(potentialName, ' '); 
+                        } 
+                    } 
+                    // Address keyword check
+                    const addressKeywords = ['시', '도', '특별시', '광역시', '특별자치시', '특별자치도', '구', '군', '읍', '면', '동', '가', '로', '길', '번지', '아파트', '산단']; 
+                    let addressMatch = raw.match(new RegExp(`([가-힣0-9\\s-]*(${addressKeywords.join('|')})[가-힣0-9\\s,-]*)`, 'g')); 
+                    if (addressMatch) { 
+                        let bestMatch = addressMatch.reduce((a, b) => a.length > b.length ? a : b, ''); 
+                        if (bestMatch.length > 2) { 
+                            result.addressText = bestMatch.trim(); 
+                            raw = raw.replace(bestMatch, ' '); 
+                        } 
+                    } 
+                    // Remaining text is memo
+                    result.shippingMemo = raw.replace(/(배송|요청|메모|사항)[:\s]*/g, '').trim(); 
+                    
+                    return result; 
+                };
+                
+                const handleParse = () => { if (!rawAddressText.trim()) { showToast('텍스트를 입력해주세요.', 'error'); return; } const parsed = parseAddressInfo(rawAddressText); const updates = { recipientName: parsed.recipientName || order.recipientName, phone: parsed.phone || order.phone, zipCode: parsed.zipCode || order.zipCode, addressText: parsed.addressText || order.addressText, shippingMemo: parsed.shippingMemo || order.shippingMemo }; handleUpdateOrderBatch(order.id, updates); showToast('자동 입력 완료'); setRawAddressText(''); };
+                const handleChange = (field, value) => { handleUpdateOrderBatch(order.id, { [field]: value }); };
+                const inputClass = "w-full p-1.5 border border-slate-200 dark:border-dark-border rounded-sm text-xs dark:bg-dark-input dark:text-dark-text focus:border-brand-500 transition-all bg-white dark:bg-dark-card";
+                return (
+                    <div className="col-span-full p-3 bg-slate-50 dark:bg-dark-input rounded-md border border-slate-200 dark:border-dark-border mt-1 mb-1 animate-fade-in shadow-inner">
+                        <div className="flex justify-between items-center pb-2 mb-2 border-b border-slate-200 dark:border-dark-border">
+                            <h3 className="text-xs font-bold text-slate-700 dark:text-white flex items-center gap-1"><Icon name="MapPin" size={12}/> 배송지 수정</h3>
+                            <div className="flex gap-1"><ActionButton onClick={handleOpenAddressSearch} color="white" icon="Search" text="검색" /><ActionButton onClick={() => setEditingAddressId(null)} color="brand" icon="FloppyDisk" text="완료" /></div>
+                        </div>
+                        <div className="flex gap-1 mb-2">
+                            <textarea className="flex-1 p-1.5 border border-slate-200 dark:border-dark-border rounded-sm text-xs focus:border-brand-500 resize-none h-8 bg-white dark:bg-dark-card" placeholder="[이름, 전화번호, (12345)주소, 메모] 붙여넣기" value={rawAddressText} onChange={(e) => setRawAddressText(e.target.value)}/>
+                            <button onClick={handleParse} className="px-2 bg-slate-800 text-white rounded-sm text-xs font-bold">자동</button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
+                            <div><label className="block text-[9px] font-bold mb-0.5 text-slate-400">수령인</label><input type="text" value={order.recipientName} onChange={(e) => handleChange('recipientName', e.target.value)} className={inputClass} /></div>
+                            <div><label className="block text-[9px] font-bold mb-0.5 text-slate-400">연락처</label><input type="text" value={order.phone} onChange={(e) => handleChange('phone', e.target.value)} className={inputClass} /></div>
+                            <div><label className="block text-[9px] font-bold mb-0.5 text-slate-400">우편번호</label><input type="text" value={order.zipCode} onChange={(e) => handleChange('zipCode', e.target.value)} className={inputClass} /></div>
+                            <div><label className="block text-[9px] font-bold mb-0.5 text-slate-400">메모</label><input type="text" value={order.shippingMemo} onChange={(e) => handleChange('shippingMemo', e.target.value)} className={inputClass} /></div>
+                        </div>
+                        <div><label className="block text-[9px] font-bold mb-0.5 text-slate-400">상세주소</label><input type="text" value={order.addressText} onChange={(e) => handleChange('addressText', e.target.value)} className={inputClass} /></div>
+                    </div>
+                );
+            };
+
             const handleParseOrders = () => {
-                if (!rawInput.trim()) { showToast('내용을 입력해주세요.', 'error'); return; }
+                if (!rawInput.trim()) { showToast('입력 내용이 없습니다.', 'error'); return; }
                 setIsProcessing(true);
                 setTimeout(() => {
                     const blocks = rawInput.split(/\n\s*\n/).filter(block => block.trim() !== '');
@@ -732,302 +431,243 @@
                         let rawCustomer = lines[0].replace(/@/g, '').trim();
                         let customer = rawCustomer.replace(/-[a-zA-Z0-9]+$/, '').trim();
                         let product = lines.slice(1).join(' ').trim() || defaultProductName;
-                        let quantity = 1; 
+                        let quantity = 1;
                         let unitPrice = productHistory[product] || Number(pricePerUnit) || 0;
                         const price = quantity * unitPrice;
                         const existingOrder = orders.find(o => o.customer === customer);
-                        let recipientName = '', zipCode = '', addressText = '', shippingMemo = '', phone = '';
-                        if (existingOrder) { recipientName = existingOrder.recipientName; phone = existingOrder.phone; zipCode = existingOrder.zipCode; addressText = existingOrder.addressText; shippingMemo = existingOrder.shippingMemo; }
-                        return sanitizeOrder({ id: Date.now() + i + Math.random(), originalText: block, customer, product, quantity, price, phone, deposit: 0, isPaid: false, isShippingPaid: false, isCardPaid: false, cardAmount: 0, customShippingFee: null, memo: '', recipientName, zipCode, addressText, shippingMemo });
+                        
+                        // CRM Lookup
+                        let recipientName = '', zipCode = '', addressText = '', shippingMemo = '', phone = '', isCRM = false;
+                        const crmData = customerDB[customer];
+                        if (crmData) {
+                            recipientName = crmData.recipientName;
+                            phone = crmData.phone;
+                            zipCode = crmData.zipCode;
+                            addressText = crmData.addressText;
+                            shippingMemo = crmData.shippingMemo;
+                            isCRM = true;
+                        } else if (existingOrder) {
+                            recipientName = existingOrder.recipientName;
+                            phone = existingOrder.phone;
+                            zipCode = existingOrder.zipCode;
+                            addressText = existingOrder.addressText;
+                            shippingMemo = existingOrder.shippingMemo;
+                        }
+
+                        return sanitizeOrder({ id: Date.now() + i + Math.random(), originalText: block, customer, product, quantity, price, phone, deposit: 0, isPaid: false, isShippingPaid: false, isCardPaid: false, cardAmount: 0, customShippingFee: null, memo: '', recipientName, zipCode, addressText, shippingMemo, isCRM });
                     }).filter(o => o !== null);
-                    setOrders(prev => [...newOrders, ...prev]); setRawInput(''); setIsProcessing(false); showToast(`${newOrders.length}건 추가 완료!`);
+                    
+                    setOrders(prev => [...newOrders, ...prev]);
+                    setRawInput('');
+                    setIsProcessing(false);
+                    showToast(`${newOrders.length}건 추가 (단골 ${newOrders.filter(o=>o.isCRM).length}명 자동입력)`);
                 }, 100);
             };
+
             const handleAddEmptyOrder = () => { setOrders(prev => [sanitizeOrder({ id: Date.now(), customer: '', product: defaultProductName, quantity: 1, price: Number(pricePerUnit) || 0 }), ...prev]); };
-            const handleUpdateOrder = (id, field, value) => {
-                setOrders(prev => prev.map(o => {
-                    if (o.id !== id) return o;
-                    let updates = { [field]: value };
-                    if (field === 'quantity') { const savedUnitPrice = productHistory[o.product] || Number(pricePerUnit) || 0; updates.price = value * savedUnitPrice; }
-                    if (field === 'product') { const savedUnitPrice = productHistory[value]; if (savedUnitPrice !== undefined) { updates.price = o.quantity * savedUnitPrice; } }
-                    if (field === 'price') { if (o.product && o.quantity > 0) { const unitPrice = value / o.quantity; setProductHistory(prevHist => ({ ...prevHist, [o.product]: unitPrice })); } }
-                    const newPrice = updates.price ?? o.price;
-                    if (field === 'deposit') { const rem = Math.max(0, newPrice - value); updates.cardAmount = rem; updates.isCardPaid = rem > 0; }
-                    return sanitizeOrder({ ...o, ...updates });
-                }));
-            };
+            const handleUpdateOrder = (id, field, value) => { setOrders(prev => prev.map(o => { if (o.id !== id) return o; let updates = { [field]: value }; if (field === 'quantity') { const savedUnitPrice = productHistory[o.product] || Number(pricePerUnit) || 0; updates.price = value * savedUnitPrice; } if (field === 'product') { const savedUnitPrice = productHistory[value]; if (savedUnitPrice !== undefined) { updates.price = o.quantity * savedUnitPrice; } } if (field === 'price') { if (o.product && o.quantity > 0) { const unitPrice = value / o.quantity; setProductHistory(prevHist => ({ ...prevHist, [o.product]: unitPrice })); } } const newPrice = updates.price ?? o.price; if (field === 'deposit') { const rem = Math.max(0, newPrice - value); updates.cardAmount = rem; updates.isCardPaid = rem > 0; } return sanitizeOrder({ ...o, ...updates }); })); };
             const handleProductSelect = (id, product, unitPrice) => { setOrders(prev => prev.map(o => { if (o.id !== id) return o; return sanitizeOrder({ ...o, product: product, price: o.quantity * unitPrice }); })); };
-            const handleDeleteProduct = useCallback((productName) => { if (window.confirm(`'${productName}' 상품을 자동완성 목록에서 삭제하시겠습니까?`)) { setProductHistory(prev => { const newHistory = { ...prev }; delete newHistory[productName]; return newHistory; }); showToast(`'${productName}' 상품이 삭제되었습니다.`); } }, []);
-            const handleUpdateOrderBatch = (id, updates) => { setOrders(prev => { const targetOrder = prev.find(o => o.id === id); if (!targetOrder || !targetOrder.customer) return prev; const isAddressUpdate = ['recipientName', 'phone', 'zipCode', 'addressText', 'shippingMemo'].some(key => key in updates); const targetCustomer = targetOrder.customer.trim(); return prev.map(o => { if (o.id === id) return sanitizeOrder({ ...o, ...updates }); if (isAddressUpdate && o.customer && o.customer.trim() === targetCustomer) return sanitizeOrder({ ...o, ...updates }); return o; }); }); };
-            const handleDelete = (id) => setOrders(prev => prev.filter(o => o.id !== id));
+            const handleDeleteProduct = useCallback((productName) => { if (window.confirm(`'${productName}' 상품을 삭제하시겠습니까?`)) { setProductHistory(prev => { const newHistory = { ...prev }; delete newHistory[productName]; return newHistory; }); showToast(`'${productName}' 삭제 완료`); } }, []);
             
-            const handleAutoDepositFull = (id) => { 
+            // --- UPDATED CRM UPDATE LOGIC ---
+            const handleUpdateOrderBatch = (id, updates) => {
                 setOrders(prev => {
-                    return prev.map(o => {
-                        if (o.id === id) {
-                            if (o.isPaid) {
-                                return sanitizeOrder({ ...o, deposit: 0, cardAmount: 0, isPaid: false, isCardPaid: false });
-                            } else {
-                                return sanitizeOrder({ ...o, deposit: o.price, cardAmount: 0, isPaid: true, isCardPaid: false });
-                            }
+                    const targetOrder = prev.find(o => o.id === id);
+                    if (!targetOrder || !targetOrder.customer) return prev;
+                    const isAddressUpdate = ['recipientName', 'phone', 'zipCode', 'addressText', 'shippingMemo'].some(key => key in updates);
+                    const targetCustomer = targetOrder.customer.trim();
+                    if (isAddressUpdate) {
+                        const mergedOrder = { ...targetOrder, ...updates };
+                        if (mergedOrder.recipientName && mergedOrder.addressText) {
+                            setCustomerDB(prevDB => ({ ...prevDB, [targetCustomer]: { recipientName: mergedOrder.recipientName, phone: mergedOrder.phone, zipCode: mergedOrder.zipCode, addressText: mergedOrder.addressText, shippingMemo: mergedOrder.shippingMemo } }));
                         }
+                    }
+                    return prev.map(o => {
+                        if (o.id === id) return sanitizeOrder({ ...o, ...updates });
+                        if (isAddressUpdate && o.customer && o.customer.trim() === targetCustomer) return sanitizeOrder({ ...o, ...updates, isCRM: true });
                         return o;
                     });
-                }); 
-                setEditingAmountId(null); 
-                setEditingShippingId(null);
+                });
             };
-            
-            const handleAutoCardFull = (id) => { setOrders(prev => prev.map(o => o.id === id ? sanitizeOrder({ ...o, deposit: 0, cardAmount: o.price, isPaid: true, isCardPaid: true }) : o)); setEditingAmountId(null); setEditingShippingId(null); };
 
-            const handleUnpaidFilterClick = (type) => {
-                if (unpaidFilter === type) {
-                    setUnpaidFilter(null); 
-                } else {
-                    setUnpaidFilter(type); 
-                }
-            };
+            const handleDelete = (id) => setOrders(prev => prev.filter(o => o.id !== id));
+            const handleAutoDepositFull = (id) => { setOrders(prev => { return prev.map(o => { if (o.id === id) { if (o.isPaid) { return sanitizeOrder({ ...o, deposit: 0, cardAmount: 0, isPaid: false, isCardPaid: false }); } else { return sanitizeOrder({ ...o, deposit: o.price, cardAmount: 0, isPaid: true, isCardPaid: false }); } } return o; }); }); setEditingAmountId(null); setEditingShippingId(null); };
+            const handleAutoCardFull = (id) => { setOrders(prev => prev.map(o => o.id === id ? sanitizeOrder({ ...o, deposit: 0, cardAmount: o.price, isPaid: true, isCardPaid: true }) : o)); setEditingAmountId(null); setEditingShippingId(null); };
+            const handleUnpaidFilterClick = (type) => { if (unpaidFilter === type) { setUnpaidFilter(null); } else { setUnpaidFilter(type); } };
 
             return (
-                <div className="min-h-screen flex flex-col text-slate-900 dark:text-dark-text">
-                    <header className="sticky top-0 z-50 bg-white/80 dark:bg-dark-card/80 backdrop-blur-md border-b border-slate-200 dark:border-dark-border flex-none">
-                        <div className="max-w-[1920px] mx-auto px-6 h-16 flex items-center justify-between gap-6">
-                            <div className="flex items-center gap-3 text-indigo-600 dark:text-indigo-400 min-w-fit">
-                                <Icon name="Package" size={28} />
-                                <h1 className="text-xl font-bold text-slate-900 dark:text-dark-text hidden md:block">강은지 주문서 자동화 v1.4 </h1>
-                            </div>
-                            <div className="flex items-center gap-3 text-sm whitespace-nowrap">
-                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-yellow-500"><Icon name="Moon" size={20} /></button>
-                                
-                                {/* Product Manager Button */}
-                                <button onClick={() => setIsProductManagerOpen(true)} className="px-3 py-1 bg-brand-500 hover:bg-brand-600 text-white rounded transition-colors">상품 관리</button>
-                                
-                                {/* Reset Button with Confirm */}
-                                <button onClick={handleReset} className="px-3 py-1 bg-slate-500 hover:bg-slate-600 text-white rounded transition-colors">초기화</button>
-                                
-                                {/* Combined Excel Button */}
-                                <div className="relative" ref={excelMenuRef}>
-                                    <button 
-                                        onClick={() => setIsExcelMenuOpen(!isExcelMenuOpen)}
-                                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-colors flex items-center gap-1"
-                                    >
-                                        엑셀 저장 <Icon name="CaretDown" size={12} />
-                                    </button>
-                                    {isExcelMenuOpen && (
-                                        <div className="absolute top-full right-0 mt-1 w-40 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-xl z-50 overflow-hidden">
-                                            <button onClick={() => { handleDownloadCSV('full'); setIsExcelMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2"><Icon name="FileXls" size={14}/> 전체 내역</button>
-                                            <button onClick={() => { handleDownloadCSV('invoice'); setIsExcelMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2"><Icon name="Truck" size={14}/> 송장용</button>
-                                            <button onClick={() => { handleDownloadProductCSV(); setIsExcelMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-2"><Icon name="List" size={14}/> 발주용 (통계)</button>
-                                        </div>
-                                    )}
-                                </div>
+                <div className="flex flex-col h-screen overflow-hidden text-slate-700 dark:text-gray-300">
+                    {/* Header */}
+                    <header className="h-10 bg-white dark:bg-dark-card border-b border-slate-200 dark:border-dark-border flex items-center justify-between px-3 shrink-0 shadow-sm z-50">
+                        <div className="flex items-center gap-2">
+                            <div className="bg-brand-700 text-white p-0.5 rounded"><Icon name="Lightning" size={14} weight="fill"/></div>
+                            <span className="font-bold text-xs tracking-tight text-slate-800 dark:text-white">주문관리 PRO</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-500"><Icon name={isDarkMode ? "Sun" : "Moon"} size={14} /></button>
+                            <div className="h-3 w-px bg-slate-300 dark:bg-slate-700 mx-1"></div>
+                            
+                            <ActionButton onClick={handleCustomerUploadClick} color="brand" icon="AddressBook" text="고객" />
+                            <input type="file" ref={customerFileRef} onChange={handleCustomerFileUpload} accept=".csv" style={{display:'none'}} />
 
-                                <button onClick={handleDownloadHTML} className="px-3 py-1 bg-indigo-600 text-white rounded">앱 백업(저장)</button>
-                                <button onClick={handleUploadClick} className="px-3 py-1 bg-slate-600 text-white rounded">업로드</button>
-                                <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{display:'none'}} />
+                            <div className="relative" ref={excelMenuRef}>
+                                <ActionButton onClick={() => setIsExcelMenuOpen(!isExcelMenuOpen)} color="ghost" icon="FileXls" text="엑셀" />
+                                {isExcelMenuOpen && (
+                                    <div className="absolute top-full right-0 mt-1 w-32 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border shadow-soft rounded-md z-50 py-1">
+                                        <button onClick={() => { handleDownloadCSV('full'); setIsExcelMenuOpen(false); }} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 text-slate-700 dark:text-gray-300"><Icon name="FileXls" className="text-accent-teal"/> 전체</button>
+                                        <button onClick={() => { handleDownloadCSV('invoice'); setIsExcelMenuOpen(false); }} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 text-slate-700 dark:text-gray-300"><Icon name="Truck" className="text-brand-600"/> 송장</button>
+                                        <button onClick={() => { handleDownloadProductCSV(); setIsExcelMenuOpen(false); }} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 border-t border-slate-100 dark:border-dark-border mt-0.5 pt-0.5 text-slate-700 dark:text-gray-300"><Icon name="List" className="text-accent-amber"/> 발주</button>
+                                    </div>
+                                )}
                             </div>
+                            
+                            <ActionButton onClick={handleDownloadHTML} color="white" icon="FloppyDisk" text="백업" />
+                            <ActionButton onClick={handleUploadClick} color="white" icon="UploadSimple" text="복원" />
+                            <ActionButton onClick={handleReset} color="ghost" icon="Eraser" text="초기화" />
+                            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{display:'none'}} />
                         </div>
                     </header>
 
-                    <main className="max-w-[1920px] mx-auto w-full px-6 py-6 flex flex-col gap-4">
-                        <datalist id="product-options">
-                            {Object.entries(productHistory).map(([product, price]) => (
-                                <option key={product} value={product} label={`${price.toLocaleString()}원`} />
-                            ))}
-                        </datalist>
+                    {/* Main Content */}
+                    <main className="flex-1 flex flex-col p-2 gap-2 overflow-hidden">
+                        <div className="shrink-0"><SummarySection stats={stats} handleUnpaidFilterClick={handleUnpaidFilterClick} unpaidFilter={unpaidFilter} /></div>
 
-                        <div className="flex-none grid grid-cols-1 gap-3">
-                            <SummaryDashboardCard 
-                                totalRevenue={stats.totalRev}
-                                orderCount={stats.qty} 
-                                shippingCount={stats.shippingCount}
-                            />
+                        {/* Middle: Editor Panels (Height Reduced to h-64 / 250px) */}
+                        <div className="shrink-0 grid grid-cols-1 lg:grid-cols-3 gap-2 h-64">
+                            <div className="lg:col-span-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col shadow-soft">
+                                <div className="flex justify-between items-center mb-1 px-1">
+                                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1"><Icon name="ClipboardList" className="text-brand-500"/> 주문서 입력</h3>
+                                </div>
+                                <textarea className="flex-1 w-full p-2 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-md resize-none text-xs font-mono focus:border-brand-500 outline-none transition-all mb-2 text-slate-700 dark:text-gray-200 placeholder-slate-400" placeholder="주문 내용을 붙여넣으세요. (예: @홍길동 A세트 1개)" value={rawInput} onChange={(e) => setRawInput(e.target.value)}></textarea>
+                                <button onClick={handleParseOrders} disabled={isProcessing} className="w-full py-1.5 bg-brand-700 hover:bg-brand-800 text-white rounded-md text-xs font-bold transition-colors flex justify-center items-center gap-1 shadow-sm">{isProcessing ? '처리 중...' : '변환하기'} <Icon name="ArrowRight" size={10} weight="bold"/></button>
+                            </div>
                             
-                            <div className="grid grid-cols-3 gap-3">
-                                <DashboardCard icon="CreditCard" color="pink" title="카드매출" value={stats.cardRev} />
-                                <DashboardCard icon="Bank" color="emerald" title="현금매출" value={stats.cashRev} />
-                                <DashboardCard icon="Truck" color="cyan" title="배송비매출" value={stats.shipRev} />
+                            <div className="lg:col-span-1 h-full overflow-hidden">
+                                <InlineProductManager productHistory={productHistory} setProductHistory={setProductHistory} setOrders={setOrders} showToast={showToast} />
                             </div>
 
-                            <div className="grid grid-cols-3 gap-3">
-                                <DashboardCard icon="Calculator" color="red" title="총 미수금 합계" value={stats.totalUnpaid} isUnpaid={true} />
-                                <DashboardCard 
-                                    icon="HandCoins" 
-                                    color="orange" 
-                                    title="현금 미수금" 
-                                    value={stats.cashUnpaid} 
-                                    isUnpaid={true} 
-                                    onClick={() => handleUnpaidFilterClick('cash')}
-                                    isActive={unpaidFilter === 'cash'}
-                                />
-                                <DashboardCard 
-                                    icon="Truck" 
-                                    color="amber" 
-                                    title="배송 미수금" 
-                                    value={stats.shipUnpaid} 
-                                    isUnpaid={true} 
-                                    onClick={() => handleUnpaidFilterClick('ship')}
-                                    isActive={unpaidFilter === 'ship'}
-                                />
+                            <div className="lg:col-span-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col shadow-soft">
+                                <div className="flex justify-between items-center mb-1 px-1">
+                                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1"><Icon name="Note" className="text-accent-amber"/> 메모장</h3>
+                                    <button onClick={handleCopyMemo} className="text-[10px] text-slate-400 hover:text-brand-600 transition-colors"><Icon name="Copy" size={12}/></button>
+                                </div>
+                                <textarea className="flex-1 w-full p-2 bg-yellow-50/50 dark:bg-yellow-900/10 border border-yellow-100 dark:border-yellow-900/20 rounded-md resize-none text-xs focus:border-accent-amber outline-none transition-all text-slate-700 dark:text-gray-200" value={globalMemo} onChange={(e) => setGlobalMemo(e.target.value)} onKeyDown={handleMemoKeyDown}></textarea>
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-4">
-                            {/* ... Paste & Memo sections ... */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-none h-48 md:h-56">
-                                <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-dark-border p-4 flex flex-col h-full">
-                                    <div className="flex items-center justify-between mb-2 h-8">
-                                        <h2 className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-dark-text">
-                                            <div className="w-1 h-4 bg-indigo-500 rounded-full"></div>댓글 붙여넣기
-                                        </h2>
+                        {/* List */}
+                        <div className="flex-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg flex flex-col overflow-hidden shadow-soft min-h-0">
+                            <div className="p-1.5 border-b border-slate-100 dark:border-dark-border flex items-center justify-between gap-2 bg-slate-50/50 dark:bg-dark-bg/50">
+                                <div className="flex items-center gap-2 flex-1 max-w-sm">
+                                    <div className="relative flex-1">
+                                        <div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="Search" size={12}/></div>
+                                        <input className="w-full pl-7 pr-2 py-1 bg-white dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm text-xs focus:border-brand-500 outline-none transition-all text-slate-700 dark:text-gray-200 placeholder-slate-400" placeholder="검색..." value={filterText} onChange={(e) => setFilterText(e.target.value)} />
                                     </div>
-                                    <textarea 
-                                        className="flex-1 w-full p-3 border border-slate-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none text-sm dark:bg-dark-input dark:text-dark-text mb-3 leading-relaxed" 
-                                        placeholder="예: @김철수 \n A세트 2개 \n\n @영희 \n B세트 1개" 
-                                        value={rawInput} 
-                                        onChange={(e) => setRawInput(e.target.value)}
-                                    ></textarea>
-                                    <button onClick={handleParseOrders} disabled={isProcessing} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-sm transition-colors flex justify-center items-center gap-2">
-                                        {isProcessing ? '변환 중...' : '주문서 변환'} <Icon name="ArrowRight" size={16}/>
-                                    </button>
                                 </div>
-
-                                <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-dark-border p-4 flex flex-col h-full relative">
-                                    <div className="flex justify-between items-center mb-2 h-8">
-                                        <h2 className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-dark-text">
-                                            <div className="w-1 h-4 bg-yellow-500 rounded-full"></div>메모장
-                                        </h2>
-                                        <button onClick={handleCopyMemo} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title="메모 복사">
-                                            <Icon name="Copy" size={18}/>
-                                        </button>
+                                <div className="flex items-center gap-1.5">
+                                    <div className="hidden md:flex items-center gap-1 bg-white dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-1.5 py-0.5">
+                                        <span className="text-[9px] text-slate-400 font-bold uppercase mr-1">기본</span>
+                                        <input type="text" value={defaultProductName} onChange={(e) => setDefaultProductName(e.target.value)} className="w-16 bg-transparent text-xs font-medium outline-none text-slate-700 dark:text-gray-200" placeholder="입력" />
                                     </div>
-                                    <textarea 
-                                        className="flex-1 w-full p-3 border border-slate-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-yellow-500 resize-none text-sm dark:bg-dark-input dark:text-dark-text leading-relaxed" 
-                                        placeholder="자유롭게 메모하세요... (엔터 키로 줄 구분)"
-                                        value={globalMemo}
-                                        onChange={(e) => setGlobalMemo(e.target.value)}
-                                        onKeyDown={handleMemoKeyDown}
-                                    ></textarea>
+                                    <div className="hidden md:flex items-center gap-1 bg-white dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-1.5 py-0.5">
+                                        <span className="text-[9px] text-slate-400 font-bold uppercase mr-1">단가</span>
+                                        <input type="number" value={pricePerUnit} onChange={(e) => setPricePerUnit(e.target.value)} className="w-10 bg-transparent text-xs font-mono text-right outline-none text-slate-700 dark:text-gray-200" placeholder="0" />
+                                    </div>
+                                    <div className="hidden md:flex items-center gap-1 bg-white dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-1.5 py-0.5">
+                                        <span className="text-[9px] text-slate-400 font-bold uppercase mr-1">배송비</span>
+                                        <input type="number" value={shippingFee} onChange={(e) => setShippingFee(Number(e.target.value))} className="w-10 bg-transparent text-xs font-mono text-right outline-none text-slate-700 dark:text-gray-200" />
+                                    </div>
+                                    <div className="h-3 w-px bg-slate-200 dark:border-dark-border mx-0.5 hidden md:block"></div>
+                                    <ActionButton onClick={handleAddEmptyOrder} color="brand" icon="Plus" text="추가" />
+                                    <ActionButton onClick={handleCopyResults} color="white" icon="Copy" text="복사" />
                                 </div>
                             </div>
 
-                            {/* Main Order List Section */}
-                            <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-slate-200 dark:border-dark-border flex flex-col">
-                                {/* ... Search & Add Controls ... */}
-                                <div className="p-3 border-b border-slate-100 dark:border-dark-border flex flex-nowrap gap-2 items-center justify-between bg-slate-50/50 dark:bg-dark-card overflow-x-auto">
-                                    <div className="flex items-center gap-2 w-40 flex-none">
-                                        <div className="relative flex-1">
-                                            <div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="Search" size={14} /></div>
-                                            <input className="w-full pl-7 pr-2 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 dark:bg-dark-input dark:border-dark-border dark:text-dark-text" 
-                                                placeholder="검색" value={filterText} onChange={(e) => setFilterText(e.target.value)} />
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-2 text-xs flex-none">
-                                        <div className="flex items-center bg-white dark:bg-dark-input rounded border border-slate-200 dark:border-dark-border px-2 py-1.5">
-                                            <span className="text-slate-500 dark:text-dark-muted mr-2">상품:</span>
-                                            <input type="text" value={defaultProductName} onChange={(e) => setDefaultProductName(e.target.value)} className="w-32 bg-transparent outline-none font-bold text-slate-700 dark:text-dark-text text-sm" placeholder="기본" />
-                                        </div>
-                                        <div className="flex items-center bg-white dark:bg-dark-input rounded border border-slate-200 dark:border-dark-border px-2 py-1.5">
-                                            <span className="text-slate-500 dark:text-dark-muted mr-2">단가:</span>
-                                            <input type="number" value={pricePerUnit} onChange={(e) => setPricePerUnit(e.target.value)} className="w-20 bg-transparent outline-none font-bold text-right text-slate-700 dark:text-dark-text text-sm" placeholder="0" />
-                                        </div>
-                                        <div className="flex items-center bg-white dark:bg-dark-input rounded border border-slate-200 dark:border-dark-border px-2 py-1.5">
-                                            <span className="text-slate-500 dark:text-dark-muted mr-2">배송:</span>
-                                            <input type="number" value={shippingFee} onChange={(e) => setShippingFee(Number(e.target.value))} className="w-20 bg-transparent outline-none font-bold text-right text-slate-700 dark:text-dark-text text-sm" />
-                                        </div>
-                                        <ActionButton onClick={handleAddEmptyOrder} color="blue" icon="Plus" text="추가" />
-                                    </div>
+                            <div className="grid grid-rows-compact gap-2 px-3 py-1.5 bg-slate-100/50 dark:bg-dark-bg border-b border-slate-200 dark:border-dark-border text-[10px] font-bold text-slate-500 dark:text-slate-400 text-center uppercase tracking-wide">
+                                <div>주소</div><div className="text-left">주문자</div><div className="text-left">상품명</div><div>수량</div><div className="text-right">금액</div><div>상태</div><div className="text-left">메모</div><div></div>
+                            </div>
 
-                                    <div className="flex items-center gap-2 flex-none">
-                                        <ActionButton onClick={handleCopyResults} color="slate" icon="Copy" text="복사" />
+                            <div className="flex-1 overflow-y-auto p-0 bg-white dark:bg-dark-bg/20">
+                                {filteredOrders.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-full text-slate-300 dark:text-slate-600 gap-2">
+                                        <Icon name="Package" size={24} className="opacity-50"/>
+                                        <span className="text-xs font-medium">데이터가 없습니다.</span>
                                     </div>
-                                </div>
-
-                                {/* Table Header */}
-                                <div className="sticky top-16 z-40 grid grid-cols-[0.5fr_2.0fr_4.0fr_0.4fr_1.0fr_1.5fr_2.0fr_0.5fr] gap-4 p-3 bg-slate-100 dark:bg-dark-input text-xs font-bold text-slate-500 dark:text-dark-muted border-b dark:border-dark-border text-center shadow-sm">
-                                    <div className="text-center">주소</div><div className="text-left">닉네임/입금명</div><div className="text-left">상품명</div><div className="text-center">수량</div><div class="text-right">금액</div><div class="text-center">상태</div><div class="text-center">메모</div><div class="text-center">삭제</div>
-                                </div>
-
-                                {/* List */}
-                                <div className="p-2 space-y-2">
-                                    {filteredOrders.length === 0 ? (
-                                        <div className="p-8 text-center text-slate-500 dark:text-dark-muted">
-                                            {unpaidFilter ? (unpaidFilter === 'cash' ? '현금 미수금이 있는 주문이 없습니다.' : '배송 미수금이 있는 주문이 없습니다.') : '주문 내역이 없습니다.'}
-                                        </div>
-                                    ) : (
-                                        filteredOrders.map((order, index) => {
+                                ) : (
+                                    <div className="divide-y divide-slate-100 dark:divide-dark-border">
+                                        {filteredOrders.map((order, index) => {
                                             const isFirst = firstOrderIds[order.customer] === order.id;
-                                            const addressIconClass = order.isAddressFilled ? 'bg-slate-900 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-slate-50 text-slate-300 hover:bg-slate-100 dark:bg-dark-input dark:text-slate-600 dark:hover:bg-slate-700';
+                                            const rowBg = order.price > 0 && (order.deposit + order.cardAmount < order.price) ? 'bg-accent-rose/5 dark:bg-accent-rose/10' : 'bg-white dark:bg-dark-card hover:bg-slate-50 dark:hover:bg-dark-input transition-colors';
                                             const nickColor = getNicknameColor(order.customer);
-                                            let moneyIcon = order.deposit > 0 ? (order.cardAmount > 0 ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600') : 'bg-slate-50 text-slate-300 dark:bg-dark-input dark:text-slate-600';
-                                            let cardIcon = order.cardAmount > 0 ? 'bg-pink-100 text-pink-500' : 'bg-slate-50 text-slate-300 dark:bg-dark-input dark:text-slate-600';
-                                            const currentShippingFee = order.customShippingFee ?? shippingFee;
-                                            const isFreeShipping = currentShippingFee === 0;
-                                            let shippingIconClass = order.isShippingPaid 
-                                                ? 'bg-blue-100 text-blue-600' 
-                                                : (isFreeShipping ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-300 dark:bg-dark-input dark:text-slate-600');
-
+                                            
                                             return (
-                                                <React.Fragment key={order.id}>
-                                                    <div className={`grid grid-cols-[0.5fr_2.0fr_4.0fr_0.4fr_1.0fr_1.5fr_2.0fr_0.5fr] gap-4 p-3 border rounded-lg items-center text-sm transition-colors ${order.price > 0 && (order.deposit + order.cardAmount < order.price) ? 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-900' : 'bg-white border-slate-100 dark:bg-dark-card dark:border-dark-border'}`}>
-                                                        <div className="flex justify-center"><button onClick={() => handleToggleAddressEdit(order.id)} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${addressIconClass}`}><Icon name="MapPin" size={20}/></button></div>
-                                                        <div className="relative pl-1">
-                                                            <input id={`customer-${index}`} onKeyDown={e => handleKeyDown(e, index, 'customer')} className={`w-full bg-transparent font-bold outline-none text-base ${nickColor}`} value={order.customer} onChange={e => handleUpdateOrder(order.id, 'customer', e.target.value)} placeholder="닉네임" />
-                                                            <input id={`phone-${index}`} onKeyDown={e => handleKeyDown(e, index, 'phone')} className="w-full bg-transparent text-slate-400 dark:text-slate-500 text-xs outline-none block mt-0.5" value={order.phone} onChange={e => handleUpdateOrder(order.id, 'phone', e.target.value)} placeholder="입금명" />
-                                                            {customerCounts[order.customer] > 1 && <span className="absolute right-0 top-0 text-[10px] bg-slate-200 dark:bg-slate-600 px-1.5 rounded-full text-slate-600 dark:text-slate-300 font-bold">{customerCounts[order.customer]}</span>}
-                                                        </div>
-                                                        <div><ProductAutocomplete id={`product-${index}`} value={order.product} onChange={(e) => handleUpdateOrder(order.id, 'product', e.target.value)} onSelect={(name, price) => handleProductSelect(order.id, name, price)} onDeleteProduct={handleDeleteProduct} onKeyDown={(e) => handleKeyDown(e, index, 'product')} priceMap={productHistory} /></div>
-                                                        <div className="flex justify-center"><input id={`quantity-${index}`} onKeyDown={e => handleKeyDown(e, index, 'quantity')} type="number" className="w-full text-center bg-slate-50 dark:bg-dark-input rounded font-bold dark:text-dark-text" value={order.quantity} onChange={e => handleUpdateOrder(order.id, 'quantity', Number(e.target.value))} /></div>
-                                                        <div className="text-right"><input id={`price-${index}`} onKeyDown={e => handleKeyDown(e, index, 'price')} className="w-full text-right bg-transparent font-bold dark:text-dark-text" value={order.price === 0 ? '' : order.price.toLocaleString()} onChange={e => { const v = e.target.value.replace(/,/g,''); if(!isNaN(v)) handleUpdateOrder(order.id, 'price', Number(v)); }} placeholder="0" /></div>
-                                                        <div className="flex justify-center gap-1">
-                                                            <button onClick={() => handleAutoDepositFull(order.id)} className={`w-9 h-9 rounded-full flex justify-center items-center transition-all ${moneyIcon}`}><Icon name="DollarSign" size={27}/></button>
-                                                            {isFirst ? (
-                                                                <div className="relative group">
-                                                                    <button onClick={() => handleUpdateOrder(order.id, 'isShippingPaid', !order.isShippingPaid)} onContextMenu={(e) => { e.preventDefault(); handleToggleShippingEdit(order.id); }} className={`w-9 h-9 rounded-full flex justify-center items-center transition-all ${shippingIconClass}`} title="클릭: 배송비 납부 토글 / 우클릭: 배송비 금액 수정"><Icon name="Truck" size={27}/></button>
-                                                                    {currentShippingFee !== shippingFee && (<span className="absolute -top-1 -right-1 bg-slate-500 text-white text-[9px] px-1 rounded-full">{currentShippingFee/1000}k</span>)}
-                                                                </div>
-                                                            ) : <div className="w-9"/>}
-                                                            <button onClick={() => handleToggleAmountEdit(order.id)} className={`w-9 h-9 rounded-full flex justify-center items-center transition-all ${cardIcon}`}><Icon name="CreditCard" size={27}/></button>
-                                                        </div>
-                                                        <div><input id={`memo-${index}`} onKeyDown={e => handleKeyDown(e, index, 'memo')} className="w-full text-center bg-transparent outline-none dark:text-dark-text" value={order.memo} onChange={e => handleUpdateOrder(order.id, 'memo', e.target.value)} placeholder="메모" /></div>
-                                                        <div className="flex justify-center"><button onClick={() => handleDelete(order.id)} className="text-slate-300 hover:text-red-500 dark:text-slate-600"><Icon name="Trash2" size={18}/></button></div>
+                                                <div key={order.id} className={`group relative grid grid-rows-compact gap-2 px-3 py-1 items-center text-xs ${rowBg}`}>
+                                                    <div className="flex justify-center">
+                                                        <button onClick={() => handleToggleAddressEdit(order.id)} className={`w-5 h-5 rounded-sm flex items-center justify-center transition-colors ${order.isAddressFilled ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
+                                                            <Icon name="MapPin" size={10} weight={order.isAddressFilled ? "bold" : "regular"}/>
+                                                        </button>
                                                     </div>
-                                                    {editingAmountId === order.id && ( <div className="col-span-full p-2 bg-slate-100 dark:bg-dark-input rounded flex gap-2 justify-end items-center"> <button onClick={() => handleAutoCardFull(order.id)} className="w-8 h-8 rounded-md flex items-center justify-center bg-pink-100 text-pink-600 hover:bg-pink-200 transition-colors" title="카드 전액 결제"><Icon name="CreditCard" size={20}/></button> <span className="text-xs font-bold dark:text-dark-text">현금:</span><input type="number" className="w-24 p-1 rounded border dark:bg-dark-card dark:border-dark-border dark:text-white" value={order.deposit} onChange={e => handleUpdateOrder(order.id, 'deposit', Number(e.target.value))} /> <span className="text-xs font-bold dark:text-dark-text">카드:</span><input type="number" className="w-24 p-1 rounded border dark:bg-dark-card dark:border-dark-border dark:text-white" value={order.cardAmount} onChange={e => handleUpdateOrder(order.id, 'cardAmount', Number(e.target.value))} /> </div> )}
-                                                    {editingShippingId === order.id && ( <div className="col-span-full p-2 bg-blue-50 dark:bg-slate-700 rounded flex gap-2 justify-center items-center animate-bounce-in"> <span className="text-xs font-bold text-slate-600 dark:text-slate-300">개별 배송비 설정:</span> <input type="number" className="w-24 p-1 rounded border border-blue-200 dark:border-slate-500 dark:bg-slate-600 dark:text-white text-center font-bold" value={order.customShippingFee ?? shippingFee} onChange={e => handleUpdateOrder(order.id, 'customShippingFee', Number(e.target.value))} /> <button onClick={() => handleUpdateOrder(order.id, 'customShippingFee', null)} className="text-xs bg-slate-200 px-2 py-1 rounded hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500">기본값 복원</button> <button onClick={() => setEditingShippingId(null)} className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 ml-2">닫기</button> </div> )}
-                                                    {editingAddressId === order.id && <AddressEditor order={order} handleUpdateOrder={handleUpdateOrder} handleUpdateOrderBatch={handleUpdateOrderBatch} setEditingAddressId={setEditingAddressId} showToast={showToast} />}
-                                                </React.Fragment>
+                                                    <div className="relative pl-1">
+                                                        <div className="flex items-center gap-1">
+                                                            {order.isCRM && <Icon name="Star" size={10} className="text-accent-amber" weight="fill" />}
+                                                            <input id={`customer-${index}`} className={`w-full bg-transparent font-bold outline-none ${nickColor}`} value={order.customer} onChange={e => handleUpdateOrder(order.id, 'customer', e.target.value)} onKeyDown={e => handleKeyDown(e, index, 'customer')} placeholder="이름" />
+                                                        </div>
+                                                        {order.phone && <div className="text-[9px] text-slate-400 font-mono -mt-0.5 truncate">{order.phone}</div>}
+                                                        {customerCounts[order.customer] > 1 && <span className="absolute right-0 top-0.5 text-[8px] bg-slate-100 dark:bg-slate-700 px-1 rounded-sm font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600">{customerCounts[order.customer]}</span>}
+                                                    </div>
+                                                    <div className="relative"><ProductAutocomplete id={`product-${index}`} value={order.product} onChange={(e) => handleUpdateOrder(order.id, 'product', e.target.value)} onSelect={(name, price) => handleProductSelect(order.id, name, price)} onDeleteProduct={handleDeleteProduct} onKeyDown={(e) => handleKeyDown(e, index, 'product')} priceMap={productHistory} /></div>
+                                                    <div className="flex justify-center"><input id={`quantity-${index}`} type="number" className="w-full text-center bg-transparent font-bold outline-none focus:bg-slate-50 dark:focus:bg-dark-input rounded-sm text-slate-700 dark:text-gray-300" value={order.quantity} onChange={e => handleUpdateOrder(order.id, 'quantity', Number(e.target.value))} onKeyDown={e => handleKeyDown(e, index, 'quantity')} /></div>
+                                                    <div className="text-right"><input id={`price-${index}`} className="w-full text-right bg-transparent font-mono font-medium outline-none focus:bg-slate-50 dark:focus:bg-dark-input rounded-sm text-slate-700 dark:text-gray-300" value={order.price === 0 ? '' : order.price.toLocaleString()} onChange={e => { const v = e.target.value.replace(/,/g,''); if(!isNaN(v)) handleUpdateOrder(order.id, 'price', Number(v)); }} onKeyDown={e => handleKeyDown(e, index, 'price')} placeholder="0" /></div>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <button onClick={() => handleAutoDepositFull(order.id)} className={`h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold border transition-all ${order.deposit > 0 ? 'bg-accent-teal/10 text-accent-teal border-accent-teal/30' : 'bg-transparent text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'}`}>현금</button>
+                                                        {isFirst ? (
+                                                            <button onClick={() => handleUpdateOrder(order.id, 'isShippingPaid', !order.isShippingPaid)} onContextMenu={(e) => { e.preventDefault(); handleToggleShippingEdit(order.id); }} className={`h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold transition-colors ${order.isShippingPaid ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>배송</button>
+                                                        ) : (
+                                                            <span className="h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold text-transparent border border-transparent select-none">배송</span>
+                                                        )}
+                                                        <button onClick={() => handleToggleAmountEdit(order.id)} className={`h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold border transition-all ${order.cardAmount > 0 ? 'bg-accent-rose/10 text-accent-rose border-accent-rose/30' : 'bg-transparent text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'}`}>카드</button>
+                                                    </div>
+                                                    <div><input id={`memo-${index}`} className="w-full bg-transparent text-slate-500 dark:text-slate-400 outline-none text-xs focus:text-slate-800 dark:focus:text-white" value={order.memo} onChange={e => handleUpdateOrder(order.id, 'memo', e.target.value)} onKeyDown={e => handleKeyDown(e, index, 'memo')} placeholder="-" /></div>
+                                                    <div className="flex justify-end"><button onClick={() => handleDelete(order.id)} className="text-slate-300 hover:text-accent-rose transition-colors p-1"><Icon name="X" size={10}/></button></div>
+
+                                                    {/* Editor Popups */}
+                                                    {editingAmountId === order.id && ( <div className="col-span-full p-1.5 bg-slate-50 dark:bg-dark-input border-y border-slate-200 dark:border-dark-border flex gap-2 justify-end items-center animate-fade-in shadow-inner"> <button onClick={() => handleAutoCardFull(order.id)} className="px-2 py-0.5 rounded-sm bg-accent-rose text-white hover:bg-rose-600 text-[10px] font-bold shadow-sm">카드 전액</button> <div className="flex items-center gap-1 bg-white dark:bg-dark-card px-2 py-0.5 rounded-sm border border-slate-200 dark:border-dark-border"><span className="text-[9px] text-slate-400">현금</span><input type="number" className="w-14 text-right text-xs font-bold outline-none bg-transparent" value={order.deposit} onChange={e => handleUpdateOrder(order.id, 'deposit', Number(e.target.value))} /></div><div className="flex items-center gap-1 bg-white dark:bg-dark-card px-2 py-0.5 rounded-sm border border-slate-200 dark:border-dark-border"><span className="text-[9px] text-slate-400">카드</span><input type="number" className="w-14 text-right text-xs font-bold outline-none bg-transparent" value={order.cardAmount} onChange={e => handleUpdateOrder(order.id, 'cardAmount', Number(e.target.value))} /></div></div> )}
+                                                    {editingShippingId === order.id && ( <div className="col-span-full p-1.5 bg-brand-50 dark:bg-brand-900/20 border-y border-brand-100 dark:border-brand-800 flex gap-2 justify-center items-center animate-fade-in shadow-inner"> <span className="text-[10px] font-bold text-brand-600 dark:text-brand-300">개별 배송비:</span> <input type="number" className="w-16 p-0.5 rounded-sm border border-brand-200 text-right font-bold text-xs text-brand-700 outline-none" value={order.customShippingFee ?? shippingFee} onChange={e => handleUpdateOrder(order.id, 'customShippingFee', Number(e.target.value))} /> <button onClick={() => handleUpdateOrder(order.id, 'customShippingFee', null)} className="text-[10px] bg-white text-brand-600 px-2 py-0.5 rounded-sm border border-brand-200 hover:bg-brand-50">기본값</button> <button onClick={() => setEditingShippingId(null)} className="text-[10px] bg-brand-600 text-white px-2 py-0.5 rounded-sm hover:bg-brand-700 ml-1">확인</button> </div> )}
+                                                    {editingAddressId === order.id && ( <div className="col-span-full"><AddressEditor order={order} handleUpdateOrder={handleUpdateOrder} handleUpdateOrderBatch={handleUpdateOrderBatch} setEditingAddressId={setEditingAddressId} showToast={showToast} /></div> )}
+                                                </div>
                                             );
-                                        })
-                                    )}
-                                </div>
-                                {/* Footer */}
-                                <div className="p-4 bg-slate-50 dark:bg-dark-input border-t border-slate-200 dark:border-dark-border text-sm flex justify-between items-center rounded-b-xl">
-                                    <div className="text-xs text-slate-500 dark:text-dark-muted">총 {filteredStats.shippingCount}명 배송 예정</div>
-                                    <div className="text-right flex gap-4">
-                                        <div className="font-bold dark:text-dark-text">합계 <span className="text-indigo-600 dark:text-indigo-400">{(filteredStats.totalRev).toLocaleString()}원</span></div>
-                                        {filteredStats.totalUnpaid > 0 && <div className="font-bold text-red-500 dark:text-red-400">미입금: {(filteredStats.totalUnpaid).toLocaleString()}원</div>}
+                                        })}
                                     </div>
+                                )}
+                            </div>
+                            
+                            <div className="p-1.5 bg-slate-50 dark:bg-dark-bg border-t border-slate-200 dark:border-dark-border text-xs flex justify-between items-center shrink-0">
+                                <div className="flex items-center gap-2"><span className="px-2 py-0.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-sm text-[10px] font-bold text-slate-500 dark:text-slate-400 shadow-sm">배송 {filteredStats.shippingCount}건</span></div>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-1"><span className="text-[10px] text-slate-400">총액</span><span className="font-bold text-slate-700 dark:text-white font-mono">{filteredStats.totalRev.toLocaleString()}</span></div>
+                                    {filteredStats.totalUnpaid > 0 && (<div className="flex items-center gap-1 pl-3 border-l border-slate-200 dark:border-slate-700"><span className="text-[10px] text-accent-rose font-bold">미입금</span><span className="font-bold text-accent-rose font-mono">{filteredStats.totalUnpaid.toLocaleString()}</span></div>)}
                                 </div>
                             </div>
                         </div>
                     </main>
                     
-                    <ProductManager 
-                        isOpen={isProductManagerOpen} 
-                        onClose={() => setIsProductManagerOpen(false)} 
-                        productHistory={productHistory} 
-                        setProductHistory={setProductHistory} 
-                        setOrders={setOrders}
-                        showToast={showToast}
-                    />
-                    {toast && <div className="fixed bottom-6 right-6 px-4 py-3 bg-slate-800 text-white rounded-xl shadow-xl flex items-center gap-2 animate-bounce-in z-50"><Icon name={toast.type==='error'?'X':'CheckCircle'} className={toast.type==='error'?'text-red-400':'text-green-400'}/> {toast.message}</div>}
+                    {toast && (
+                        <div className="fixed top-6 right-6 px-4 py-2.5 bg-slate-800 text-white rounded-md shadow-lg flex items-center gap-2 animate-fade-in z-[100] border-l-4 border-brand-500">
+                            <Icon name={toast.type==='error'?'WarningCircle':'CheckCircle'} className={toast.type==='error'?'text-accent-rose':'text-accent-teal'} size={14} weight="fill"/> 
+                            <span className="font-medium text-xs tracking-wide">{toast.message}</span>
+                        </div>
+                    )}
                 </div>
             );
         };
         
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        try {
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+        } catch (error) {
+            document.body.innerHTML = `<div style="color:red; padding:20px;"><h3>Critical Error</h3><pre>${error.message}</pre></div>`;
+            console.error(error);
+        }
     </script>
-
-</body></html>
+</body>
+</html>
