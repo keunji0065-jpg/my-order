@@ -2,7 +2,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문관리 PRO (Receipt Layout Fix)</title>
+    <title>강은지 주문관리 PRO (Clean Menu)</title>
     
     <!-- Daum Postcode -->
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -33,17 +33,17 @@
                     colors: {
                         brand: {
                             50: '#f0f4f8', 100: '#d9e2ec', 200: '#bcccdc', 300: '#9fb3c8', 400: '#829ab1',
-                            500: '#627d98', 600: '#486581', 700: '#334e68', 800: '#243b53', 900: '#102a43',
+                            500: '#475569', 600: '#334155', 700: '#1e293b', 800: '#0f172a', 900: '#020617',
                         },
                         accent: {
-                            rose: '#d64545', teal: '#3ebd93', amber: '#f0b429',
+                            rose: '#e11d48', teal: '#0d9488', amber: '#d97706',
                         },
                         dark: {
                             bg: '#121212', card: '#1e1e1e', border: '#2c2c2c', input: '#252525'
                         }
                     },
                     boxShadow: {
-                        'soft': '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+                        'soft': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                         'inner-soft': 'inset 0 1px 2px 0 rgba(0, 0, 0, 0.03)',
                     },
                     fontSize: { 'xxs': '0.65rem' },
@@ -60,7 +60,7 @@
         body { 
             font-family: 'NanumSquareNeo', sans-serif; 
             -webkit-font-smoothing: antialiased; 
-            background-color: #f5f7fa;
+            background-color: #f2f3f5;
         }
         
         ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -84,7 +84,6 @@
             .print-break-after { page-break-after: always; }
             .print-break-inside-avoid { page-break-inside: avoid; }
             
-            /* 1 per page layout */
             .print-layout-1 .receipt-card {
                 height: 100vh;
                 page-break-after: always;
@@ -95,7 +94,6 @@
                 padding-top: 20px;
             }
 
-            /* 2 per page layout */
             .print-layout-2 .receipt-card {
                 height: 48vh; 
                 page-break-inside: avoid;
@@ -110,7 +108,7 @@
         .print-only { display: none; }
     </style>
 </head>
-<body class="bg-[#f5f7fa] dark:bg-dark-bg text-slate-700 dark:text-gray-300 transition-colors duration-200 min-h-screen flex flex-col overflow-hidden">
+<body class="bg-[#f2f3f5] dark:bg-dark-bg text-slate-700 dark:text-gray-300 transition-colors duration-200 min-h-screen flex flex-col overflow-hidden">
     <div id="root" class="h-full flex flex-col"></div>
 
     <script type="text/babel">
@@ -157,12 +155,45 @@
                 HandCoins: "ph-hand-coins", Calculator: "ph-calculator", Eraser: "ph-eraser", List: "ph-list",
                 CaretDown: "ph-caret-down", FileXls: "ph-file-xls", Sun: "ph-sun", Lightning: "ph-lightning",
                 Star: "ph-star", Users: "ph-users", AddressBook: "ph-address-book", CloudArrowUp: "ph-cloud-arrow-up", CloudArrowDown: "ph-cloud-arrow-down",
-                Gear: "ph-gear", Spinner: "ph-spinner", Printer: "ph-printer", Receipt: "ph-receipt"
+                Gear: "ph-gear", Spinner: "ph-spinner", Printer: "ph-printer", Receipt: "ph-receipt", 
+                Export: "ph-export", Database: "ph-database", CaretDown: "ph-caret-down"
             };
             const weightClass = weight === 'bold' ? 'ph-bold' : (weight === 'fill' ? 'ph-fill' : 'ph');
             const spinClass = spin ? 'animate-spin' : '';
             return <i className={`${weightClass} ${map[name] || 'ph-question'} ${className} ${spinClass}`} style={{ fontSize: size }}></i>;
         });
+
+        // --- COMPONENT: Reusable Dropdown Menu ---
+        const DropdownMenu = ({ label, icon, children }) => {
+            const [isOpen, setIsOpen] = useState(false);
+            const ref = useRef(null);
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (ref.current && !ref.current.contains(event.target)) setIsOpen(false);
+                };
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, []);
+
+            return (
+                <div className="relative" ref={ref}>
+                    <button onClick={() => setIsOpen(!isOpen)} className="px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        <Icon name={icon} size={14} weight="bold"/> {label} <Icon name="CaretDown" size={10} />
+                    </button>
+                    {isOpen && (
+                        <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border shadow-lg rounded-md z-50 py-1 animate-fade-in overflow-hidden">
+                            {children}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const DropdownItem = ({ onClick, icon, label, colorClass="text-slate-700 dark:text-slate-300" }) => (
+            <button onClick={onClick} className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors ${colorClass}`}>
+                <Icon name={icon} size={14} /> {label}
+            </button>
+        );
 
         // --- COMPONENT: Compact Stat Card ---
         const CompactStat = ({ label, value, subValue, icon, colorClass }) => (
@@ -196,114 +227,62 @@
                     </div>
                     <CompactStat label="총 주문" value={stats.qty} subValue="개" icon="Package" colorClass="text-slate-600 dark:text-slate-300" />
                     <CompactStat label="배송 예정" value={stats.shippingCount} subValue="건" icon="Truck" colorClass="text-brand-600 dark:text-brand-400" />
-                    <div className={`col-span-1 cursor-pointer transition-all ${unpaidFilter === 'cash' ? 'ring-1 ring-accent-rose' : 'hover:bg-slate-50'}`} onClick={() => handleUnpaidFilterClick('cash')}>
+                    <div className={`col-span-1 cursor-pointer transition-all ${unpaidFilter === 'cash' ? 'ring-1 ring-accent-rose' : 'hover:bg-brand-50'}`} onClick={() => handleUnpaidFilterClick('cash')}>
                         <CompactStat label="현금 미수금" value={stats.cashUnpaid.toLocaleString()} subValue="" icon="WarningCircle" colorClass="text-accent-rose" />
                     </div>
-                    <div className={`col-span-1 cursor-pointer transition-all ${unpaidFilter === 'ship' ? 'ring-1 ring-accent-amber' : 'hover:bg-slate-50'}`} onClick={() => handleUnpaidFilterClick('ship')}>
+                    <div className={`col-span-1 cursor-pointer transition-all ${unpaidFilter === 'ship' ? 'ring-1 ring-accent-amber' : 'hover:bg-brand-50'}`} onClick={() => handleUnpaidFilterClick('ship')}>
                         <CompactStat label="배송 미수금" value={stats.shipUnpaid.toLocaleString()} subValue="" icon="WarningCircle" colorClass="text-accent-amber" />
                     </div>
                 </div>
             );
         });
 
-        // --- COMPONENT: Receipt Modal & Print View ---
+        // --- COMPONENT: Receipt Modal ---
         const ReceiptModal = ({ orders, onClose, shippingFee }) => {
             const [layout, setLayout] = useState(1); 
-
             const groupedReceipts = useMemo(() => {
                 const grouped = {};
                 orders.forEach(order => {
                     const name = order.customer || '미지정';
-                    if (!grouped[name]) {
-                        grouped[name] = {
-                            customer: name,
-                            items: [],
-                            totalPrice: 0,
-                            totalQty: 0,
-                            shipping: 0
-                        };
-                    }
+                    if (!grouped[name]) { grouped[name] = { customer: name, items: [], totalPrice: 0, totalQty: 0, shipping: 0 }; }
                     grouped[name].items.push(order);
                     grouped[name].totalPrice += order.price;
                     grouped[name].totalQty += order.quantity;
-                    if (order.customShippingFee !== null) {
-                         grouped[name].shipping = Math.max(grouped[name].shipping, order.customShippingFee);
-                    } else if (grouped[name].shipping === 0) {
-                         grouped[name].shipping = shippingFee;
-                    }
+                    if (order.customShippingFee !== null) { grouped[name].shipping = Math.max(grouped[name].shipping, order.customShippingFee); } 
+                    else if (grouped[name].shipping === 0) { grouped[name].shipping = shippingFee; }
                 });
-                Object.values(grouped).forEach(g => {
-                    g.grandTotal = g.totalPrice + g.shipping;
-                });
+                Object.values(grouped).forEach(g => { g.grandTotal = g.totalPrice + g.shipping; });
                 return Object.values(grouped);
             }, [orders, shippingFee]);
-
-            const handlePrint = () => {
-                window.print();
-            };
-
+            const handlePrint = () => { window.print(); };
             return (
                 <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex justify-center items-center">
                     <div className="bg-white dark:bg-dark-card w-full max-w-4xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden no-print">
                         <div className="p-4 border-b border-slate-200 dark:border-dark-border flex justify-between items-center bg-white dark:bg-dark-card">
-                            <h2 className="text-lg font-bold flex items-center gap-2 dark:text-white">
-                                <Icon name="Receipt" size={20} className="text-brand-600"/> 구매 내역서 미리보기
-                            </h2>
+                            <h2 className="text-lg font-bold flex items-center gap-2 dark:text-white"><Icon name="Receipt" size={20} className="text-brand-600"/> 구매 내역서</h2>
                             <div className="flex items-center gap-2">
-                                <div className="flex bg-slate-100 dark:bg-dark-input p-1 rounded-lg">
-                                    <button onClick={()=>setLayout(1)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${layout===1 ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-500'}`}>1장/페이지</button>
-                                    <button onClick={()=>setLayout(2)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${layout===2 ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-500'}`}>2장/페이지</button>
+                                <div className="flex bg-brand-50 dark:bg-dark-input p-1 rounded-lg">
+                                    <button onClick={()=>setLayout(1)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${layout===1 ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-500'}`}>1장</button>
+                                    <button onClick={()=>setLayout(2)} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${layout===2 ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-slate-500'}`}>2장</button>
                                 </div>
-                                <button onClick={handlePrint} className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 shadow-md transition-all active:scale-95">
-                                    <Icon name="Printer" size={16} weight="fill"/> 인쇄하기
-                                </button>
-                                <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><Icon name="X" size={20}/></button>
+                                <button onClick={handlePrint} className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 shadow-md"><Icon name="Printer" size={16} weight="fill"/> 인쇄</button>
+                                <button onClick={onClose} className="p-2 hover:bg-brand-50 dark:hover:bg-slate-800 rounded-full"><Icon name="X" size={20}/></button>
                             </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-8 bg-slate-100 dark:bg-black/50">
+                        <div className="flex-1 overflow-y-auto p-8 bg-brand-50 dark:bg-black/50">
                             <div className={`max-w-[210mm] mx-auto bg-white shadow-lg min-h-[297mm] p-8 ${layout === 2 ? 'grid grid-cols-1 gap-8' : 'space-y-8'}`}>
                                 {groupedReceipts.map((receipt, idx) => (
                                     <div key={idx} className="border border-slate-200 p-8 rounded-sm bg-white text-black mb-8 last:mb-0 shadow-sm">
-                                        {/* Header Layout Fix */}
                                         <div className="flex justify-between items-end border-b border-slate-300 pb-3 mb-3">
                                             <h1 className="text-2xl font-extrabold tracking-tight text-slate-800">{receipt.customer} 님</h1>
                                             <p className="text-xs font-medium text-slate-500">주문일 : {new Date().toLocaleDateString()}</p>
                                         </div>
-                                        
-                                        <div className="flex justify-end items-end mb-3">
-                                            <div className="text-right text-xs text-slate-500">
-                                                <p>품목 수: {receipt.totalQty}</p>
-                                            </div>
-                                        </div>
                                         <table className="w-full text-sm mb-5">
-                                            <thead>
-                                                <tr className="border-y border-slate-300">
-                                                    <th className="py-1.5 text-left w-[50%] font-bold text-slate-700">상품명</th>
-                                                    <th className="py-1.5 text-center w-[15%] font-bold text-slate-700">수량</th>
-                                                    <th className="py-1.5 text-right w-[35%] font-bold text-slate-700">금액</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {receipt.items.map((item, i) => (
-                                                    <tr key={i}>
-                                                        <td className="py-1.5 text-slate-800">{item.product}</td>
-                                                        <td className="py-1.5 text-center text-slate-600">{item.quantity}</td>
-                                                        <td className="py-1.5 text-right font-mono text-slate-800">{item.price.toLocaleString()}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                            <tfoot>
-                                                <tr>
-                                                    <td className="py-2 font-bold text-slate-500">배송비</td>
-                                                    <td></td>
-                                                    <td className="py-2 text-right font-bold font-mono text-slate-600">{receipt.shipping.toLocaleString()}</td>
-                                                </tr>
-                                            </tfoot>
+                                            <thead><tr className="border-y border-slate-300"><th className="py-1.5 text-left w-[50%]">상품명</th><th className="py-1.5 text-center w-[15%]">수량</th><th className="py-1.5 text-right w-[35%]">금액</th></tr></thead>
+                                            <tbody className="divide-y divide-slate-100">{receipt.items.map((item, i) => (<tr key={i}><td className="py-1.5">{item.product}</td><td className="py-1.5 text-center">{item.quantity}</td><td className="py-1.5 text-right font-mono">{item.price.toLocaleString()}</td></tr>))}</tbody>
+                                            <tfoot><tr><td className="py-2 font-bold">배송비</td><td></td><td className="py-2 text-right font-bold font-mono">{receipt.shipping.toLocaleString()}</td></tr></tfoot>
                                         </table>
-                                        <div className="border-t border-slate-300 pt-3 flex justify-between items-center">
-                                            <span className="text-base font-bold text-slate-800">총 결제금액</span>
-                                            <span className="text-2xl font-extrabold font-mono text-black">{receipt.grandTotal.toLocaleString()} <span className="text-xs font-sans font-normal text-slate-500">원</span></span>
-                                        </div>
+                                        <div className="border-t border-slate-300 pt-3 flex justify-between items-center"><span className="text-base font-bold">총 결제금액</span><span className="text-2xl font-extrabold font-mono">{receipt.grandTotal.toLocaleString()} <span className="text-xs font-sans font-normal">원</span></span></div>
                                     </div>
                                 ))}
                             </div>
@@ -312,39 +291,15 @@
                     <div className={`print-only fixed inset-0 bg-white z-[200] p-0 m-0 ${layout === 1 ? 'print-layout-1' : 'print-layout-2'}`}>
                          {groupedReceipts.map((receipt, idx) => (
                             <div key={idx} className="receipt-card p-8 box-border text-black w-full max-w-[210mm] mx-auto">
-                                {/* Print Layout Header Fix */}
                                 <div className="flex justify-between items-end border-b border-slate-300 pb-2 mb-3">
                                     <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{receipt.customer} 님</h1>
                                     <p className="text-xs font-medium text-slate-500">주문일 : {new Date().toLocaleDateString()}</p>
                                 </div>
-                                
                                 <table className="w-full text-sm mb-3 border-collapse">
-                                    <thead>
-                                        <tr className="border-y border-slate-300">
-                                            <th className="py-1 text-left font-bold">상품명</th>
-                                            <th className="py-1 text-center font-bold">수량</th>
-                                            <th className="py-1 text-right font-bold">금액</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-200">
-                                        {receipt.items.map((item, i) => (
-                                            <tr key={i}>
-                                                <td className="py-1">{item.product}</td>
-                                                <td className="py-1 text-center">{item.quantity}</td>
-                                                <td className="py-1 text-right font-mono">{item.price.toLocaleString()}</td>
-                                            </tr>
-                                        ))}
-                                        <tr>
-                                            <td className="py-1 text-slate-600">배송비</td>
-                                            <td></td>
-                                            <td className="py-1 text-right font-mono text-slate-600">{receipt.shipping.toLocaleString()}</td>
-                                        </tr>
-                                    </tbody>
+                                    <thead><tr className="border-y border-slate-300"><th className="py-1 text-left">상품명</th><th className="py-1 text-center">수량</th><th className="py-1 text-right">금액</th></tr></thead>
+                                    <tbody className="divide-y divide-slate-200">{receipt.items.map((item, i) => (<tr key={i}><td className="py-1">{item.product}</td><td className="py-1 text-center">{item.quantity}</td><td className="py-1 text-right font-mono">{item.price.toLocaleString()}</td></tr>))}<tr><td className="py-1">배송비</td><td></td><td className="py-1 text-right font-mono">{receipt.shipping.toLocaleString()}</td></tr></tbody>
                                 </table>
-                                <div className="border-t border-slate-300 pt-2 flex justify-between items-center">
-                                    <span className="text-base font-bold">합계</span>
-                                    <span className="text-xl font-extrabold font-mono">{receipt.grandTotal.toLocaleString()} <span className="text-xs font-sans font-normal">원</span></span>
-                                </div>
+                                <div className="border-t border-slate-300 pt-2 flex justify-between items-center"><span className="text-base font-bold">합계</span><span className="text-xl font-extrabold font-mono">{receipt.grandTotal.toLocaleString()} <span className="text-xs font-sans font-normal">원</span></span></div>
                             </div>
                         ))}
                     </div>
@@ -371,11 +326,11 @@
             return (
                 <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-md p-2 flex flex-col h-full shadow-soft">
                     <div className="flex gap-1 mb-1.5">
-                        <input className="flex-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-2 py-1 text-xs outline-none focus:border-brand-500 text-slate-700 dark:text-gray-200" placeholder="상품명" value={name} onChange={e=>setName(e.target.value)} />
-                        <input className="w-14 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-2 py-1 text-xs outline-none focus:border-brand-500 text-right text-slate-700 dark:text-gray-200 font-mono" type="number" placeholder="단가" value={price} onChange={e=>setPrice(e.target.value)} />
+                        <input className="flex-1 bg-brand-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-2 py-1 text-xs outline-none focus:border-brand-500 text-slate-700 dark:text-gray-200" placeholder="상품명" value={name} onChange={e=>setName(e.target.value)} />
+                        <input className="w-14 bg-brand-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-2 py-1 text-xs outline-none focus:border-brand-500 text-right text-slate-700 dark:text-gray-200 font-mono" type="number" placeholder="단가" value={price} onChange={e=>setPrice(e.target.value)} />
                         <button onClick={handleSave} className="bg-brand-700 hover:bg-brand-800 text-white px-2 py-1 rounded-sm text-xs font-bold transition-colors">저장</button>
                     </div>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-dark-bg border border-slate-100 dark:border-dark-border rounded-sm p-0.5">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar bg-brand-50/50 dark:bg-dark-bg border border-slate-100 dark:border-dark-border rounded-sm p-0.5">
                         <ul className="space-y-px">
                             {Object.entries(productHistory).map(([n, p]) => (
                                 <li key={n} onClick={() => handleItemClick(n, p)} className="flex justify-between items-center px-2 py-1 hover:bg-white hover:shadow-sm dark:hover:bg-dark-card cursor-pointer text-xs border border-transparent hover:border-slate-100 dark:hover:border-dark-border rounded-sm group transition-all">
@@ -396,9 +351,9 @@
             const base = "px-2 py-1 rounded-sm text-xs font-bold flex items-center gap-1 transition-all border shadow-sm h-7";
             const colors = {
                 brand: "bg-brand-600 text-white border-brand-700 hover:bg-brand-700",
-                white: "bg-white dark:bg-dark-card text-slate-600 dark:text-slate-300 border-slate-200 dark:border-dark-border hover:bg-slate-50 hover:text-brand-700",
+                white: "bg-white dark:bg-dark-card text-slate-600 dark:text-slate-300 border-slate-200 dark:border-dark-border hover:bg-brand-50 hover:text-brand-700",
                 dark: "bg-brand-800 text-white border-brand-900 hover:bg-brand-900",
-                ghost: "bg-transparent text-slate-500 border-transparent hover:bg-slate-100 dark:hover:bg-slate-800",
+                ghost: "bg-transparent text-slate-500 border-transparent hover:bg-brand-50 dark:hover:bg-slate-800",
             };
             return (
                 <button onClick={onClick} disabled={loading} className={`${base} ${colors[color] || colors.white} ${active ? 'ring-1 ring-brand-500' : ''} ${className} ${loading ? 'opacity-70 cursor-wait' : ''}`}>
@@ -418,7 +373,7 @@
                     {show && filtered.length > 0 && (
                         <ul className="absolute z-50 left-0 top-full mt-0.5 w-full bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border shadow-lg max-h-32 overflow-y-auto rounded-sm text-xs">
                             {filtered.map(([n, p]) => (
-                                <li key={n} className="px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-dark-input cursor-pointer flex justify-between border-b border-slate-50 dark:border-dark-border last:border-0 text-slate-700 dark:text-slate-300" onClick={() => { onSelect(n, p); setShow(false); }}>
+                                <li key={n} className="px-2 py-1.5 hover:bg-brand-50 dark:hover:bg-dark-input cursor-pointer flex justify-between border-b border-slate-50 dark:border-dark-border last:border-0 text-slate-700 dark:text-slate-300" onClick={() => { onSelect(n, p); setShow(false); }}>
                                     <span className="font-medium">{n}</span><span className="font-mono text-slate-400">{p.toLocaleString()}</span>
                                 </li>
                             ))}
@@ -565,59 +520,7 @@
             };
             
             const handleCustomerUploadClick = () => customerFileRef.current && customerFileRef.current.click();
-            const handleCustomerFileUpload = (e) => { 
-                const file = e.target.files[0]; 
-                if (!file) return; 
-                Papa.parse(file, { 
-                    header: true, 
-                    skipEmptyLines: true, 
-                    complete: (results) => { 
-                        const newDB = { ...customerDB }; 
-                        let count = 0; 
-                        
-                        // Header Mapping Logic
-                        const headers = results.meta.fields;
-                        if (!headers) return;
-
-                        const findHeader = (keywords) => headers.find(h => keywords.some(kw => h.replace(/[\(\)\*\s]/g, '').includes(kw)));
-                        
-                        const nickH = findHeader(['닉네임', '이름', '성함', 'Nickname']);
-                        const phoneH = findHeader(['핸드폰', '전화', '연락처', 'Phone']);
-                        const addrH = findHeader(['주소', '배송지', 'Address']);
-                        const memoH = findHeader(['메모', '요청', 'Memo']);
-                        const zipH = findHeader(['우편번호', 'Zip']);
-
-                        results.data.forEach(row => { 
-                            const nick = row[nickH];
-                            if (nick && nick.trim()) { 
-                                const rawAddr = row[addrH] || '';
-                                let zipCode = row[zipH] || '';
-                                let addressText = rawAddr;
-
-                                // Extract Zip if embedded in Address like (12345)
-                                const zipMatch = rawAddr.match(/\((\d{5,6})\)/);
-                                if (zipMatch) {
-                                    zipCode = zipMatch[1];
-                                    addressText = rawAddr.replace(zipMatch[0], '').trim();
-                                }
-
-                                newDB[nick.trim()] = { 
-                                    recipientName: row['수령인'] || row['받는분'] || nick.trim(), 
-                                    phone: row[phoneH] || '', 
-                                    zipCode: zipCode, 
-                                    addressText: addressText, 
-                                    shippingMemo: row[memoH] || '' 
-                                }; 
-                                count++; 
-                            } 
-                        }); 
-                        setCustomerDB(newDB); 
-                        showToast(`총 ${count}명의 고객 정보를 등록했습니다!`, 'success'); 
-                    } 
-                }); 
-                e.target.value = null; 
-            };
-
+            const handleCustomerFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const newDB = { ...customerDB }; let count = 0; results.data.forEach(row => { const nick = row['닉네임'] || row['Nickname'] || row['이름'] || row['성함']; if (nick && nick.trim()) { newDB[nick.trim()] = { recipientName: row['수령인'] || row['받는분'] || row['이름'] || nick.trim(), phone: row['연락처'] || row['전화번호'] || row['휴대폰'] || '', zipCode: row['우편번호'] || row['Zip'] || '', addressText: row['주소'] || row['Address'] || row['기본주소'] || '', shippingMemo: row['배송메모'] || row['배송요청사항'] || row['메모'] || '' }; count++; } }); setCustomerDB(newDB); showToast(`총 ${count}명의 고객 정보를 등록했습니다!`, 'success'); } }); e.target.value = null; };
             const getNicknameColor = (name) => { if (!name) return 'text-slate-700 dark:text-slate-300'; const colors = ['text-brand-600 dark:text-brand-400', 'text-slate-700 dark:text-slate-300']; let hash = 0; for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash); return colors[Math.abs(hash) % colors.length]; };
             const handleCopyMemo = () => { if (!globalMemo) { showToast('복사할 메모가 없습니다.', 'error'); return; } const ta = document.createElement("textarea"); ta.value = globalMemo; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('메모 복사 완료'); };
             
@@ -668,10 +571,8 @@
             const firstOrderIds = useMemo(() => { const ids = {}; orders.forEach(o => { if (o.customer && !ids[o.customer]) ids[o.customer] = o.id; }); return ids; }, [orders]);
             const customerCounts = useMemo(() => orders.reduce((acc, o) => { if(o.customer) acc[o.customer] = (acc[o.customer] || 0) + 1; return acc; }, {}), [orders]);
             
-            // 1. Define filteredOrders first
             const filteredOrders = useMemo(() => { let result = orders; if (filterText) { const lower = filterText.toLowerCase(); result = result.filter(o => (o.customer && o.customer.toLowerCase().includes(lower)) || (o.product && o.product.toLowerCase().includes(lower))); } if (unpaidFilter) { const grouped = orders.reduce((acc, o) => { const k = o.customer || 'u'; if(!acc[k]) acc[k] = {p:0, d:0, c:0, ship:false, fee:null}; acc[k].p += o.price; acc[k].d += o.deposit; acc[k].c += o.cardAmount; if(o.isShippingPaid) acc[k].ship = true; if(o.customShippingFee !== null) acc[k].fee = o.customShippingFee; return acc; }, {}); result = result.filter(o => { const g = grouped[o.customer || 'u']; if (!g) return false; const ship = g.fee ?? shippingFee; const totalRequired = g.p + ship; const totalPaid = g.d + g.c; const shippingCredit = g.ship ? ship : 0; const personUnpaid = Math.max(0, totalRequired - totalPaid - shippingCredit); if (unpaidFilter === 'ship') { return !g.ship && ship > 0; } if (unpaidFilter === 'cash') { let cashUnpaid = 0; if (g.ship) { cashUnpaid = personUnpaid; } else { const unpaidAttribToShip = Math.min(personUnpaid, ship); cashUnpaid = personUnpaid - unpaidAttribToShip; } return cashUnpaid > 0; } return true; }); } return result; }, [orders, filterText, unpaidFilter, shippingFee]);
             
-            // 2. Define stats depending on filteredOrders
             const stats = useMemo(() => { 
                 const res = { qty: 0, orderCount: 0, shippingCount: 0, cardRev: 0, cashRev: 0, shipRev: 0, totalRev: 0, cardUnpaid: 0, cashUnpaid: 0, shipUnpaid: 0, totalUnpaid: 0 }; 
                 const grouped = filteredOrders.reduce((acc, o) => { 
@@ -703,7 +604,6 @@
             const handleKeyDown = (e, index, field) => { if (e.key === 'Enter') { e.preventDefault(); const nextIndex = index + 1; if (nextIndex < filteredOrders.length) { const nextElement = document.getElementById(`${field}-${nextIndex}`); if (nextElement) { nextElement.focus(); if (nextElement.select) nextElement.select(); } } } };
             const handleMemoKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const textarea = e.target; const start = textarea.selectionStart; const end = textarea.selectionEnd; const value = globalMemo; const newValue = value.substring(0, start) + "\n▫ " + value.substring(end); setGlobalMemo(newValue); setTimeout(() => { textarea.selectionStart = textarea.selectionEnd = start + 3; }, 0); } };
             
-            // --- PARSE ORDERS ---
             const handleParseOrders = () => {
                 if (!rawInput.trim()) { showToast('입력 내용이 없습니다.', 'error'); return; }
                 setIsProcessing(true);
@@ -767,31 +667,35 @@
                             <span className="font-bold text-xs tracking-tight text-slate-800 dark:text-white">강은지 주문관리 <span className="text-brand-600 dark:text-brand-400">PRO</span></span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="flex items-center bg-slate-100 dark:bg-dark-input rounded-sm p-0.5">
+                            <div className="flex items-center bg-brand-50 dark:bg-dark-input rounded-sm p-0.5">
                                 <ActionButton onClick={handleSetGoogleUrl} color="ghost" icon="Gear" text="" className="!px-1.5"/>
                                 <ActionButton onClick={handleSaveToGoogle} color="ghost" icon="CloudArrowUp" text="저장" loading={isSyncing}/>
                                 <div className="w-px h-3 bg-slate-300 dark:bg-slate-600 mx-0.5"></div>
                                 <ActionButton onClick={handleLoadFromGoogle} color="ghost" icon="CloudArrowDown" text="불러오기" loading={isSyncing}/>
                             </div>
                             <div className="h-3 w-px bg-slate-300 dark:bg-slate-700 mx-1"></div>
-                            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-500"><Icon name={isDarkMode ? "Sun" : "Moon"} size={14} /></button>
+                            
+                            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1 hover:bg-brand-50 dark:hover:bg-slate-700 rounded-md text-slate-500"><Icon name={isDarkMode ? "Sun" : "Moon"} size={14} /></button>
+                            
                             <div className="h-3 w-px bg-slate-300 dark:bg-slate-700 mx-1"></div>
-                            <ActionButton onClick={handleCustomerUploadClick} color="brand" icon="AddressBook" text="고객" />
+                            
+                            {/* Dropdown Groups */}
+                            <DropdownMenu label="출력/저장" icon="Export">
+                                <DropdownItem onClick={() => setIsReceiptModalOpen(true)} icon="Receipt" label="영수증 인쇄" />
+                                <DropdownItem onClick={() => handleDownloadCSV('full')} icon="FileXls" label="엑셀 (전체)" colorClass="text-accent-teal" />
+                                <DropdownItem onClick={() => handleDownloadCSV('invoice')} icon="Truck" label="엑셀 (송장)" colorClass="text-brand-600" />
+                                <DropdownItem onClick={() => handleDownloadProductCSV()} icon="List" label="엑셀 (발주)" colorClass="text-accent-amber" />
+                            </DropdownMenu>
+
+                            <DropdownMenu label="데이터 관리" icon="Database">
+                                <DropdownItem onClick={handleCustomerUploadClick} icon="AddressBook" label="고객수첩 등록" colorClass="text-brand-600"/>
+                                <DropdownItem onClick={handleDownloadHTML} icon="FloppyDisk" label="파일 백업 (HTML)" />
+                                <DropdownItem onClick={handleUploadClick} icon="UploadSimple" label="파일 복원" />
+                                <DropdownItem onClick={handleReset} icon="Eraser" label="초기화 (Reset)" colorClass="text-accent-rose"/>
+                            </DropdownMenu>
+
+                            {/* Hidden Inputs */}
                             <input type="file" ref={customerFileRef} onChange={handleCustomerFileUpload} accept=".csv" style={{display:'none'}} />
-                            <div className="relative" ref={excelMenuRef}>
-                                <ActionButton onClick={() => setIsExcelMenuOpen(!isExcelMenuOpen)} color="ghost" icon="FileXls" text="엑셀" />
-                                {isExcelMenuOpen && (
-                                    <div className="absolute top-full right-0 mt-1 w-32 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border shadow-soft rounded-md z-50 py-1">
-                                        <button onClick={() => { handleDownloadCSV('full'); setIsExcelMenuOpen(false); }} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 text-slate-700 dark:text-gray-300"><Icon name="FileXls" className="text-accent-teal"/> 전체</button>
-                                        <button onClick={() => { handleDownloadCSV('invoice'); setIsExcelMenuOpen(false); }} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 text-slate-700 dark:text-gray-300"><Icon name="Truck" className="text-brand-600"/> 송장</button>
-                                        <button onClick={() => { handleDownloadProductCSV(); setIsExcelMenuOpen(false); }} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 border-t border-slate-100 dark:border-dark-border mt-0.5 pt-0.5 text-slate-700 dark:text-gray-300"><Icon name="List" className="text-accent-amber"/> 발주</button>
-                                    </div>
-                                )}
-                            </div>
-                            <ActionButton onClick={() => setIsReceiptModalOpen(true)} color="brand" icon="Receipt" text="영수증" />
-                            <ActionButton onClick={handleDownloadHTML} color="white" icon="FloppyDisk" text="백업" />
-                            <ActionButton onClick={handleUploadClick} color="white" icon="UploadSimple" text="복원" />
-                            <ActionButton onClick={handleReset} color="ghost" icon="Eraser" text="초기화" />
                             <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{display:'none'}} />
                         </div>
                     </header>
@@ -806,7 +710,7 @@
                                 <div className="flex justify-between items-center mb-1 px-1">
                                     <h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1"><Icon name="ClipboardList" className="text-brand-500"/> 주문서 입력</h3>
                                 </div>
-                                <textarea className="flex-1 w-full p-2 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-md resize-none text-xs font-mono focus:border-brand-500 outline-none transition-all mb-2 text-slate-700 dark:text-gray-200 placeholder-slate-400" placeholder="주문 내용을 붙여넣으세요. (예: @홍길동 A세트 1개)" value={rawInput} onChange={(e) => setRawInput(e.target.value)}></textarea>
+                                <textarea className="flex-1 w-full p-2 bg-brand-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-md resize-none text-xs font-mono focus:border-brand-500 outline-none transition-all mb-2 text-slate-700 dark:text-gray-200 placeholder-slate-400" placeholder="주문 내용을 붙여넣으세요. (예: @홍길동 A세트 1개)" value={rawInput} onChange={(e) => setRawInput(e.target.value)}></textarea>
                                 <button onClick={handleParseOrders} disabled={isProcessing} className="w-full py-1.5 bg-brand-700 hover:bg-brand-800 text-white rounded-md text-xs font-bold transition-colors flex justify-center items-center gap-1 shadow-sm">{isProcessing ? '처리 중...' : '변환하기'} <Icon name="ArrowRight" size={10} weight="bold"/></button>
                             </div>
                             
@@ -825,23 +729,23 @@
 
                         {/* List */}
                         <div className="flex-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg flex flex-col overflow-hidden shadow-soft min-h-0">
-                            <div className="p-1.5 border-b border-slate-100 dark:border-dark-border flex items-center justify-between gap-2 bg-slate-50/50 dark:bg-dark-bg/50">
+                            <div className="p-1.5 border-b border-slate-100 dark:border-dark-border flex items-center justify-between gap-2 bg-brand-50/50 dark:bg-dark-bg/50">
                                 <div className="flex items-center gap-2 flex-1 max-w-sm">
                                     <div className="relative flex-1">
                                         <div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="Search" size={12}/></div>
-                                        <input className="w-full pl-7 pr-2 py-1 bg-white dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm text-xs focus:border-brand-500 outline-none transition-all text-slate-700 dark:text-gray-200 placeholder-slate-400" placeholder="검색..." value={filterText} onChange={(e) => setFilterText(e.target.value)} />
+                                        <input className="w-full pl-7 pr-2 py-1 bg-brand-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm text-xs focus:border-brand-500 outline-none transition-all text-slate-700 dark:text-gray-200 placeholder-slate-400" placeholder="검색..." value={filterText} onChange={(e) => setFilterText(e.target.value)} />
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                    <div className="hidden md:flex items-center gap-1 bg-white dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-1.5 py-0.5">
+                                    <div className="hidden md:flex items-center gap-1 bg-brand-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-1.5 py-0.5">
                                         <span className="text-[9px] text-slate-400 font-bold uppercase mr-1">기본</span>
                                         <input type="text" value={defaultProductName} onChange={(e) => setDefaultProductName(e.target.value)} className="w-16 bg-transparent text-xs font-medium outline-none text-slate-700 dark:text-gray-200" placeholder="입력" />
                                     </div>
-                                    <div className="hidden md:flex items-center gap-1 bg-white dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-1.5 py-0.5">
+                                    <div className="hidden md:flex items-center gap-1 bg-brand-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-1.5 py-0.5">
                                         <span className="text-[9px] text-slate-400 font-bold uppercase mr-1">단가</span>
                                         <input type="number" value={pricePerUnit} onChange={(e) => setPricePerUnit(e.target.value)} className="w-10 bg-transparent text-xs font-mono text-right outline-none text-slate-700 dark:text-gray-200" placeholder="0" />
                                     </div>
-                                    <div className="hidden md:flex items-center gap-1 bg-white dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-1.5 py-0.5">
+                                    <div className="hidden md:flex items-center gap-1 bg-brand-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded-sm px-1.5 py-0.5">
                                         <span className="text-[9px] text-slate-400 font-bold uppercase mr-1">배송비</span>
                                         <input type="number" value={shippingFee} onChange={(e) => setShippingFee(Number(e.target.value))} className="w-10 bg-transparent text-xs font-mono text-right outline-none text-slate-700 dark:text-gray-200" />
                                     </div>
@@ -851,7 +755,7 @@
                                 </div>
                             </div>
 
-                            <div className="grid grid-rows-compact gap-2 px-3 py-1.5 bg-slate-100/50 dark:bg-dark-bg border-b border-slate-200 dark:border-dark-border text-[10px] font-bold text-slate-500 dark:text-slate-400 text-center uppercase tracking-wide">
+                            <div className="grid grid-rows-compact gap-2 px-3 py-1.5 bg-brand-50/50 dark:bg-dark-bg border-b border-slate-200 dark:border-dark-border text-[10px] font-bold text-slate-500 dark:text-slate-400 text-center uppercase tracking-wide">
                                 <div>주소</div><div className="text-left">주문자</div><div className="text-left">상품명</div><div>수량</div><div className="text-right">금액</div><div>상태</div><div className="text-left">메모</div><div></div>
                             </div>
 
@@ -865,7 +769,7 @@
                                     <div className="divide-y divide-slate-100 dark:divide-dark-border">
                                         {filteredOrders.map((order, index) => {
                                             const isFirst = firstOrderIds[order.customer] === order.id;
-                                            const rowBg = order.price > 0 && (order.deposit + order.cardAmount < order.price) ? 'bg-accent-rose/5 dark:bg-accent-rose/10' : 'bg-white dark:bg-dark-card hover:bg-slate-50 dark:hover:bg-dark-input transition-colors';
+                                            const rowBg = order.price > 0 && (order.deposit + order.cardAmount < order.price) ? 'bg-accent-rose/5 dark:bg-accent-rose/10' : 'bg-white dark:bg-dark-card hover:bg-brand-50 dark:hover:bg-dark-input transition-colors';
                                             const nickColor = getNicknameColor(order.customer);
                                             
                                             return (
@@ -881,15 +785,15 @@
                                                             <input id={`customer-${index}`} className={`w-full bg-transparent font-bold outline-none ${nickColor}`} value={order.customer} onChange={e => handleUpdateOrder(order.id, 'customer', e.target.value)} onKeyDown={e => handleKeyDown(e, index, 'customer')} placeholder="이름" />
                                                         </div>
                                                         {order.phone && <div className="text-[9px] text-slate-400 font-mono -mt-0.5 truncate">{order.phone}</div>}
-                                                        {customerCounts[order.customer] > 1 && <span className="absolute right-0 top-0.5 text-[8px] bg-slate-100 dark:bg-slate-700 px-1 rounded-sm font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600">{customerCounts[order.customer]}</span>}
+                                                        {customerCounts[order.customer] > 1 && <span className="absolute right-0 top-0.5 text-[8px] bg-brand-100 dark:bg-slate-700 px-1 rounded-sm font-bold text-slate-500 dark:text-slate-400 border border-brand-200 dark:border-slate-600">{customerCounts[order.customer]}</span>}
                                                     </div>
                                                     <div className="relative"><ProductAutocomplete id={`product-${index}`} value={order.product} onChange={(e) => handleUpdateOrder(order.id, 'product', e.target.value)} onSelect={(name, price) => handleProductSelect(order.id, name, price)} onDeleteProduct={handleDeleteProduct} onKeyDown={(e) => handleKeyDown(e, index, 'product')} priceMap={productHistory} /></div>
-                                                    <div className="flex justify-center"><input id={`quantity-${index}`} type="number" className="w-full text-center bg-transparent font-bold outline-none focus:bg-slate-50 dark:focus:bg-dark-input rounded-sm text-slate-700 dark:text-gray-300" value={order.quantity} onChange={e => handleUpdateOrder(order.id, 'quantity', Number(e.target.value))} onKeyDown={e => handleKeyDown(e, index, 'quantity')} /></div>
-                                                    <div className="text-right"><input id={`price-${index}`} className="w-full text-right bg-transparent font-mono font-medium outline-none focus:bg-slate-50 dark:focus:bg-dark-input rounded-sm text-slate-700 dark:text-gray-300" value={order.price === 0 ? '' : order.price.toLocaleString()} onChange={e => { const v = e.target.value.replace(/,/g,''); if(!isNaN(v)) handleUpdateOrder(order.id, 'price', Number(v)); }} onKeyDown={e => handleKeyDown(e, index, 'price')} placeholder="0" /></div>
+                                                    <div className="flex justify-center"><input id={`quantity-${index}`} type="number" className="w-full text-center bg-transparent font-bold outline-none focus:bg-brand-50 dark:focus:bg-dark-input rounded-sm text-slate-700 dark:text-gray-300" value={order.quantity} onChange={e => handleUpdateOrder(order.id, 'quantity', Number(e.target.value))} onKeyDown={e => handleKeyDown(e, index, 'quantity')} /></div>
+                                                    <div className="text-right"><input id={`price-${index}`} className="w-full text-right bg-transparent font-mono font-medium outline-none focus:bg-brand-50 dark:focus:bg-dark-input rounded-sm text-slate-700 dark:text-gray-300" value={order.price === 0 ? '' : order.price.toLocaleString()} onChange={e => { const v = e.target.value.replace(/,/g,''); if(!isNaN(v)) handleUpdateOrder(order.id, 'price', Number(v)); }} onKeyDown={e => handleKeyDown(e, index, 'price')} placeholder="0" /></div>
                                                     <div className="flex items-center justify-center gap-1">
                                                         <button onClick={() => handleAutoDepositFull(order.id)} className={`h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold border transition-all ${order.deposit > 0 ? 'bg-accent-teal/10 text-accent-teal border-accent-teal/30' : 'bg-transparent text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'}`}>현금</button>
                                                         {isFirst ? (
-                                                            <button onClick={() => handleUpdateOrder(order.id, 'isShippingPaid', !order.isShippingPaid)} onContextMenu={(e) => { e.preventDefault(); handleToggleShippingEdit(order.id); }} className={`h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold transition-colors ${order.isShippingPaid ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>배송</button>
+                                                            <button onClick={() => handleUpdateOrder(order.id, 'isShippingPaid', !order.isShippingPaid)} onContextMenu={(e) => { e.preventDefault(); handleToggleShippingEdit(order.id); }} className={`h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold transition-colors ${order.isShippingPaid ? 'bg-brand-600 text-white' : 'bg-brand-50 text-slate-400 dark:bg-slate-800 hover:bg-brand-100'}`}>배송</button>
                                                         ) : (
                                                             <span className="h-4.5 px-1.5 rounded-sm flex items-center justify-center text-[9px] font-bold text-transparent border border-transparent select-none">배송</span>
                                                         )}
@@ -899,7 +803,7 @@
                                                     <div className="flex justify-end"><button onClick={() => handleDelete(order.id)} className="text-slate-300 hover:text-accent-rose transition-colors p-1"><Icon name="X" size={10}/></button></div>
 
                                                     {/* Editor Popups */}
-                                                    {editingAmountId === order.id && ( <div className="col-span-full p-1.5 bg-slate-50 dark:bg-dark-input border-y border-slate-200 dark:border-dark-border flex gap-2 justify-end items-center animate-fade-in shadow-inner"> <button onClick={() => handleAutoCardFull(order.id)} className="px-2 py-0.5 rounded-sm bg-accent-rose text-white hover:bg-rose-600 text-[10px] font-bold shadow-sm">카드 전액</button> <div className="flex items-center gap-1 bg-white dark:bg-dark-card px-2 py-0.5 rounded-sm border border-slate-200 dark:border-dark-border"><span className="text-[9px] text-slate-400">현금</span><input type="number" className="w-14 text-right text-xs font-bold outline-none bg-transparent" value={order.deposit} onChange={e => handleUpdateOrder(order.id, 'deposit', Number(e.target.value))} /></div><div className="flex items-center gap-1 bg-white dark:bg-dark-card px-2 py-0.5 rounded-sm border border-slate-200 dark:border-dark-border"><span className="text-[9px] text-slate-400">카드</span><input type="number" className="w-14 text-right text-xs font-bold outline-none bg-transparent" value={order.cardAmount} onChange={e => handleUpdateOrder(order.id, 'cardAmount', Number(e.target.value))} /></div></div> )}
+                                                    {editingAmountId === order.id && ( <div className="col-span-full p-1.5 bg-brand-50 dark:bg-dark-input border-y border-slate-200 dark:border-dark-border flex gap-2 justify-end items-center animate-fade-in shadow-inner"> <button onClick={() => handleAutoCardFull(order.id)} className="px-2 py-0.5 rounded-sm bg-accent-rose text-white hover:bg-rose-600 text-[10px] font-bold shadow-sm">카드 전액</button> <div className="flex items-center gap-1 bg-white dark:bg-dark-card px-2 py-0.5 rounded-sm border border-slate-200 dark:border-dark-border"><span className="text-[9px] text-slate-400">현금</span><input type="number" className="w-14 text-right text-xs font-bold outline-none bg-transparent" value={order.deposit} onChange={e => handleUpdateOrder(order.id, 'deposit', Number(e.target.value))} /></div><div className="flex items-center gap-1 bg-white dark:bg-dark-card px-2 py-0.5 rounded-sm border border-slate-200 dark:border-dark-border"><span className="text-[9px] text-slate-400">카드</span><input type="number" className="w-14 text-right text-xs font-bold outline-none bg-transparent" value={order.cardAmount} onChange={e => handleUpdateOrder(order.id, 'cardAmount', Number(e.target.value))} /></div></div> )}
                                                     {editingShippingId === order.id && ( <div className="col-span-full p-1.5 bg-brand-50 dark:bg-brand-900/20 border-y border-brand-100 dark:border-brand-800 flex gap-2 justify-center items-center animate-fade-in shadow-inner"> <span className="text-[10px] font-bold text-brand-600 dark:text-brand-300">개별 배송비:</span> <input type="number" className="w-16 p-0.5 rounded-sm border border-brand-200 text-right font-bold text-xs text-brand-700 outline-none" value={order.customShippingFee ?? shippingFee} onChange={e => handleUpdateOrder(order.id, 'customShippingFee', Number(e.target.value))} /> <button onClick={() => handleUpdateOrder(order.id, 'customShippingFee', null)} className="text-[10px] bg-white text-brand-600 px-2 py-0.5 rounded-sm border border-brand-200 hover:bg-brand-50">기본값</button> <button onClick={() => setEditingShippingId(null)} className="text-[10px] bg-brand-600 text-white px-2 py-0.5 rounded-sm hover:bg-brand-700 ml-1">확인</button> </div> )}
                                                     {editingAddressId === order.id && ( <div className="col-span-full"><AddressEditor order={order} handleUpdateOrder={handleUpdateOrder} handleUpdateOrderBatch={handleUpdateOrderBatch} setEditingAddressId={setEditingAddressId} showToast={showToast} /></div> )}
                                                 </div>
@@ -909,7 +813,7 @@
                                 )}
                             </div>
                             
-                            <div className="p-1.5 bg-slate-50 dark:bg-dark-bg border-t border-slate-200 dark:border-dark-border text-xs flex justify-between items-center shrink-0">
+                            <div className="p-1.5 bg-brand-50 dark:bg-dark-bg border-t border-slate-200 dark:border-dark-border text-xs flex justify-between items-center shrink-0">
                                 <div className="flex items-center gap-2"><span className="px-2 py-0.5 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-sm text-[10px] font-bold text-slate-500 dark:text-slate-400 shadow-sm">배송 {filteredStats.shippingCount}건</span></div>
                                 <div className="flex items-center gap-4">
                                     <div className="flex items-center gap-1"><span className="text-[10px] text-slate-400">총액</span><span className="font-bold text-slate-700 dark:text-white font-mono">{filteredStats.totalRev.toLocaleString()}</span></div>
