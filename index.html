@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO</title>
+    <title>깔로픽 주문서 PRO</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -267,7 +267,44 @@
             };
             
             const handlePostcode = () => { try { new daum.Postcode({ oncomplete: function(data) { setLocalAddr(prev => ({ ...prev, zipCode: data.zonecode, addressText: data.address, addressDetail: '' })); } }).open(); } catch(e) { showToast("팝업이 차단되었습니다.", "error"); } };
-            const handleParseRaw = () => { if (!rawText.trim()) return; let text = rawText; let name = '', phone = '', address = '', memo = ''; const phoneMatch = text.match(/(01[016789])[- .]?(\d{3,4})[- .]?(\d{4})/); if (phoneMatch) { phone = phoneMatch[0]; text = text.replace(phone, ''); } const zipMatch = text.match(/\d{5}/); if(zipMatch) text = text.replace(zipMatch[0], ''); const lines = text.split('\n').map(l => l.trim()).filter(Boolean); lines.forEach(line => { if (line.match(/^(이름|수령인|받는분):?/)) name = line.replace(/^(이름|수령인|받는분):?/, '').trim();else if (line.match(/^(주소|배송지):?/)) address = line.replace(/^(주소|배송지):?/, '').trim();else if (line.match(/^(메모|요청사항):?/)) memo = line.replace(/^(메모|요청사항):?/, '').trim(); }); if (!name && lines.length > 0) name = lines[0]; if (!address && lines.length > 1) address = lines.find(l => l !== name && l.match(/[시도구군길로]/)) || lines[1]; setLocalAddr(prev => ({ ...prev, recipientName: name || prev.recipientName, phone: phone || prev.phone, addressText: address || prev.addressText, shippingMemo: memo || prev.shippingMemo })); setTab('edit'); showToast("정보가 입력되었습니다."); };
+            
+            const handleParseRaw = () => { 
+                if (!rawText.trim()) return; 
+                let text = rawText; 
+                let name = '', phone = '', address = '', memo = ''; 
+                
+                // [수정됨] 010으로 시작하고, 중간에 어떤 특수문자가 와도 숫자 11개(또는 10개)를 찾아냄
+                // (010) + (숫자아님*) + (3~4자리) + (숫자아님*) + (4자리)
+                const phoneMatch = text.match(/(01[016789])\D*(\d{3,4})\D*(\d{4})/); 
+                
+                if (phoneMatch) { 
+                    phone = `${phoneMatch[1]}-${phoneMatch[2]}-${phoneMatch[3]}`; 
+                    text = text.replace(phoneMatch[0], ''); 
+                } 
+                
+                const zipMatch = text.match(/\d{5}/); 
+                if(zipMatch) text = text.replace(zipMatch[0], ''); 
+                
+                const lines = text.split('\n').map(l => l.trim()).filter(Boolean); 
+                lines.forEach(line => { 
+                    if (line.match(/^(이름|수령인|받는분):?/)) name = line.replace(/^(이름|수령인|받는분):?/, '').trim();
+                    else if (line.match(/^(주소|배송지):?/)) address = line.replace(/^(주소|배송지):?/, '').trim();
+                    else if (line.match(/^(메모|요청사항):?/)) memo = line.replace(/^(메모|요청사항):?/, '').trim(); 
+                }); 
+                
+                if (!name && lines.length > 0) name = lines[0]; 
+                if (!address && lines.length > 1) address = lines.find(l => l !== name && l.match(/[시도구군길로]/)) || lines[1]; 
+                
+                setLocalAddr(prev => ({ 
+                    ...prev, 
+                    recipientName: name || prev.recipientName, 
+                    phone: phone || prev.phone, 
+                    addressText: address || prev.addressText, 
+                    shippingMemo: memo || prev.shippingMemo 
+                })); 
+                setTab('edit'); 
+                showToast("정보가 입력되었습니다."); 
+            };
             
             if (!selectedOrder) { return (<div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col h-full shadow-soft items-center justify-center text-slate-400 text-xs"><Icon name="map-pin" size={24} className="mb-2 opacity-50"/><p>주문을 선택해주세요</p></div>); }
             
