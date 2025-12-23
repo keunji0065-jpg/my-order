@@ -51,17 +51,41 @@
         .grid-rows-compact { grid-template-columns: 75px 100px 70px 1.8fr 50px 80px 30px 1fr 30px; }
         .dragging { opacity: 0.5; border: 2px dashed #627d98; }
         
-        /* --- 인쇄 전용 스타일 --- */
+        /* --- 인쇄 전용 스타일 수정됨 --- */
         @media print {
+            @page { margin: 10mm; size: auto; }
+            
+            /* 기본적으로 모든 요소 숨김 */
             body * { visibility: hidden; }
-            #print-area, #print-area * { visibility: visible; }
+            
+            /* 레이아웃 제약 해제 (필수) */
+            html, body, #root, .App, main, .tab-content, .h-screen, .flex-col, .overflow-hidden, .overflow-y-auto {
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+                display: block !important;
+                position: static !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white !important;
+            }
+
+            /* 인쇄 영역 및 그 하위 요소만 표시 */
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+
+            /* 인쇄 영역 위치 강제 조정 */
             #print-area { 
                 position: absolute; 
                 left: 0; 
                 top: 0; 
                 width: 100%; 
-                background: white;
+                margin: 0;
+                padding: 0;
             }
+
+            /* 영수증 카드 스타일 */
             .receipt-card {
                 break-inside: avoid;
                 page-break-inside: avoid;
@@ -69,7 +93,9 @@
                 margin-bottom: 2rem;
                 box-shadow: none !important;
                 width: 100%;
+                page-break-after: auto;
             }
+            
             .no-print { display: none !important; }
             
             .text-brand-600 { color: black !important; }
