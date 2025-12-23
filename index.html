@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>깔로픽 주문서 PRO</title>
+    <title>강은지 주문서 PRO (Lite) - v3.91 (구글 연동 버그 수정)</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -90,6 +90,109 @@
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+        // --- APPS SCRIPT CODE (백업용, 화면에는 표시 안 함) ---
+        const APPS_SCRIPT_CODE = `
+function doGet(e) {
+  var doc = SpreadsheetApp.getActiveSpreadsheet();
+  var result = {};
+
+  try {
+    // 1. Load Orders
+    var orderSheet = doc.getSheetByName('orders');
+    if (orderSheet && orderSheet.getLastRow() > 1) {
+      // Get all data including headers
+      var data = orderSheet.getDataRange().getValues();
+      result.orders = JSON.stringify(data); // Send as array of arrays
+    }
+
+    // 2. Load Products
+    var prodSheet = doc.getSheetByName('products');
+    if (prodSheet && prodSheet.getLastRow() > 1) {
+      var pData = prodSheet.getDataRange().getValues();
+      var pObj = {};
+      // Skip header row 0
+      for(var i=1; i<pData.length; i++) {
+        if(pData[i][0]) pObj[pData[i][0]] = pData[i][1];
+      }
+      result.products = JSON.stringify(pObj);
+    }
+
+    // 3. Load Customers
+    var custSheet = doc.getSheetByName('customers');
+    if (custSheet && custSheet.getLastRow() > 1) {
+        var cData = custSheet.getDataRange().getValues();
+        result.customers = JSON.stringify(cData);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ 'error': err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(10000);
+
+  try {
+    var doc = SpreadsheetApp.getActiveSpreadsheet();
+    var json = JSON.parse(e.postData.contents);
+    
+    // 1. 주문 목록 저장 (orders 시트)
+    if(json.orders) {
+        var orders = JSON.parse(json.orders);
+        saveToSheet(doc, 'orders', 
+          ['주문일시', '주문자', '코드', '상품명', '수량', '단가', '배송비', '총액', '입금액(현금)', '카드결제', '수령인', '연락처', '주소', '메모'], 
+          orders.map(function(o) {
+            var dateStr = new Date(o.id).toLocaleString();
+            var addr = (o.addressText || '') + ' ' + (o.addressDetail || '');
+            var ship = o.customShippingFee != null ? o.customShippingFee : '';
+            var total = (Number(o.price) || 0); 
+            return [
+              dateStr, o.customer, '', o.product, o.quantity, o.price, ship, total, o.deposit, o.cardAmount, o.recipientName, o.phone, addr, o.memo
+            ];
+          })
+        );
+    }
+
+    // 2. 상품 목록 저장 (products 시트)
+    if(json.products) {
+        var products = JSON.parse(json.products);
+        var prodRows = [];
+        for (var key in products) { prodRows.push([key, products[key]]); }
+        saveToSheet(doc, 'products', ['상품명', '단가'], prodRows);
+    }
+
+    // 3. 고객 목록 저장 (customers 시트)
+    if(json.customers) {
+        var customers = JSON.parse(json.customers);
+        var custRows = [];
+        for (var key in customers) {
+          var c = customers[key];
+          custRows.push([key, c.recipientName, c.phone, c.zipCode, (c.addressText||'')+' '+(c.addressDetail||''), c.shippingMemo]);
+        }
+        saveToSheet(doc, 'customers', ['닉네임', '수령인', '연락처', '우편번호', '주소', '배송메모'], custRows);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ 'result': 'success' })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ 'result': 'error', 'error': err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function saveToSheet(doc, sheetName, headers, rows) {
+  var sheet = doc.getSheetByName(sheetName);
+  if (!sheet) { sheet = doc.insertSheet(sheetName); }
+  sheet.clear();
+  sheet.appendRow(headers);
+  if (rows && rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  }
+}`;
 
         // --- GLOBAL UTILITIES ---
         const parseNum = (val) => {
@@ -219,6 +322,9 @@
         // --- Settings Modal ---
         const SettingsModal = ({ isOpen, onClose, url, setUrl, showToast }) => {
             if (!isOpen) return null;
+            const copyCode = () => {
+                navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(() => showToast('코드가 복사되었습니다. Apps Script에 붙여넣으세요.'));
+            };
             return (
                 <div className="modal-overlay" onClick={onClose}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -227,6 +333,16 @@
                             <h3 className="text-sm font-bold text-slate-700 mb-2">Google Web App URL</h3>
                             <input className="w-full p-2 border rounded text-xs font-mono bg-slate-50 mb-1" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://script.google.com/..." />
                             <p className="text-[10px] text-slate-400">데이터를 저장할 구글 웹앱 주소를 입력하세요.</p>
+                        </div>
+                        <div className="mb-6 border-t pt-4">
+                            <h3 className="text-sm font-bold text-slate-700 mb-2 flex justify-between items-center">
+                                <span>Apps Script 코드 (필수 업데이트)</span>
+                                <button onClick={copyCode} className="bg-slate-800 text-white px-2 py-1 rounded text-xs">코드 복사</button>
+                            </h3>
+                            <p className="text-[10px] text-rose-500 mb-2 font-bold">
+                                * 주의: 이 코드를 Apps Script에 붙여넣고 [새 버전]으로 배포해야 저장/불러오기가 정상 작동합니다.
+                            </p>
+                            <textarea className="w-full h-32 p-2 bg-slate-800 text-slate-200 text-[10px] font-mono rounded overflow-auto" readOnly value={APPS_SCRIPT_CODE}></textarea>
                         </div>
                         <div className="text-right">
                             <button onClick={onClose} className="bg-brand-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-brand-700">닫기</button>
@@ -844,6 +960,7 @@
             
             const handleSetGoogleUrl = () => setIsSettingsOpen(true);
 
+            // [수정됨] 고객 데이터 로드 피드백 강화 및 에러 수정 (GET 요청 처리)
             const handleLoadFromGoogle = async () => { 
                 if (!googleScriptUrl) { handleSetGoogleUrl(); return; } 
                 setIsSyncing(true); 
@@ -855,16 +972,27 @@
 
                     if (data.orders) { 
                         const rows = JSON.parse(data.orders); 
+                        // rows[0] is header
                         const headers = rows[0]; 
-                        const loadedOrders = rows.slice(1).map(row => { const obj = {}; headers.forEach((h, i) => obj[h] = row[i]); return sanitizeOrder(obj); }); 
+                        const loadedOrders = rows.slice(1).map(row => { 
+                            const obj = {}; 
+                            headers.forEach((h, i) => obj[h] = row[i]); 
+                            return sanitizeOrder(obj); 
+                        }); 
                         setOrders(loadedOrders);
                         orderCount = loadedOrders.length;
                     } 
                     if (data.products) setProductHistory(JSON.parse(data.products)); 
                     if (data.customers) { 
                         const custRows = JSON.parse(data.customers); 
+                        // custRows[0] is header: ['닉네임', '수령인', '연락처', '우편번호', '주소', '배송메모']
                         const newDB = {}; 
-                        custRows.slice(1).forEach(r => { newDB[r[0]] = { recipientName: r[1], phone: r[2], zipCode: r[3], addressText: r[4], shippingMemo: r[5] }; }); 
+                        custRows.slice(1).forEach(r => { 
+                            // r[0]: 닉네임, r[1]: 수령인, r[2]: 연락처, r[3]: 우편번호, r[4]: 주소, r[5]: 배송메모
+                            if(r[0]) {
+                                newDB[r[0]] = { recipientName: r[1], phone: r[2], zipCode: r[3], addressText: r[4], shippingMemo: r[5] }; 
+                            }
+                        }); 
                         setCustomerDB(newDB);
                         customerCount = Object.keys(newDB).length;
                     } 
@@ -876,7 +1004,29 @@
                 } 
             };
             
-            const handleSaveToGoogle = async () => { if (!googleScriptUrl) { handleSetGoogleUrl(); return; } setIsSyncing(true); try { const payload = { orders: JSON.stringify(orders), products: JSON.stringify(productHistory), customers: JSON.stringify(customerDB) }; const res = await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify(payload) }); const json = await res.json(); if (json.status === 'success') showToast("저장 완료 (고객주소 및 주문내역)"); else throw new Error(json.message || "Unknown Error"); } catch (e) { showToast("저장 실패 (설정에서 코드를 업데이트했는지 확인하세요)", "error"); console.error(e); } finally { setIsSyncing(false); } };
+            // [수정됨] 저장 로직: 성공 조건 수정 (result === 'success')
+            const handleSaveToGoogle = async () => { 
+                if (!googleScriptUrl) { handleSetGoogleUrl(); return; } 
+                setIsSyncing(true); 
+                try { 
+                    const payload = { orders: JSON.stringify(orders), products: JSON.stringify(productHistory), customers: JSON.stringify(customerDB) }; 
+                    const res = await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify(payload) }); 
+                    const json = await res.json(); 
+                    
+                    // Apps Script now returns { 'result': 'success' }
+                    if (json.result === 'success') {
+                        showToast("저장 완료 (고객주소 및 주문내역)"); 
+                    } else {
+                        throw new Error(json.error || json.message || "Unknown Error"); 
+                    }
+                } catch (e) { 
+                    showToast("저장 실패 (설정에서 코드를 업데이트했는지 확인하세요)", "error"); 
+                    console.error(e); 
+                } finally { 
+                    setIsSyncing(false); 
+                } 
+            };
+
             const handleDownloadHTML = () => { const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const date = new Date(); const timestamp = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}`; a.download = `강은지_주문서_백업_${timestamp}.html`; a.click(); URL.revokeObjectURL(url); showToast('백업 완료'); };
             const handleUploadClick = () => fileInputRef.current && fileInputRef.current.click();
             const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const uploaded = results.data.map((row, i) => sanitizeOrder({ id: Date.now() + i, originalText: `UPLOAD: ${row['상품명']}`, customer: row['닉네임']?.trim(), product: row['상품명'], quantity: Number(row['수량']) || 1, price: Number(row['금액']?.replace(/,/g, '')) || 0, deposit: Number(row['입금액(현금)']), cardAmount: Number(row['카드결제액']), recipientName: row['수령인'], phone: row['연락처'], zipCode: row['우편번호'], addressText: row['주소'], shippingMemo: row['배송메모'], memo: row['메모'] })).filter(o => o.customer); setOrders(prev => [...uploaded, ...prev]); showToast(`${uploaded.length}건 업로드 완료`); } }); e.target.value = null; };
