@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Lite) - v3.95 (고객관리 기능 강화)</title>
+    <title>강은지 주문서 PRO (Lite) - v3.99 (우편번호 0유지)</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -238,6 +238,7 @@
 
             const handleChange = (field, val) => setLocalAddr(prev => ({...prev, [field]: val}));
             
+            // 저장 버튼 클릭 시: App 컴포넌트의 통합 저장 핸들러 호출
             const handleSave = () => { 
                 if (!selectedOrder) return; 
                 onSaveAddress(selectedOrder.id, localAddr); 
@@ -386,8 +387,122 @@
                 showToast(`닉네임이 '${selectedCustomer}' → '${newName}'으로 변경되었습니다.`);
             };
             
-            const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const newDB = { ...customerDB }; let count = 0; results.data.forEach(row => { const nick = row['닉네임'] || row['Nickname'] || row['이름'] || row['성함']; if (nick && nick.trim()) { newDB[nick.trim()] = { recipientName: row['수령인'] || row['받는분'] || row['이름'] || nick.trim(), phone: row['연락처'] || row['전화번호'] || row['휴대폰'] || '', zipCode: row['우편번호'] || row['Zip'] || '', addressText: row['주소'] || row['Address'] || row['기본주소'] || '', addressDetail: row['상세주소'] || '', shippingMemo: row['배송메모'] || row['배송요청사항'] || row['메모'] || '' }; count++; } }); setCustomerDB(newDB); showToast(`총 ${count}명 고객 등록 완료`, 'success'); } }); e.target.value = null; };
-            const handleFileDownload = () => { const rows = Object.entries(customerDB).map(([nick, info]) => ({ '닉네임': nick, '수령인': info.recipientName, '연락처': info.phone, '우편번호': info.zipCode, '주소': info.addressText, '상세주소': info.addressDetail, '배송메모': info.shippingMemo })); const csv = Papa.unparse(rows); const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.setAttribute('download', `고객목록_${new Date().toISOString().slice(0, 10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+            // [스마트 업로드] 설문 결과 파일 호환성 개선 + 우편번호 복원
+            const handleFileUpload = (e) => { 
+                const file = e.target.files[0]; 
+                if (!file) return; 
+                
+                Papa.parse(file, { 
+                    header: true, 
+                    skipEmptyLines: true, 
+                    complete: (results) => { 
+                        const newDB = { ...customerDB }; 
+                        let count = 0; 
+                        
+                        const findColumn = (keywords) => {
+                            const headers = results.meta.fields || [];
+                            for (const keyword of keywords) {
+                                const match = headers.find(h => h.includes(keyword));
+                                if (match) return match;
+                            }
+                            return null;
+                        };
+
+                        const nameField = findColumn(['닉네임', '이름', '성함', '참여자']);
+                        const recipientField = findColumn(['성함', '수령인', '받는분', '이름']);
+                        const phoneField = findColumn(['핸드폰', '연락처', '전화']);
+                        const addrField = findColumn(['주소', '배송지']);
+                        const memoField = findColumn(['배송요청', '메모', '요청']);
+                        const zipField = findColumn(['우편번호', 'Zip']); // 명시적 우편번호 열
+
+                        if (!nameField) {
+                            showToast("닉네임(또는 이름/성함) 열을 찾을 수 없습니다.", "error");
+                            return;
+                        }
+
+                        results.data.forEach(row => { 
+                            const nick = row[nameField]?.trim();
+                            if (nick) { 
+                                let phone = row[phoneField] || '';
+                                const phoneMatch = phone.match(/(01[016789])\D*(\d{3,4})\D*(\d{4})/);
+                                if (phoneMatch) phone = `${phoneMatch[1]}-${phoneMatch[2]}-${phoneMatch[3]}`;
+
+                                let fullAddr = row[addrField] || '';
+                                let zipCode = row[zipField] || '';
+                                let addressText = fullAddr;
+                                
+                                // (12345) 주소 형식 파싱 (주소 컬럼에 우편번호가 같이 있는 경우)
+                                if (!zipCode && fullAddr) {
+                                    const zipMatch = fullAddr.match(/^\(?(\d{5})\)?\s*(.*)$/);
+                                    if (zipMatch) {
+                                        zipCode = zipMatch[1];
+                                        addressText = zipMatch[2];
+                                    }
+                                }
+
+                                // [수정] 업로드 시 ="01234" 형태의 우편번호 복원 (엑셀 수식 형태 제거)
+                                if (zipCode && typeof zipCode === 'string' && zipCode.startsWith('="') && zipCode.endsWith('"')) {
+                                    zipCode = zipCode.slice(2, -1);
+                                }
+
+                                newDB[nick] = { 
+                                    recipientName: row[recipientField] || nick, 
+                                    phone: phone, 
+                                    zipCode: zipCode, 
+                                    addressText: addressText, 
+                                    addressDetail: '', 
+                                    shippingMemo: row[memoField] || '' 
+                                }; 
+                                count++; 
+                            } 
+                        }); 
+                        setCustomerDB(newDB); 
+                        showToast(`총 ${count}명 고객 정보가 업데이트되었습니다.`, 'success'); 
+                    } 
+                }); 
+                e.target.value = null; 
+            };
+
+            // [수정] 다운로드 시 우편번호 0 유지 (="01234" 포맷 사용)
+            const handleFileDownload = () => { 
+                try {
+                    const rows = Object.entries(customerDB).map(([nick, info]) => {
+                        let zip = info.zipCode || '';
+                        // 우편번호가 0으로 시작하면 엑셀 수식 형태(="01234")로 변환하여 0 유지
+                        if (zip && /^\d+$/.test(zip) && (zip.startsWith('0') || zip.length === 5)) {
+                             zip = `="${zip}"`; 
+                        }
+
+                        return { 
+                            '닉네임': nick, 
+                            '수령인': info.recipientName || '', 
+                            '연락처': info.phone || '', 
+                            '우편번호': zip, 
+                            '주소': info.addressText || '', 
+                            '상세주소': info.addressDetail || '', 
+                            '배송메모': info.shippingMemo || ''
+                        };
+                    }); 
+                    
+                    if (rows.length === 0) {
+                        showToast("저장된 고객 정보가 없습니다.", "error");
+                        return;
+                    }
+
+                    const csv = Papa.unparse(rows); 
+                    const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' }); 
+                    const url = URL.createObjectURL(blob); 
+                    const link = document.createElement('a'); 
+                    link.href = url; 
+                    link.setAttribute('download', `고객목록_${new Date().toISOString().slice(0, 10)}.csv`); 
+                    document.body.appendChild(link); 
+                    link.click(); 
+                    document.body.removeChild(link); 
+                } catch (e) {
+                    console.error(e);
+                    showToast("다운로드 중 오류가 발생했습니다.", "error");
+                }
+            };
             
             const currentInfo = customerDB[selectedCustomer] || {};
             
@@ -395,7 +510,7 @@
                 <div className="flex h-full tab-content gap-4 p-4">
                     <div className="w-64 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm flex flex-col overflow-hidden">
                         <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 flex flex-col gap-2">
-                            <div className="flex justify-between items-center"><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="address-book" size={14}/> 고객 목록</h3><div className="flex gap-1"><button onClick={() => fileInputRef.current.click()} className="text-[10px] bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 flex items-center gap-1" title="[CSV 파일 양식] 1열 헤더 필수: 닉네임, 수령인, 연락처, 우편번호, 주소, 상세주소, 배송메모"><Icon name="file-csv"/> 업로드</button><button onClick={handleFileDownload} className="text-[10px] bg-slate-500 text-white px-2 py-1 rounded hover:bg-slate-600 flex items-center gap-1"><Icon name="download-simple"/> 다운</button></div><input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{display:'none'}} /></div>
+                            <div className="flex justify-between items-center"><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="address-book" size={14}/> 고객 목록</h3><div className="flex gap-1"><button onClick={() => fileInputRef.current.click()} className="text-[10px] bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 flex items-center gap-1" title="[스마트 업로드] 엑셀/CSV 파일의 헤더를 자동으로 인식합니다."><Icon name="file-csv"/> 업로드</button><button onClick={handleFileDownload} className="text-[10px] bg-slate-500 text-white px-2 py-1 rounded hover:bg-slate-600 flex items-center gap-1"><Icon name="download-simple"/> 다운</button></div><input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv,.xlsx,.xls" style={{display:'none'}} /></div>
                             <div className="relative"><input className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-dark-input border border-slate-200 dark:border-slate-700 rounded text-xs outline-none focus:border-brand-500" placeholder="고객명 검색..." value={search} onChange={e => setSearch(e.target.value)} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="magnifying-glass" size={12}/></div></div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-1 space-y-0.5">{allCustomers.map(c => (<button key={c} onClick={() => { setSelectedCustomer(c); setIsRenaming(false); }} className={`w-full text-left px-3 py-2 text-xs rounded transition-colors flex items-center justify-between group ${selectedCustomer === c ? 'bg-brand-50 text-brand-700 font-bold dark:bg-brand-900/30 dark:text-brand-400' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span className="truncate">{c}</span>{customerDB[c] && <Icon name="check-circle" size={10} className="text-emerald-500"/>}</button>))}</div>
@@ -423,7 +538,6 @@
                                         <div><label className="text-xs text-slate-500 block mb-1">수령인</label><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" value={currentInfo.recipientName || ''} onChange={e => handleUpdateCustomer('recipientName', e.target.value)} /></div>
                                         <div><label className="text-xs text-slate-500 block mb-1">연락처</label><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" value={currentInfo.phone || ''} onChange={e => handleUpdateCustomer('phone', e.target.value)} /></div>
                                         
-                                        {/* [수정됨] 우편번호 필드 추가 및 주소검색과 연동 */}
                                         <div className="col-span-2">
                                             <label className="text-xs text-slate-500 block mb-1">우편번호</label>
                                             <div className="flex gap-2 mb-1">
@@ -883,6 +997,8 @@
                 const csvContent = "\ufeff상품명,수량\n" + Object.entries(summary).map(e => e.join(',')).join('\n'); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.setAttribute('download', `발주리스트_${new Date().toISOString().slice(0, 10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); 
             };
             
+            const handleSetGoogleUrl = () => setIsSettingsOpen(true);
+
             const handleLoadFromGoogle = async () => { 
                 if (!googleScriptUrl) { showToast("설정된 Google Script URL이 없습니다.", "error"); return; } 
                 setIsSyncing(true); 
