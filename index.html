@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Lite) - v3.91 (구글 연동 버그 수정)</title>
+    <title>강은지 주문서 PRO (Lite) - v3.95 (고객관리 기능 강화)</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -91,109 +91,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
-        // --- APPS SCRIPT CODE (백업용, 화면에는 표시 안 함) ---
-        const APPS_SCRIPT_CODE = `
-function doGet(e) {
-  var doc = SpreadsheetApp.getActiveSpreadsheet();
-  var result = {};
-
-  try {
-    // 1. Load Orders
-    var orderSheet = doc.getSheetByName('orders');
-    if (orderSheet && orderSheet.getLastRow() > 1) {
-      // Get all data including headers
-      var data = orderSheet.getDataRange().getValues();
-      result.orders = JSON.stringify(data); // Send as array of arrays
-    }
-
-    // 2. Load Products
-    var prodSheet = doc.getSheetByName('products');
-    if (prodSheet && prodSheet.getLastRow() > 1) {
-      var pData = prodSheet.getDataRange().getValues();
-      var pObj = {};
-      // Skip header row 0
-      for(var i=1; i<pData.length; i++) {
-        if(pData[i][0]) pObj[pData[i][0]] = pData[i][1];
-      }
-      result.products = JSON.stringify(pObj);
-    }
-
-    // 3. Load Customers
-    var custSheet = doc.getSheetByName('customers');
-    if (custSheet && custSheet.getLastRow() > 1) {
-        var cData = custSheet.getDataRange().getValues();
-        result.customers = JSON.stringify(cData);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
-
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ 'error': err.toString() })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function doPost(e) {
-  var lock = LockService.getScriptLock();
-  lock.tryLock(10000);
-
-  try {
-    var doc = SpreadsheetApp.getActiveSpreadsheet();
-    var json = JSON.parse(e.postData.contents);
-    
-    // 1. 주문 목록 저장 (orders 시트)
-    if(json.orders) {
-        var orders = JSON.parse(json.orders);
-        saveToSheet(doc, 'orders', 
-          ['주문일시', '주문자', '코드', '상품명', '수량', '단가', '배송비', '총액', '입금액(현금)', '카드결제', '수령인', '연락처', '주소', '메모'], 
-          orders.map(function(o) {
-            var dateStr = new Date(o.id).toLocaleString();
-            var addr = (o.addressText || '') + ' ' + (o.addressDetail || '');
-            var ship = o.customShippingFee != null ? o.customShippingFee : '';
-            var total = (Number(o.price) || 0); 
-            return [
-              dateStr, o.customer, '', o.product, o.quantity, o.price, ship, total, o.deposit, o.cardAmount, o.recipientName, o.phone, addr, o.memo
-            ];
-          })
-        );
-    }
-
-    // 2. 상품 목록 저장 (products 시트)
-    if(json.products) {
-        var products = JSON.parse(json.products);
-        var prodRows = [];
-        for (var key in products) { prodRows.push([key, products[key]]); }
-        saveToSheet(doc, 'products', ['상품명', '단가'], prodRows);
-    }
-
-    // 3. 고객 목록 저장 (customers 시트)
-    if(json.customers) {
-        var customers = JSON.parse(json.customers);
-        var custRows = [];
-        for (var key in customers) {
-          var c = customers[key];
-          custRows.push([key, c.recipientName, c.phone, c.zipCode, (c.addressText||'')+' '+(c.addressDetail||''), c.shippingMemo]);
-        }
-        saveToSheet(doc, 'customers', ['닉네임', '수령인', '연락처', '우편번호', '주소', '배송메모'], custRows);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ 'result': 'success' })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ 'result': 'error', 'error': err.toString() })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function saveToSheet(doc, sheetName, headers, rows) {
-  var sheet = doc.getSheetByName(sheetName);
-  if (!sheet) { sheet = doc.insertSheet(sheetName); }
-  sheet.clear();
-  sheet.appendRow(headers);
-  if (rows && rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
-  }
-}`;
-
         // --- GLOBAL UTILITIES ---
         const parseNum = (val) => {
             if (typeof val === 'number') return val;
@@ -218,7 +115,6 @@ function saveToSheet(doc, sheetName, headers, rows) {
             const rawPrice = parseNum(order.price !== undefined ? order.price : 0);
             const rawQty = parseNum(order.quantity !== undefined ? order.quantity : 1);
             
-            // 주소 입력 완료 여부 체크 (아이콘 색상용)
             const isAddressFilled = !!order.recipientName && !!order.phone && !!order.addressText;
 
             return {
@@ -245,7 +141,6 @@ function saveToSheet(doc, sheetName, headers, rows) {
             };
         };
 
-        // [수정됨] 아이콘 컴포넌트: weight prop을 클래스로 처리하여 fill 스타일 등 지원 강화
         const Icon = React.memo(({ name, size = 14, className = "", weight = "regular" }) => {
             const weightClass = weight === "regular" ? "" : `ph-${weight}`;
             return <i className={`ph ph-${name} ${weightClass} ${className}`} style={{ fontSize: size }}></i>;
@@ -319,39 +214,6 @@ function saveToSheet(doc, sheetName, headers, rows) {
             </div>
         );
 
-        // --- Settings Modal ---
-        const SettingsModal = ({ isOpen, onClose, url, setUrl, showToast }) => {
-            if (!isOpen) return null;
-            const copyCode = () => {
-                navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(() => showToast('코드가 복사되었습니다. Apps Script에 붙여넣으세요.'));
-            };
-            return (
-                <div className="modal-overlay" onClick={onClose}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()}>
-                        <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Icon name="gear" size={20}/> 구글 연동 설정</h2>
-                        <div className="mb-6">
-                            <h3 className="text-sm font-bold text-slate-700 mb-2">Google Web App URL</h3>
-                            <input className="w-full p-2 border rounded text-xs font-mono bg-slate-50 mb-1" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://script.google.com/..." />
-                            <p className="text-[10px] text-slate-400">데이터를 저장할 구글 웹앱 주소를 입력하세요.</p>
-                        </div>
-                        <div className="mb-6 border-t pt-4">
-                            <h3 className="text-sm font-bold text-slate-700 mb-2 flex justify-between items-center">
-                                <span>Apps Script 코드 (필수 업데이트)</span>
-                                <button onClick={copyCode} className="bg-slate-800 text-white px-2 py-1 rounded text-xs">코드 복사</button>
-                            </h3>
-                            <p className="text-[10px] text-rose-500 mb-2 font-bold">
-                                * 주의: 이 코드를 Apps Script에 붙여넣고 [새 버전]으로 배포해야 저장/불러오기가 정상 작동합니다.
-                            </p>
-                            <textarea className="w-full h-32 p-2 bg-slate-800 text-slate-200 text-[10px] font-mono rounded overflow-auto" readOnly value={APPS_SCRIPT_CODE}></textarea>
-                        </div>
-                        <div className="text-right">
-                            <button onClick={onClose} className="bg-brand-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-brand-700">닫기</button>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
         // --- AddressAdminPanel: 헤더 제거, 기능만 유지 ---
         const AddressAdminPanel = ({ selectedOrder, onSaveAddress, showToast }) => {
             const [localAddr, setLocalAddr] = useState({ recipientName: '', phone: '', zipCode: '', addressText: '', addressDetail: '', shippingMemo: '' });
@@ -376,7 +238,6 @@ function saveToSheet(doc, sheetName, headers, rows) {
 
             const handleChange = (field, val) => setLocalAddr(prev => ({...prev, [field]: val}));
             
-            // 저장 버튼 클릭 시: App 컴포넌트의 통합 저장 핸들러 호출
             const handleSave = () => { 
                 if (!selectedOrder) return; 
                 onSaveAddress(selectedOrder.id, localAddr); 
@@ -389,8 +250,6 @@ function saveToSheet(doc, sheetName, headers, rows) {
                 let text = rawText; 
                 let name = '', phone = '', address = '', memo = ''; 
                 
-                // [수정됨] 010으로 시작하고, 중간에 어떤 특수문자가 와도 숫자 11개(또는 10개)를 찾아냄
-                // (010) + (숫자아님*) + (3~4자리) + (숫자아님*) + (4자리)
                 const phoneMatch = text.match(/(01[016789])\D*(\d{3,4})\D*(\d{4})/); 
                 
                 if (phoneMatch) { 
@@ -426,12 +285,10 @@ function saveToSheet(doc, sheetName, headers, rows) {
             
             return (
                 <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg flex flex-col h-full shadow-soft overflow-hidden">
-                    {/* 헤더 타이틀 제거, 탭 버튼만 남김 */}
                     <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 shrink-0 p-1 gap-1">
                         <button onClick={()=>setTab('input')} className={`flex-1 py-1.5 text-xs font-bold rounded transition-all ${tab==='input' ? 'bg-white dark:bg-dark-card text-brand-600 dark:text-brand-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>붙여넣기</button>
                         <button onClick={()=>setTab('edit')} className={`flex-1 py-1.5 text-xs font-bold rounded transition-all ${tab==='edit' ? 'bg-white dark:bg-dark-card text-brand-600 dark:text-brand-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>상세수정</button>
                     </div>
-                    
                     <div className="flex-1 overflow-y-auto p-2">
                         {tab === 'input' ? (
                             <div className="h-full flex flex-col gap-2">
@@ -477,29 +334,108 @@ function saveToSheet(doc, sheetName, headers, rows) {
             );
         };
 
-        const CustomerTab = ({ customerDB, setCustomerDB, orders, showToast }) => {
+        const CustomerTab = ({ customerDB, setCustomerDB, orders, showToast, setOrders }) => {
             const [selectedCustomer, setSelectedCustomer] = useState(null);
             const [search, setSearch] = useState('');
+            const [isRenaming, setIsRenaming] = useState(false);
+            const [tempName, setTempName] = useState('');
             const fileInputRef = useRef(null);
+
             const allCustomers = useMemo(() => { const orderCustomers = new Set(orders.map(o => o.customer)); const dbCustomers = Object.keys(customerDB); const merged = new Set([...orderCustomers, ...dbCustomers]); return Array.from(merged).filter(c => c && c.toLowerCase().includes(search.toLowerCase())).sort(); }, [orders, customerDB, search]);
             const customerOrders = useMemo(() => { if (!selectedCustomer) return []; return orders.filter(o => o.customer === selectedCustomer).sort((a,b) => b.id - a.id); }, [orders, selectedCustomer]);
-            const handleUpdateCustomer = (field, value) => { if (!selectedCustomer) return; setCustomerDB(prev => ({ ...prev, [selectedCustomer]: { ...prev[selectedCustomer], [field]: value } })); };
+            
+            const handleUpdateCustomer = (field, value) => { 
+                if (!selectedCustomer) return; 
+                setCustomerDB(prev => ({ ...prev, [selectedCustomer]: { ...prev[selectedCustomer], [field]: value } })); 
+            };
+
+            // 닉네임 변경 시작
+            const startRenaming = () => {
+                setTempName(selectedCustomer);
+                setIsRenaming(true);
+            };
+
+            // 닉네임 변경 저장 및 주문 목록 일괄 업데이트
+            const saveRename = () => {
+                const newName = tempName.trim();
+                if (!newName) {
+                    showToast("닉네임을 입력해주세요.", "error");
+                    return;
+                }
+                if (newName === selectedCustomer) {
+                    setIsRenaming(false);
+                    return;
+                }
+                if (customerDB[newName]) {
+                    showToast("이미 존재하는 닉네임입니다.", "error");
+                    return;
+                }
+
+                // 1. 고객 DB 키 변경
+                const newDB = { ...customerDB };
+                newDB[newName] = newDB[selectedCustomer]; // 기존 정보 복사
+                delete newDB[selectedCustomer]; // 기존 키 삭제
+                setCustomerDB(newDB);
+
+                // 2. 주문 내역 일괄 업데이트 (중요!)
+                setOrders(prev => prev.map(o => o.customer === selectedCustomer ? { ...o, customer: newName } : o));
+
+                // 3. 상태 업데이트
+                setSelectedCustomer(newName);
+                setIsRenaming(false);
+                showToast(`닉네임이 '${selectedCustomer}' → '${newName}'으로 변경되었습니다.`);
+            };
+            
             const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const newDB = { ...customerDB }; let count = 0; results.data.forEach(row => { const nick = row['닉네임'] || row['Nickname'] || row['이름'] || row['성함']; if (nick && nick.trim()) { newDB[nick.trim()] = { recipientName: row['수령인'] || row['받는분'] || row['이름'] || nick.trim(), phone: row['연락처'] || row['전화번호'] || row['휴대폰'] || '', zipCode: row['우편번호'] || row['Zip'] || '', addressText: row['주소'] || row['Address'] || row['기본주소'] || '', addressDetail: row['상세주소'] || '', shippingMemo: row['배송메모'] || row['배송요청사항'] || row['메모'] || '' }; count++; } }); setCustomerDB(newDB); showToast(`총 ${count}명 고객 등록 완료`, 'success'); } }); e.target.value = null; };
             const handleFileDownload = () => { const rows = Object.entries(customerDB).map(([nick, info]) => ({ '닉네임': nick, '수령인': info.recipientName, '연락처': info.phone, '우편번호': info.zipCode, '주소': info.addressText, '상세주소': info.addressDetail, '배송메모': info.shippingMemo })); const csv = Papa.unparse(rows); const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.setAttribute('download', `고객목록_${new Date().toISOString().slice(0, 10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+            
             const currentInfo = customerDB[selectedCustomer] || {};
+            
             return (
                 <div className="flex h-full tab-content gap-4 p-4">
                     <div className="w-64 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm flex flex-col overflow-hidden">
                         <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 flex flex-col gap-2">
-                            <div className="flex justify-between items-center"><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="address-book" size={14}/> 고객 목록</h3><div className="flex gap-1"><button onClick={() => fileInputRef.current.click()} className="text-[10px] bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 flex items-center gap-1"><Icon name="file-csv"/> 업로드</button><button onClick={handleFileDownload} className="text-[10px] bg-slate-500 text-white px-2 py-1 rounded hover:bg-slate-600 flex items-center gap-1"><Icon name="download-simple"/> 다운</button></div><input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{display:'none'}} /></div>
+                            <div className="flex justify-between items-center"><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="address-book" size={14}/> 고객 목록</h3><div className="flex gap-1"><button onClick={() => fileInputRef.current.click()} className="text-[10px] bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 flex items-center gap-1" title="[CSV 파일 양식] 1열 헤더 필수: 닉네임, 수령인, 연락처, 우편번호, 주소, 상세주소, 배송메모"><Icon name="file-csv"/> 업로드</button><button onClick={handleFileDownload} className="text-[10px] bg-slate-500 text-white px-2 py-1 rounded hover:bg-slate-600 flex items-center gap-1"><Icon name="download-simple"/> 다운</button></div><input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{display:'none'}} /></div>
                             <div className="relative"><input className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-dark-input border border-slate-200 dark:border-slate-700 rounded text-xs outline-none focus:border-brand-500" placeholder="고객명 검색..." value={search} onChange={e => setSearch(e.target.value)} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="magnifying-glass" size={12}/></div></div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-1 space-y-0.5">{allCustomers.map(c => (<button key={c} onClick={() => setSelectedCustomer(c)} className={`w-full text-left px-3 py-2 text-xs rounded transition-colors flex items-center justify-between group ${selectedCustomer === c ? 'bg-brand-50 text-brand-700 font-bold dark:bg-brand-900/30 dark:text-brand-400' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span className="truncate">{c}</span>{customerDB[c] && <Icon name="check-circle" size={10} className="text-emerald-500"/>}</button>))}</div>
+                        <div className="flex-1 overflow-y-auto p-1 space-y-0.5">{allCustomers.map(c => (<button key={c} onClick={() => { setSelectedCustomer(c); setIsRenaming(false); }} className={`w-full text-left px-3 py-2 text-xs rounded transition-colors flex items-center justify-between group ${selectedCustomer === c ? 'bg-brand-50 text-brand-700 font-bold dark:bg-brand-900/30 dark:text-brand-400' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span className="truncate">{c}</span>{customerDB[c] && <Icon name="check-circle" size={10} className="text-emerald-500"/>}</button>))}</div>
                     </div>
                     <div className="flex-1 flex flex-col gap-4 overflow-hidden">
                         {selectedCustomer ? (
                             <>
-                                <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm p-4"><h3 className="text-sm font-bold mb-4 flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2"><div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center"><Icon name="user"/></div>{selectedCustomer} 님의 정보</h3><div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-slate-500 block mb-1">수령인</label><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" value={currentInfo.recipientName || ''} onChange={e => handleUpdateCustomer('recipientName', e.target.value)} /></div><div><label className="text-xs text-slate-500 block mb-1">연락처</label><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" value={currentInfo.phone || ''} onChange={e => handleUpdateCustomer('phone', e.target.value)} /></div><div className="col-span-2"><label className="text-xs text-slate-500 block mb-1">주소</label><div className="flex gap-2 mb-1"><input className="flex-1 p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" value={currentInfo.addressText || ''} onChange={e => handleUpdateCustomer('addressText', e.target.value)} /><button onClick={() => { try { new daum.Postcode({ oncomplete: (data) => { handleUpdateCustomer('zipCode', data.zonecode); handleUpdateCustomer('addressText', data.address); } }).open(); } catch(e) { showToast("주소 검색 팝업 차단됨", "error"); } }} className="bg-slate-100 px-3 rounded text-xs hover:bg-slate-200">검색</button></div><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" placeholder="상세주소 (동/호수)" value={currentInfo.addressDetail || ''} onChange={e => handleUpdateCustomer('addressDetail', e.target.value)} /></div><div className="col-span-2"><label className="text-xs text-slate-500 block mb-1">배송메모</label><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" value={currentInfo.shippingMemo || ''} onChange={e => handleUpdateCustomer('shippingMemo', e.target.value)} /></div></div></div>
+                                <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm p-4">
+                                    <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2 mb-4">
+                                        <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center shrink-0"><Icon name="user"/></div>
+                                        {isRenaming ? (
+                                            <div className="flex-1 flex gap-2 items-center">
+                                                <input className="flex-1 p-1 border rounded text-sm font-bold bg-white focus:border-brand-500 outline-none" value={tempName} onChange={e=>setTempName(e.target.value)} autoFocus />
+                                                <button onClick={saveRename} className="bg-brand-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-brand-700">저장</button>
+                                                <button onClick={()=>setIsRenaming(false)} className="bg-slate-200 text-slate-700 px-3 py-1 rounded text-xs font-bold hover:bg-slate-300">취소</button>
+                                            </div>
+                                        ) : (
+                                            <h3 className="text-sm font-bold flex-1 flex items-center gap-2">
+                                                {selectedCustomer} 님의 정보
+                                                <button onClick={startRenaming} className="text-slate-400 hover:text-brand-600 p-1" title="닉네임 변경"><Icon name="pencil-simple" size={14}/></button>
+                                            </h3>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-xs text-slate-500 block mb-1">수령인</label><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" value={currentInfo.recipientName || ''} onChange={e => handleUpdateCustomer('recipientName', e.target.value)} /></div>
+                                        <div><label className="text-xs text-slate-500 block mb-1">연락처</label><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" value={currentInfo.phone || ''} onChange={e => handleUpdateCustomer('phone', e.target.value)} /></div>
+                                        
+                                        {/* [수정됨] 우편번호 필드 추가 및 주소검색과 연동 */}
+                                        <div className="col-span-2">
+                                            <label className="text-xs text-slate-500 block mb-1">우편번호</label>
+                                            <div className="flex gap-2 mb-1">
+                                                <input className="w-32 p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700 text-center bg-slate-50" value={currentInfo.zipCode || ''} readOnly placeholder="00000" />
+                                                <button onClick={() => { try { new daum.Postcode({ oncomplete: (data) => { handleUpdateCustomer('zipCode', data.zonecode); handleUpdateCustomer('addressText', data.address); } }).open(); } catch(e) { showToast("주소 검색 팝업 차단됨", "error"); } }} className="bg-brand-600 text-white px-3 py-1.5 rounded text-xs hover:bg-brand-700 font-bold flex items-center gap-1"><Icon name="magnifying-glass"/> 주소 검색</button>
+                                            </div>
+                                        </div>
+
+                                        <div className="col-span-2"><label className="text-xs text-slate-500 block mb-1">주소</label><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700 mb-1" value={currentInfo.addressText || ''} onChange={e => handleUpdateCustomer('addressText', e.target.value)} /><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" placeholder="상세주소 (동/호수)" value={currentInfo.addressDetail || ''} onChange={e => handleUpdateCustomer('addressDetail', e.target.value)} /></div>
+                                        <div className="col-span-2"><label className="text-xs text-slate-500 block mb-1">배송메모</label><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" value={currentInfo.shippingMemo || ''} onChange={e => handleUpdateCustomer('shippingMemo', e.target.value)} /></div>
+                                    </div>
+                                </div>
                                 <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm flex-1 flex flex-col overflow-hidden"><div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20"><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="clock"/> 주문 이력</h3></div><div className="flex-1 overflow-y-auto"><table className="w-full text-xs text-left"><thead className="bg-slate-50 dark:bg-dark-input text-slate-500 border-b dark:border-slate-700 sticky top-0"><tr><th className="p-2">날짜</th><th className="p-2">상품명</th><th className="p-2">수량</th><th className="p-2 text-right">금액</th><th className="p-2 text-center">상태</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{customerOrders.map(o => (<tr key={o.id}><td className="p-2 text-slate-400">{new Date(o.id).toLocaleDateString()}</td><td className="p-2 font-bold">{o.product}</td><td className="p-2">{o.quantity}</td><td className="p-2 text-right font-mono">{o.price.toLocaleString()}</td><td className="p-2 text-center"><span className={`px-2 py-0.5 rounded-full ${o.isPaid ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>{o.isPaid ? '결제완료' : '미결제'}</span></td></tr>))}{customerOrders.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-400">주문 내역이 없습니다.</td></tr>}</tbody></table></div></div>
                             </>
                         ) : (<div className="flex-1 flex flex-col items-center justify-center text-slate-400"><Icon name="user" size={48} className="mb-2 opacity-20"/><p>왼쪽 목록에서 고객을 선택하세요.</p></div>)}
@@ -710,7 +646,7 @@ function saveToSheet(doc, sheetName, headers, rows) {
             const [categoryOrder, setCategoryOrder] = useState(() => JSON.parse(localStorage.getItem('categoryOrder')) || []);
             const [customerDB, setCustomerDB] = useState(() => JSON.parse(localStorage.getItem('customerDB')) || {}); 
             const [orders, setOrders] = useState(() => JSON.parse(localStorage.getItem('youtubeOrders')) || []);
-            const [googleScriptUrl, setGoogleScriptUrl] = useState(() => localStorage.getItem('googleScriptUrl') || 'https://script.google.com/macros/s/AKfycbx-Z7i1NAxMGpZCW3RB5ueXYh18G9-NbAcWwsDD-sJga6YfLH2ErA1ZpFvlc8V3m_kL-A/exec');
+            const [googleScriptUrl, setGoogleScriptUrl] = useState('https://script.google.com/macros/s/AKfycbyYfKsuD0NIn9F2JiRzUwKM3s9vjs6RGuidiJJooeioWm8C2EGhgPrxMCUrpXbnSiz90Q/exec');
             const [quickShipping, setQuickShipping] = useState(4000); 
             const [speedInput, setSpeedInput] = useState('');
             const [isProcessing, setIsProcessing] = useState(false);
@@ -743,7 +679,6 @@ function saveToSheet(doc, sheetName, headers, rows) {
             useEffect(() => { localStorage.setItem('productNumbers', JSON.stringify(productNumbers)); }, [productNumbers]);
             useEffect(() => { localStorage.setItem('categoryOrder', JSON.stringify(categoryOrder)); }, [categoryOrder]);
             useEffect(() => { localStorage.setItem('customerDB', JSON.stringify(customerDB)); }, [customerDB]);
-            useEffect(() => { localStorage.setItem('googleScriptUrl', googleScriptUrl); }, [googleScriptUrl]);
             useEffect(() => { localStorage.setItem('currentSite', currentSite); }, [currentSite]);
             useEffect(() => { const handleClickOutside = (event) => { if (excelMenuRef.current && !excelMenuRef.current.contains(event.target)) { setIsExcelMenuOpen(false); } }; document.addEventListener("mousedown", handleClickOutside); return () => document.removeEventListener("mousedown", handleClickOutside); }, []);
 
@@ -752,22 +687,17 @@ function saveToSheet(doc, sheetName, headers, rows) {
             
             const focusedOrder = useMemo(() => { return orders.find(o => o.id === focusedOrderId); }, [orders, focusedOrderId]);
 
-            // ** 완전 연동 로직 1: 주소 저장 시 고객 DB도 업데이트 및 동일 고객 주문 일괄 적용 **
             const handleSaveAddress = (orderId, addrData) => {
-                // 타겟 주문 찾기 (고객명 확인용)
                 const targetOrder = orders.find(o => o.id === orderId);
                 const targetCustomer = targetOrder ? targetOrder.customer : '';
 
-                // 1. 주문 정보 업데이트 (동일 고객 일괄 적용)
                 setOrders(prev => prev.map(o => {
-                    // 타겟 주문이거나, 고객명이 같고 비어있지 않은 경우
                     if (o.id === orderId || (targetCustomer && o.customer === targetCustomer)) {
                         return sanitizeOrder({ ...o, ...addrData });
                     }
                     return o;
                 }));
 
-                // 2. 고객 DB 업데이트 (연동)
                 if (targetCustomer) {
                     setCustomerDB(prev => ({
                         ...prev,
@@ -776,7 +706,6 @@ function saveToSheet(doc, sheetName, headers, rows) {
                             ...addrData 
                         }
                     }));
-                    // 메시지 업데이트: 몇 건이 업데이트 되었는지 표시
                     const count = orders.filter(o => o.customer === targetCustomer).length;
                     showToast(`[${targetCustomer}] 님의 모든 주문(${count}건)에 주소가 저장되었습니다.`);
                 } else {
@@ -838,15 +767,11 @@ function saveToSheet(doc, sheetName, headers, rows) {
                     if (o.id !== id) return o; 
                     let updates = { [field]: value };
                     
-                    // ** 완전 연동 로직 2: 그리드에서 닉네임 변경 시 DB 조회 및 자동 입력 **
                     if (field === 'customer') {
                         const newCustomer = value.trim();
                         updates.customer = newCustomer;
-                        // DB에 있는 고객이면 정보 자동 채우기
                         if (customerDB[newCustomer]) {
                             const info = customerDB[newCustomer];
-                            // 현재 주소가 비어있을 때만 채울지, 무조건 덮어쓸지 결정.
-                            // "자동으로 입력해줘야지" -> 무조건 최신 DB 정보로 채우는 게 맞음 (사용자 의도상)
                             updates.recipientName = info.recipientName || '';
                             updates.phone = info.phone || '';
                             updates.zipCode = info.zipCode || '';
@@ -958,11 +883,8 @@ function saveToSheet(doc, sheetName, headers, rows) {
                 const csvContent = "\ufeff상품명,수량\n" + Object.entries(summary).map(e => e.join(',')).join('\n'); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.setAttribute('download', `발주리스트_${new Date().toISOString().slice(0, 10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); 
             };
             
-            const handleSetGoogleUrl = () => setIsSettingsOpen(true);
-
-            // [수정됨] 고객 데이터 로드 피드백 강화 및 에러 수정 (GET 요청 처리)
             const handleLoadFromGoogle = async () => { 
-                if (!googleScriptUrl) { handleSetGoogleUrl(); return; } 
+                if (!googleScriptUrl) { showToast("설정된 Google Script URL이 없습니다.", "error"); return; } 
                 setIsSyncing(true); 
                 try { 
                     const res = await fetch(googleScriptUrl); 
@@ -972,7 +894,6 @@ function saveToSheet(doc, sheetName, headers, rows) {
 
                     if (data.orders) { 
                         const rows = JSON.parse(data.orders); 
-                        // rows[0] is header
                         const headers = rows[0]; 
                         const loadedOrders = rows.slice(1).map(row => { 
                             const obj = {}; 
@@ -985,10 +906,8 @@ function saveToSheet(doc, sheetName, headers, rows) {
                     if (data.products) setProductHistory(JSON.parse(data.products)); 
                     if (data.customers) { 
                         const custRows = JSON.parse(data.customers); 
-                        // custRows[0] is header: ['닉네임', '수령인', '연락처', '우편번호', '주소', '배송메모']
                         const newDB = {}; 
                         custRows.slice(1).forEach(r => { 
-                            // r[0]: 닉네임, r[1]: 수령인, r[2]: 연락처, r[3]: 우편번호, r[4]: 주소, r[5]: 배송메모
                             if(r[0]) {
                                 newDB[r[0]] = { recipientName: r[1], phone: r[2], zipCode: r[3], addressText: r[4], shippingMemo: r[5] }; 
                             }
@@ -1004,16 +923,14 @@ function saveToSheet(doc, sheetName, headers, rows) {
                 } 
             };
             
-            // [수정됨] 저장 로직: 성공 조건 수정 (result === 'success')
             const handleSaveToGoogle = async () => { 
-                if (!googleScriptUrl) { handleSetGoogleUrl(); return; } 
+                if (!googleScriptUrl) { showToast("설정된 Google Script URL이 없습니다.", "error"); return; } 
                 setIsSyncing(true); 
                 try { 
                     const payload = { orders: JSON.stringify(orders), products: JSON.stringify(productHistory), customers: JSON.stringify(customerDB) }; 
                     const res = await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify(payload) }); 
                     const json = await res.json(); 
                     
-                    // Apps Script now returns { 'result': 'success' }
                     if (json.result === 'success') {
                         showToast("저장 완료 (고객주소 및 주문내역)"); 
                     } else {
@@ -1382,7 +1299,7 @@ function saveToSheet(doc, sheetName, headers, rows) {
                     <header className="h-10 bg-white dark:bg-dark-card border-b border-slate-200 dark:border-dark-border flex items-center justify-between px-3 shrink-0 shadow-sm z-50">
                         <div className="flex items-center gap-2"><div className="bg-brand-700 text-white p-0.5 rounded"><Icon name="lightning" size={14} weight="fill"/></div><span className="font-bold text-xs tracking-tight text-slate-800 dark:text-white">주문관리 PRO (Lite)</span></div>
                         <div className="flex items-center gap-2">
-                            <div className="flex items-center bg-slate-100 dark:bg-dark-input rounded-sm p-0.5"><ActionButton onClick={handleSetGoogleUrl} color="ghost" icon="gear" text="" className="!px-1.5"/><ActionButton onClick={handleSaveToGoogle} color="ghost" icon="cloud-arrow-up" text="저장" loading={isSyncing}/><div className="w-px h-3 bg-slate-300 dark:bg-slate-600 mx-0.5"></div><ActionButton onClick={handleLoadFromGoogle} color="ghost" icon="cloud-arrow-down" text="불러오기" loading={isSyncing}/></div>
+                            <div className="flex items-center bg-slate-100 dark:bg-dark-input rounded-sm p-0.5"><ActionButton onClick={handleSaveToGoogle} color="ghost" icon="cloud-arrow-up" text="저장" loading={isSyncing}/><div className="w-px h-3 bg-slate-300 dark:bg-slate-600 mx-0.5"></div><ActionButton onClick={handleLoadFromGoogle} color="ghost" icon="cloud-arrow-down" text="불러오기" loading={isSyncing}/></div>
                             <div className="h-3 w-px bg-slate-300 dark:bg-slate-700 mx-1"></div>
                             <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-500"><Icon name={isDarkMode ? "sun" : "moon"} size={14}/></button>
                             <div className="h-3 w-px bg-slate-300 dark:bg-slate-700 mx-1"></div>
@@ -1492,11 +1409,9 @@ function saveToSheet(doc, sheetName, headers, rows) {
                                 </div>
                             </>
                         )}
-                        {activeTab === 'customer' && <CustomerTab customerDB={customerDB} setCustomerDB={setCustomerDB} orders={orders} showToast={showToast} />}
+                        {activeTab === 'customer' && <CustomerTab customerDB={customerDB} setCustomerDB={setCustomerDB} orders={orders} showToast={showToast} setOrders={setOrders} />}
                         {activeTab === 'receipt' && <ReceiptTab orders={orders} productNumbers={productNumbers} quickShipping={quickShipping} />}
                     </main>
-                    
-                    <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} url={googleScriptUrl} setUrl={setGoogleScriptUrl} showToast={showToast} />
                     
                     {toast && <div className="fixed top-6 right-6 px-4 py-2.5 bg-slate-800 text-white rounded-md shadow-lg flex items-center gap-2 animate-fade-in z-[100]"><Icon name="check-circle" size={14} className="ph-fill"/><span className="text-xs">{toast.message}</span></div>}
                     
