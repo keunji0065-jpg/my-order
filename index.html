@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Lite) - v2.8 (인쇄 수정: 1분할/2분할)</title>
+    <title>강은지 주문서 PRO (Lite) - v2.9 (인쇄 오류 수정)</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -51,59 +51,73 @@
         .grid-rows-compact { grid-template-columns: 75px 100px 70px 1.8fr 50px 80px 30px 1fr 30px; }
         .dragging { opacity: 0.5; border: 2px dashed #627d98; }
         
-        /* --- 인쇄 전용 스타일 (강력 수정) --- */
+        /* --- 인쇄 전용 스타일 (최종 수정) --- */
         @media print {
             @page { 
-                size: A4;
-                margin: 0; /* 여백 제거 (내부에서 제어) */
+                size: A4; 
+                margin: 0; 
             }
             
-            /* 모든 화면 요소 숨김 */
-            body * { 
-                visibility: hidden; 
+            /* 1. 모든 요소 숨김 (visibility 사용으로 레이아웃 충돌 방지) */
+            body * {
+                visibility: hidden;
             }
-            
-            /* 루트 컨테이너 스타일 초기화 */
-            html, body, #root, .App, main, .tab-content {
+
+            /* 2. 인쇄 영역과 그 자식들만 보이게 설정 */
+            #print-area-wrapper, #print-area-wrapper * {
+                visibility: visible;
+            }
+
+            /* 3. 인쇄 영역을 화면 최상단으로 강제 이동 */
+            #print-area-wrapper {
+                position: absolute;
+                left: 0;
+                top: 0;
                 width: 100%;
-                height: auto !important;
+                margin: 0;
+                padding: 0;
+                background-color: white !important;
+                color: black !important;
+                z-index: 9999; /* 최상위 레벨 */
+            }
+
+            /* 4. 부모 컨테이너들의 레이아웃 제약 해제 (스크롤/크기 제한 제거) */
+            html, body, #root, main, .flex, .h-screen, .overflow-hidden {
                 overflow: visible !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                background: white !important;
+                height: auto !important;
+                width: auto !important;
                 position: static !important;
                 display: block !important;
             }
 
-            /* 인쇄 영역만 표시 */
-            #print-area, #print-area * {
-                visibility: visible;
-                color: #000 !important; /* 완전 검정 */
+            /* 5. 불필요한 스크롤바 숨김 */
+            ::-webkit-scrollbar {
+                display: none;
             }
 
-            #print-area {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 210mm; /* A4 폭 */
-                min-height: 297mm;
-                margin: 0 auto;
-                background: white;
+            /* 6. 영수증 스타일 (완전 블랙 & 배경 제거) */
+            .receipt-card {
+                border: 2px solid black !important;
+                color: black !important;
+                background: transparent !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                width: 100%;
             }
-
-            /* 1분할 모드 */
+            
+            /* 1분할 (페이지 나눔) */
             .print-page-single {
                 width: 100%;
                 padding: 10mm;
                 box-sizing: border-box;
                 page-break-after: always;
-                border-bottom: 1px dashed #000;
+                page-break-inside: avoid;
             }
 
-            /* 2분할 모드 (A4 한 장에 2개) */
+            /* 2분할 (한 페이지에 2개) */
             .print-page-double {
                 width: 100%;
-                height: 297mm; /* A4 높이 고정 */
+                height: 297mm; /* A4 높이 */
                 display: flex;
                 flex-direction: column;
                 box-sizing: border-box;
@@ -111,35 +125,25 @@
             }
             
             .print-half-page {
-                flex: 1; /* 절반 차지 */
+                flex: 1;
                 padding: 10mm;
                 box-sizing: border-box;
                 display: flex;
                 flex-direction: column;
-                justify-content: flex-start; /* 상단 정렬 */
+                justify-content: flex-start;
+                border-bottom: 1px dashed black; /* 절취선 */
                 overflow: hidden;
             }
-            
-            .print-half-page:first-child {
-                border-bottom: 2px dashed #000; /* 절취선 */
+            .print-half-page:last-child {
+                border-bottom: none;
             }
 
-            .receipt-card {
-                border: 2px solid #000 !important; /* 진한 테두리 */
-                box-shadow: none !important;
-                margin: 0 !important;
-                width: 100%;
-                color: #000 !important;
-            }
-            
-            /* 색상 강제 흑백 */
+            /* 텍스트 강제 검정 */
             .text-slate-500, .text-slate-400, .text-brand-600, .text-brand-700 {
-                color: #000 !important;
-            }
-            .bg-slate-100, .bg-brand-50 {
-                background: transparent !important;
+                color: black !important;
             }
             
+            /* 화면상에만 보여야 할 요소들 확실히 제거 */
             .no-print { display: none !important; }
         }
 
@@ -387,7 +391,7 @@
                 const grandTotal = productTotal + shipFee;
 
                 return (
-                    <div className="receipt-card bg-white p-6 rounded-lg mb-4 w-full text-black border-2 border-black h-full flex flex-col justify-start">
+                    <div className="receipt-card p-6 w-full text-black h-full flex flex-col justify-start">
                         <div className="text-xl font-bold mb-4 pb-2 border-b-2 border-black flex justify-between items-center shrink-0">
                             <span>{customer} 님</span>
                             <span className="text-xs font-normal text-slate-500">{new Date().toLocaleDateString()}</span>
@@ -468,19 +472,19 @@
                             <span className="text-xs font-bold text-slate-500 ml-2">미리보기 (총 {selectedCustomers.length}건)</span>
                             <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded text-xs font-bold hover:bg-slate-700 flex items-center gap-2"><Icon name="Printer"/> 인쇄하기</button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-8" id="print-area">
+                        <div className="flex-1 overflow-y-auto p-8" id="print-area-wrapper">
                             {selectedCustomers.length > 0 ? (
                                 chunkedCustomers.map((chunk, idx) => (
                                     <div key={idx} className={printMode === 'single' ? 'print-page-single' : 'print-page-double'}>
                                         {chunk.map(c => (
-                                            <div key={c} className={printMode === 'double' ? 'print-half-page' : ''}>
+                                            <div key={c} className={printMode === 'double' ? 'print-half-page' : 'receipt-card'}>
                                                 <ReceiptContent customer={c}/>
                                             </div>
                                         ))}
                                     </div>
                                 ))
                             ) : (
-                                <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                                <div className="h-full flex flex-col items-center justify-center text-slate-400 no-print">
                                     <Icon name="Receipt" size={64} className="mb-4 opacity-20"/>
                                     <p>좌측에서 영수증을 출력할 고객을 선택하세요.</p>
                                 </div>
