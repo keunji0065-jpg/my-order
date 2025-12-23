@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Lite) - v3.9 (완전 연동 & 헤더 제거)</title>
+    <title>강은지 주문서 PRO</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -142,7 +142,11 @@
             };
         };
 
-        const Icon = React.memo(({ name, size = 14, className = "", weight = "regular" }) => <i className={`ph-${name} ${className}`} style={{ fontSize: size, fontWeight: weight }}></i>);
+        // [수정됨] 아이콘 컴포넌트: weight prop을 클래스로 처리하여 fill 스타일 등 지원 강화
+        const Icon = React.memo(({ name, size = 14, className = "", weight = "regular" }) => {
+            const weightClass = weight === "regular" ? "" : `ph-${weight}`;
+            return <i className={`ph ph-${name} ${weightClass} ${className}`} style={{ fontSize: size }}></i>;
+        });
 
         const ActionButton = React.memo(({ onClick, color, icon, text, loading }) => {
             const base = "px-2 py-1 rounded-sm text-xs font-bold flex items-center gap-1 transition-all border shadow-sm h-7";
@@ -595,25 +599,33 @@
             
             const focusedOrder = useMemo(() => { return orders.find(o => o.id === focusedOrderId); }, [orders, focusedOrderId]);
 
-            // ** 완전 연동 로직 1: 주소 저장 시 고객 DB도 업데이트 **
+            // ** 완전 연동 로직 1: 주소 저장 시 고객 DB도 업데이트 및 동일 고객 주문 일괄 적용 **
             const handleSaveAddress = (orderId, addrData) => {
-                // 1. 주문 정보 업데이트
+                // 타겟 주문 찾기 (고객명 확인용)
+                const targetOrder = orders.find(o => o.id === orderId);
+                const targetCustomer = targetOrder ? targetOrder.customer : '';
+
+                // 1. 주문 정보 업데이트 (동일 고객 일괄 적용)
                 setOrders(prev => prev.map(o => {
-                    if (o.id !== orderId) return o;
-                    return sanitizeOrder({ ...o, ...addrData });
+                    // 타겟 주문이거나, 고객명이 같고 비어있지 않은 경우
+                    if (o.id === orderId || (targetCustomer && o.customer === targetCustomer)) {
+                        return sanitizeOrder({ ...o, ...addrData });
+                    }
+                    return o;
                 }));
 
                 // 2. 고객 DB 업데이트 (연동)
-                const order = orders.find(o => o.id === orderId);
-                if (order && order.customer) {
+                if (targetCustomer) {
                     setCustomerDB(prev => ({
                         ...prev,
-                        [order.customer]: {
-                            ...prev[order.customer], // 기존 정보 유지
-                            ...addrData // 새로운 정보 덮어쓰기
+                        [targetCustomer]: {
+                            ...prev[targetCustomer], 
+                            ...addrData 
                         }
                     }));
-                    showToast(`[${order.customer}] 님의 주소 정보가 업데이트되었습니다.`);
+                    // 메시지 업데이트: 몇 건이 업데이트 되었는지 표시
+                    const count = orders.filter(o => o.customer === targetCustomer).length;
+                    showToast(`[${targetCustomer}] 님의 모든 주문(${count}건)에 주소가 저장되었습니다.`);
                 } else {
                     showToast('주문서에 주소가 저장되었습니다.');
                 }
@@ -795,7 +807,6 @@
             
             const handleSetGoogleUrl = () => setIsSettingsOpen(true);
 
-            // [수정됨] 고객 데이터 로드 피드백 강화
             const handleLoadFromGoogle = async () => { 
                 if (!googleScriptUrl) { handleSetGoogleUrl(); return; } 
                 setIsSyncing(true); 
@@ -1280,7 +1291,7 @@
                                                         <div className="relative"><input id={`cell-product-${idx}`} className="w-full bg-transparent font-bold outline-none" value={order.product} onChange={e => handleUpdateOrder(order.id, 'product', e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'product', idx)} /></div>
                                                         <div className="flex justify-center"><input id={`cell-quantity-${idx}`} type="number" className="w-full text-center bg-transparent font-bold outline-none" value={order.quantity} onChange={e => handleUpdateOrder(order.id, 'quantity', e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'quantity', idx)} /></div>
                                                         <div className="text-right"><input id={`cell-price-${idx}`} className="w-full text-right bg-transparent font-mono outline-none focus:border-b focus:border-blue-500 cursor-text" value={order.price.toLocaleString()} onChange={e => handleUpdateOrder(order.id, 'price', e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'price', idx)} /></div>
-                                                        <div className="flex justify-center"><div className={`w-5 h-5 rounded-sm flex items-center justify-center cursor-default ${order.isAddressFilled ? 'bg-brand-600 text-white' : 'text-slate-300 bg-slate-100 dark:bg-slate-800'}`}><Icon name="map-pin" size={10}/></div></div>
+                                                        <div className="flex justify-center"><div className={`w-5 h-5 rounded-sm flex items-center justify-center cursor-default ${order.isAddressFilled ? 'bg-brand-600 text-white' : 'text-slate-300 bg-slate-100 dark:bg-slate-800'}`}><Icon name="map-pin" size={12} weight={order.isAddressFilled ? "fill" : "regular"}/></div></div>
                                                         <div><input id={`cell-memo-${idx}`} className="w-full bg-transparent text-slate-500 outline-none" value={order.memo} onChange={e => handleUpdateOrder(order.id, 'memo', e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'memo', idx)} /></div>
                                                         <div className="flex justify-end"><button onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }} className="text-slate-300 hover:text-rose-500"><Icon name="x" size={10}/></button></div>
                                                         
