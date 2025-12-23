@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Lite) - v2.9 (인쇄 오류 수정)</title>
+    <title>강은지 주문서 PRO (Lite) - v3.0 (테두리 제거)</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -95,9 +95,9 @@
                 display: none;
             }
 
-            /* 6. 영수증 스타일 (완전 블랙 & 배경 제거) */
+            /* 6. 영수증 스타일 (완전 블랙 & 배경 제거 & 테두리 제거) */
             .receipt-card {
-                border: 2px solid black !important;
+                border: none !important; /* 테두리 제거 */
                 color: black !important;
                 background: transparent !important;
                 box-shadow: none !important;
