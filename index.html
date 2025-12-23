@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Lite) - v3.6 (시트 저장 완벽 구현)</title>
+    <title>강은지 주문서 PRO (Lite) - v3.9 (완전 연동 & 헤더 제거)</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -48,7 +48,7 @@
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         *:focus { outline: none !important; }
         
-        .grid-rows-compact { grid-template-columns: 85px 75px 100px 70px 1.8fr 50px 80px 30px 1fr 30px; }
+        .grid-rows-compact { grid-template-columns: 60px 75px 100px 70px 1.8fr 50px 80px 30px 1fr 30px; }
         .dragging { opacity: 0.5; border: 2px dashed #627d98; }
         
         /* --- 인쇄 전용 스타일 --- */
@@ -91,75 +91,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
-        // --- APPS SCRIPT CODE FOR USER COPY ---
-        const APPS_SCRIPT_CODE = `function doPost(e) {
-  var lock = LockService.getScriptLock();
-  lock.tryLock(10000);
-
-  try {
-    var doc = SpreadsheetApp.getActiveSpreadsheet();
-    var json = JSON.parse(e.postData.contents);
-    
-    // 1. 주문 목록 저장 (orders 시트)
-    // 날짜, 주문자, 코드, 상품명, 수량, 단가, 배송비, 총액, 입금액, 카드, 수령인, 연락처, 주소, 메모
-    if(json.orders) {
-        var orders = JSON.parse(json.orders);
-        saveToSheet(doc, 'orders', 
-          ['주문일시', '주문자', '코드', '상품명', '수량', '단가', '배송비', '총액', '입금액(현금)', '카드결제', '수령인', '연락처', '주소', '메모'], 
-          orders.map(function(o) {
-            var dateStr = new Date(o.id).toLocaleString();
-            var addr = (o.addressText || '') + ' ' + (o.addressDetail || '');
-            var ship = o.customShippingFee != null ? o.customShippingFee : '';
-            var total = (Number(o.price) || 0); 
-            // productNumbers 정보는 클라이언트에서 보내지 않으므로 여기서는 코드란을 비우거나 별도 처리 필요하지만, 
-            // 현재 구조상 'product' 필드에 상품명이 들어갑니다. 코드는 별도 매핑이 필요하면 GAS에서 처리하기 복잡하므로 
-            // 클라이언트에서 맵핑된 데이터를 보내주는 것이 가장 좋습니다. 
-            // 여기서는 단순 저장만 수행합니다.
-            return [
-              dateStr, o.customer, '', o.product, o.quantity, o.price, ship, total, o.deposit, o.cardAmount, o.recipientName, o.phone, addr, o.memo
-            ];
-          })
-        );
-    }
-
-    // 2. 상품 목록 저장 (products 시트)
-    if(json.products) {
-        var products = JSON.parse(json.products);
-        var prodRows = [];
-        for (var key in products) { prodRows.push([key, products[key]]); }
-        saveToSheet(doc, 'products', ['상품명', '단가'], prodRows);
-    }
-
-    // 3. 고객 목록 저장 (customers 시트)
-    if(json.customers) {
-        var customers = JSON.parse(json.customers);
-        var custRows = [];
-        for (var key in customers) {
-          var c = customers[key];
-          custRows.push([key, c.recipientName, c.phone, c.zipCode, (c.addressText||'')+' '+(c.addressDetail||''), c.shippingMemo]);
-        }
-        saveToSheet(doc, 'customers', ['닉네임', '수령인', '연락처', '우편번호', '주소', '배송메모'], custRows);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ 'result': 'success' })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ 'result': 'error', 'error': err.toString() })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function saveToSheet(doc, sheetName, headers, rows) {
-  var sheet = doc.getSheetByName(sheetName);
-  if (!sheet) { sheet = doc.insertSheet(sheetName); }
-  sheet.clear(); // 기존 데이터 삭제 (덮어쓰기)
-  sheet.appendRow(headers); // 헤더 추가
-  if (rows && rows.length > 0) {
-    // 2행 1열부터 데이터 쓰기
-    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
-  }
-}`;
-
         // --- GLOBAL UTILITIES ---
         const parseNum = (val) => {
             if (typeof val === 'number') return val;
@@ -183,6 +114,10 @@ function saveToSheet(doc, sheetName, headers, rows) {
             if (!order || typeof order !== 'object') return null;
             const rawPrice = parseNum(order.price !== undefined ? order.price : 0);
             const rawQty = parseNum(order.quantity !== undefined ? order.quantity : 1);
+            
+            // 주소 입력 완료 여부 체크 (아이콘 색상용)
+            const isAddressFilled = !!order.recipientName && !!order.phone && !!order.addressText;
+
             return {
                 id: order.id || Date.now() + Math.random(),
                 customer: order.customer || '',
@@ -203,11 +138,11 @@ function saveToSheet(doc, sheetName, headers, rows) {
                 addressDetail: order.addressDetail || '',
                 shippingMemo: order.shippingMemo || '',
                 isCRM: !!order.isCRM,
-                isAddressFilled: !!order.recipientName && !!order.phone && !!order.addressText
+                isAddressFilled: isAddressFilled
             };
         };
 
-        const Icon = React.memo(({ name, size = 14, className = "" }) => <i className={`ph-${name} ${className}`} style={{ fontSize: size }}></i>);
+        const Icon = React.memo(({ name, size = 14, className = "", weight = "regular" }) => <i className={`ph-${name} ${className}`} style={{ fontSize: size, fontWeight: weight }}></i>);
 
         const ActionButton = React.memo(({ onClick, color, icon, text, loading }) => {
             const base = "px-2 py-1 rounded-sm text-xs font-bold flex items-center gap-1 transition-all border shadow-sm h-7";
@@ -280,32 +215,15 @@ function saveToSheet(doc, sheetName, headers, rows) {
         // --- Settings Modal ---
         const SettingsModal = ({ isOpen, onClose, url, setUrl, showToast }) => {
             if (!isOpen) return null;
-            const copyCode = () => {
-                navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(() => showToast('코드가 복사되었습니다. Apps Script에 붙여넣으세요.'));
-            };
             return (
                 <div className="modal-overlay" onClick={onClose}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
-                        <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Icon name="gear" size={20}/> 설정 및 연동 가이드</h2>
-                        
+                        <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Icon name="gear" size={20}/> 구글 연동 설정</h2>
                         <div className="mb-6">
-                            <h3 className="text-sm font-bold text-slate-700 mb-2">1. Google Web App URL</h3>
+                            <h3 className="text-sm font-bold text-slate-700 mb-2">Google Web App URL</h3>
                             <input className="w-full p-2 border rounded text-xs font-mono bg-slate-50 mb-1" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://script.google.com/..." />
-                            <p className="text-[10px] text-slate-400">배포된 웹 앱 URL을 여기에 입력해야 저장/불러오기가 작동합니다.</p>
+                            <p className="text-[10px] text-slate-400">데이터를 저장할 구글 웹앱 주소를 입력하세요.</p>
                         </div>
-
-                        <div className="mb-6 border-t pt-4">
-                            <h3 className="text-sm font-bold text-slate-700 mb-2 flex justify-between items-center">
-                                <span>2. 시트에 행/열로 저장하기 (Apps Script 코드)</span>
-                                <button onClick={copyCode} className="bg-slate-800 text-white px-2 py-1 rounded text-xs">코드 복사</button>
-                            </h3>
-                            <p className="text-xs text-slate-500 mb-2">
-                                기본 연동만 하면 모든 데이터가 한 셀에 저장됩니다. <br/>
-                                <b>시트에 엑셀처럼 행/열로 저장하려면</b> 아래 코드를 복사해서 Apps Script(`코드.gs`) 내용을 <b>모두 지우고 붙여넣은 뒤 [새 버전]으로 배포</b>해주세요.
-                            </p>
-                            <textarea className="w-full h-40 p-2 bg-slate-800 text-slate-200 text-[10px] font-mono rounded overflow-auto" readOnly value={APPS_SCRIPT_CODE}></textarea>
-                        </div>
-                        
                         <div className="text-right">
                             <button onClick={onClose} className="bg-brand-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-brand-700">닫기</button>
                         </div>
@@ -314,25 +232,94 @@ function saveToSheet(doc, sheetName, headers, rows) {
             );
         };
 
-        // --- Other Components (AddressAdminPanel, CustomerTab) skipped for brevity (same logic) ---
-        // ... (AddressAdminPanel code is same as v3.5, omitted here but included in final render) ...
-        const AddressAdminPanel = ({ selectedOrder, handleUpdateOrderBatch, showToast }) => {
-            const [localAddr, setLocalAddr] = useState({ recipientName: '', phone: '', addressText: '', addressDetail: '', shippingMemo: '' });
+        // --- AddressAdminPanel: 헤더 제거, 기능만 유지 ---
+        const AddressAdminPanel = ({ selectedOrder, onSaveAddress, showToast }) => {
+            const [localAddr, setLocalAddr] = useState({ recipientName: '', phone: '', zipCode: '', addressText: '', addressDetail: '', shippingMemo: '' });
             const [tab, setTab] = useState('input');
             const [rawText, setRawText] = useState('');
-            useEffect(() => { if (selectedOrder) { setLocalAddr({ recipientName: selectedOrder.recipientName || '', phone: selectedOrder.phone || '', addressText: selectedOrder.addressText || '', addressDetail: selectedOrder.addressDetail || '', shippingMemo: selectedOrder.shippingMemo || '' }); setRawText(''); } else { setLocalAddr({ recipientName: '', phone: '', addressText: '', addressDetail: '', shippingMemo: '' }); } }, [selectedOrder]);
+            
+            useEffect(() => { 
+                if (selectedOrder) { 
+                    setLocalAddr({ 
+                        recipientName: selectedOrder.recipientName || '', 
+                        phone: selectedOrder.phone || '', 
+                        zipCode: selectedOrder.zipCode || '', 
+                        addressText: selectedOrder.addressText || '', 
+                        addressDetail: selectedOrder.addressDetail || '', 
+                        shippingMemo: selectedOrder.shippingMemo || '' 
+                    }); 
+                    setRawText(''); 
+                } else { 
+                    setLocalAddr({ recipientName: '', phone: '', zipCode: '', addressText: '', addressDetail: '', shippingMemo: '' }); 
+                } 
+            }, [selectedOrder]);
+
             const handleChange = (field, val) => setLocalAddr(prev => ({...prev, [field]: val}));
-            const handleSave = () => { if (!selectedOrder) return; handleUpdateOrderBatch(selectedOrder.id, localAddr); showToast('주소 정보 저장 완료'); };
+            
+            // 저장 버튼 클릭 시: App 컴포넌트의 통합 저장 핸들러 호출
+            const handleSave = () => { 
+                if (!selectedOrder) return; 
+                onSaveAddress(selectedOrder.id, localAddr); 
+            };
+            
             const handlePostcode = () => { try { new daum.Postcode({ oncomplete: function(data) { setLocalAddr(prev => ({ ...prev, zipCode: data.zonecode, addressText: data.address, addressDetail: '' })); } }).open(); } catch(e) { showToast("팝업이 차단되었습니다.", "error"); } };
             const handleParseRaw = () => { if (!rawText.trim()) return; let text = rawText; let name = '', phone = '', address = '', memo = ''; const phoneMatch = text.match(/(01[016789])[- .]?(\d{3,4})[- .]?(\d{4})/); if (phoneMatch) { phone = phoneMatch[0]; text = text.replace(phone, ''); } const zipMatch = text.match(/\d{5}/); if(zipMatch) text = text.replace(zipMatch[0], ''); const lines = text.split('\n').map(l => l.trim()).filter(Boolean); lines.forEach(line => { if (line.match(/^(이름|수령인|받는분):?/)) name = line.replace(/^(이름|수령인|받는분):?/, '').trim();else if (line.match(/^(주소|배송지):?/)) address = line.replace(/^(주소|배송지):?/, '').trim();else if (line.match(/^(메모|요청사항):?/)) memo = line.replace(/^(메모|요청사항):?/, '').trim(); }); if (!name && lines.length > 0) name = lines[0]; if (!address && lines.length > 1) address = lines.find(l => l !== name && l.match(/[시도구군길로]/)) || lines[1]; setLocalAddr(prev => ({ ...prev, recipientName: name || prev.recipientName, phone: phone || prev.phone, addressText: address || prev.addressText, shippingMemo: memo || prev.shippingMemo })); setTab('edit'); showToast("정보가 입력되었습니다."); };
             
             if (!selectedOrder) { return (<div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col h-full shadow-soft items-center justify-center text-slate-400 text-xs"><Icon name="map-pin" size={24} className="mb-2 opacity-50"/><p>주문을 선택해주세요</p></div>); }
+            
             return (
                 <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg flex flex-col h-full shadow-soft overflow-hidden">
-                    <div className="flex items-center justify-between px-2 pt-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 shrink-0"><div className="flex gap-1"><button onClick={()=>setTab('input')} className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition-all ${tab==='input' ? 'bg-white dark:bg-dark-card text-brand-600 dark:text-brand-400 border-x border-t border-slate-200 dark:border-slate-700 border-b-white dark:border-b-dark-card -mb-px z-10' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>정보 붙여넣기</button><button onClick={()=>setTab('edit')} className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition-all ${tab==='edit' ? 'bg-white dark:bg-dark-card text-brand-600 dark:text-brand-400 border-x border-t border-slate-200 dark:border-slate-700 border-b-white dark:border-b-dark-card -mb-px z-10' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>상세 수정</button></div><span className="text-[9px] text-slate-400 font-mono pb-1 pr-1">#{selectedOrder.id.toString().slice(-4)}</span></div>
-                    <div className="flex-1 overflow-y-auto p-2">{tab === 'input' ? (<div className="h-full flex flex-col gap-2"><textarea className="flex-1 w-full p-2 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs resize-none outline-none focus:border-brand-500 placeholder-slate-400" placeholder={`예시:\n홍길동\n010-1234-5678\n서울시 강남구...`} value={rawText} onChange={e => setRawText(e.target.value)}></textarea><button onClick={handleParseRaw} className="w-full py-2 bg-brand-600 hover:bg-brand-700 text-white rounded text-xs font-bold transition-colors">자동 입력</button></div>) : (<div className="space-y-2"><div className="flex items-center gap-2"><label className="w-12 text-xs text-slate-500 text-right">수령인</label><input className="flex-1 p-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs outline-none focus:border-brand-500" value={localAddr.recipientName} onChange={e=>handleChange('recipientName', e.target.value)} /></div><div className="flex items-center gap-2"><label className="w-12 text-xs text-slate-500 text-right">연락처</label><input className="flex-1 p-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs outline-none focus:border-brand-500" value={localAddr.phone} onChange={e=>handleChange('phone', e.target.value)} /></div><div className="flex items-center gap-2"><label className="w-12 text-xs text-slate-500 text-right">주소</label><div className="flex-1 flex flex-col gap-1"><div className="relative w-full"><input className="w-full p-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs outline-none focus:border-brand-500 pr-6" value={localAddr.addressText} onChange={e=>handleChange('addressText', e.target.value)} /><button onClick={handlePostcode} className="absolute right-1 top-1 text-slate-400 hover:text-brand-600"><Icon name="magnifying-glass" size={10}/></button></div><input className="w-full p-2 border rounded text-sm dark:bg-dark-input dark:border-slate-700" placeholder="상세주소 (동/호수)" value={localAddr.addressDetail} onChange={e=>handleChange('addressDetail', e.target.value)} /></div></div><div className="flex items-center gap-2"><label className="w-12 text-xs text-slate-500 text-right">배송메모</label><input className="flex-1 p-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs outline-none focus:border-brand-500" value={localAddr.shippingMemo} onChange={e=>handleChange('shippingMemo', e.target.value)} /></div><div className="pt-2 text-right"><button onClick={handleSave} className="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors shadow-sm">저장</button></div></div>)}</div></div>
+                    {/* 헤더 타이틀 제거, 탭 버튼만 남김 */}
+                    <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 shrink-0 p-1 gap-1">
+                        <button onClick={()=>setTab('input')} className={`flex-1 py-1.5 text-xs font-bold rounded transition-all ${tab==='input' ? 'bg-white dark:bg-dark-card text-brand-600 dark:text-brand-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>붙여넣기</button>
+                        <button onClick={()=>setTab('edit')} className={`flex-1 py-1.5 text-xs font-bold rounded transition-all ${tab==='edit' ? 'bg-white dark:bg-dark-card text-brand-600 dark:text-brand-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>상세수정</button>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-2">
+                        {tab === 'input' ? (
+                            <div className="h-full flex flex-col gap-2">
+                                <textarea className="flex-1 w-full p-2 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs resize-none outline-none focus:border-brand-500 placeholder-slate-400" placeholder={`예시:\n홍길동\n010-1234-5678\n서울시 강남구...`} value={rawText} onChange={e => setRawText(e.target.value)}></textarea>
+                                <button onClick={handleParseRaw} className="w-full py-2 bg-brand-600 hover:bg-brand-700 text-white rounded text-xs font-bold transition-colors">자동 입력</button>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <label className="w-12 text-xs text-slate-500 text-right">수령인</label>
+                                    <input className="flex-1 p-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs outline-none focus:border-brand-500" value={localAddr.recipientName} onChange={e=>handleChange('recipientName', e.target.value)} />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <label className="w-12 text-xs text-slate-500 text-right">연락처</label>
+                                    <input className="flex-1 p-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs outline-none focus:border-brand-500" value={localAddr.phone} onChange={e=>handleChange('phone', e.target.value)} />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <label className="w-12 text-xs text-slate-500 text-right">우편번호</label>
+                                    <div className="flex-1 flex gap-1">
+                                        <input className="w-20 p-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs outline-none focus:border-brand-500 text-center" value={localAddr.zipCode} readOnly placeholder="00000" />
+                                        <button onClick={handlePostcode} className="bg-brand-600 hover:bg-brand-700 text-white px-2 py-1 rounded text-xs font-bold flex-1 flex items-center justify-center gap-1"><Icon name="magnifying-glass" /> 주소검색</button>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <label className="w-12 text-xs text-slate-500 text-right">주소</label>
+                                    <input className="flex-1 p-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs outline-none focus:border-brand-500" value={localAddr.addressText} onChange={e=>handleChange('addressText', e.target.value)} />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <label className="w-12 text-xs text-slate-500 text-right">상세</label>
+                                    <input className="flex-1 p-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs outline-none focus:border-brand-500" placeholder="상세주소 (동/호수)" value={localAddr.addressDetail} onChange={e=>handleChange('addressDetail', e.target.value)} />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <label className="w-12 text-xs text-slate-500 text-right">배송메모</label>
+                                    <input className="flex-1 p-1 bg-slate-50 dark:bg-dark-input border border-slate-200 dark:border-dark-border rounded text-xs outline-none focus:border-brand-500" value={localAddr.shippingMemo} onChange={e=>handleChange('shippingMemo', e.target.value)} />
+                                </div>
+                                <div className="pt-2 text-right">
+                                    <button onClick={handleSave} className="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors shadow-sm">저장</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             );
         };
+
         const CustomerTab = ({ customerDB, setCustomerDB, orders, showToast }) => {
             const [selectedCustomer, setSelectedCustomer] = useState(null);
             const [search, setSearch] = useState('');
@@ -399,7 +386,6 @@ function saveToSheet(doc, sheetName, headers, rows) {
                 return (
                     <div className="receipt-card p-6 w-full text-black h-full flex flex-col justify-start">
                         <div className="receipt-header-box print-flex-between flex justify-between items-center shrink-0">
-                            {/* 헤더 페이지 표시 조건: totalPages가 1보다 클 때만 표시 */}
                             <span className="text-xl font-bold">{customer} 님 {totalPages > 1 && <span className="text-sm font-normal text-slate-500 ml-1">({pageIndex + 1}/{totalPages})</span>}</span>
                             <span className="text-xs font-normal">{new Date().toLocaleDateString()}</span>
                         </div>
@@ -609,6 +595,30 @@ function saveToSheet(doc, sheetName, headers, rows) {
             
             const focusedOrder = useMemo(() => { return orders.find(o => o.id === focusedOrderId); }, [orders, focusedOrderId]);
 
+            // ** 완전 연동 로직 1: 주소 저장 시 고객 DB도 업데이트 **
+            const handleSaveAddress = (orderId, addrData) => {
+                // 1. 주문 정보 업데이트
+                setOrders(prev => prev.map(o => {
+                    if (o.id !== orderId) return o;
+                    return sanitizeOrder({ ...o, ...addrData });
+                }));
+
+                // 2. 고객 DB 업데이트 (연동)
+                const order = orders.find(o => o.id === orderId);
+                if (order && order.customer) {
+                    setCustomerDB(prev => ({
+                        ...prev,
+                        [order.customer]: {
+                            ...prev[order.customer], // 기존 정보 유지
+                            ...addrData // 새로운 정보 덮어쓰기
+                        }
+                    }));
+                    showToast(`[${order.customer}] 님의 주소 정보가 업데이트되었습니다.`);
+                } else {
+                    showToast('주문서에 주소가 저장되었습니다.');
+                }
+            };
+
             const handleRecentProductClick = (name, price) => {
                 if (activeTab === 'order' && focusedOrderId) {
                      setOrders(prev => prev.map(o => {
@@ -662,6 +672,25 @@ function saveToSheet(doc, sheetName, headers, rows) {
                 setOrders(prev => prev.map(o => { 
                     if (o.id !== id) return o; 
                     let updates = { [field]: value };
+                    
+                    // ** 완전 연동 로직 2: 그리드에서 닉네임 변경 시 DB 조회 및 자동 입력 **
+                    if (field === 'customer') {
+                        const newCustomer = value.trim();
+                        updates.customer = newCustomer;
+                        // DB에 있는 고객이면 정보 자동 채우기
+                        if (customerDB[newCustomer]) {
+                            const info = customerDB[newCustomer];
+                            // 현재 주소가 비어있을 때만 채울지, 무조건 덮어쓸지 결정.
+                            // "자동으로 입력해줘야지" -> 무조건 최신 DB 정보로 채우는 게 맞음 (사용자 의도상)
+                            updates.recipientName = info.recipientName || '';
+                            updates.phone = info.phone || '';
+                            updates.zipCode = info.zipCode || '';
+                            updates.addressText = info.addressText || '';
+                            updates.addressDetail = info.addressDetail || '';
+                            updates.shippingMemo = info.shippingMemo || '';
+                        }
+                    }
+
                     const numValue = parseNum(value);
                     if (field === 'quantity') { 
                         const pName = o.product ? o.product.trim() : '';
@@ -766,8 +795,40 @@ function saveToSheet(doc, sheetName, headers, rows) {
             
             const handleSetGoogleUrl = () => setIsSettingsOpen(true);
 
-            const handleLoadFromGoogle = async () => { if (!googleScriptUrl) { handleSetGoogleUrl(); return; } setIsSyncing(true); try { const res = await fetch(googleScriptUrl); const data = await res.json(); if (data.orders) { const rows = JSON.parse(data.orders); const headers = rows[0]; const loadedOrders = rows.slice(1).map(row => { const obj = {}; headers.forEach((h, i) => obj[h] = row[i]); return sanitizeOrder(obj); }); setOrders(loadedOrders); } if (data.products) setProductHistory(JSON.parse(data.products)); if (data.customers) { const custRows = JSON.parse(data.customers); const newDB = {}; custRows.slice(1).forEach(r => { newDB[r[0]] = { recipientName: r[1], phone: r[2], zipCode: r[3], addressText: r[4], shippingMemo: r[5] }; }); setCustomerDB(newDB); } showToast("불러오기 완료"); } catch (e) { showToast("실패: " + e.message, "error"); } finally { setIsSyncing(false); } };
-            const handleSaveToGoogle = async () => { if (!googleScriptUrl) { handleSetGoogleUrl(); return; } setIsSyncing(true); try { const payload = { orders: JSON.stringify(orders), products: JSON.stringify(productHistory), customers: JSON.stringify(customerDB) }; const res = await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify(payload) }); const json = await res.json(); if (json.status === 'success') showToast("저장 완료"); else throw new Error(json.message || "Unknown Error"); } catch (e) { showToast("저장 실패 (설정에서 코드를 업데이트했는지 확인하세요)", "error"); console.error(e); } finally { setIsSyncing(false); } };
+            // [수정됨] 고객 데이터 로드 피드백 강화
+            const handleLoadFromGoogle = async () => { 
+                if (!googleScriptUrl) { handleSetGoogleUrl(); return; } 
+                setIsSyncing(true); 
+                try { 
+                    const res = await fetch(googleScriptUrl); 
+                    const data = await res.json(); 
+                    let orderCount = 0;
+                    let customerCount = 0;
+
+                    if (data.orders) { 
+                        const rows = JSON.parse(data.orders); 
+                        const headers = rows[0]; 
+                        const loadedOrders = rows.slice(1).map(row => { const obj = {}; headers.forEach((h, i) => obj[h] = row[i]); return sanitizeOrder(obj); }); 
+                        setOrders(loadedOrders);
+                        orderCount = loadedOrders.length;
+                    } 
+                    if (data.products) setProductHistory(JSON.parse(data.products)); 
+                    if (data.customers) { 
+                        const custRows = JSON.parse(data.customers); 
+                        const newDB = {}; 
+                        custRows.slice(1).forEach(r => { newDB[r[0]] = { recipientName: r[1], phone: r[2], zipCode: r[3], addressText: r[4], shippingMemo: r[5] }; }); 
+                        setCustomerDB(newDB);
+                        customerCount = Object.keys(newDB).length;
+                    } 
+                    showToast(`불러오기 완료 (고객 ${customerCount}명 / 주문 ${orderCount}건)`); 
+                } catch (e) { 
+                    showToast("실패: " + e.message, "error"); 
+                } finally { 
+                    setIsSyncing(false); 
+                } 
+            };
+            
+            const handleSaveToGoogle = async () => { if (!googleScriptUrl) { handleSetGoogleUrl(); return; } setIsSyncing(true); try { const payload = { orders: JSON.stringify(orders), products: JSON.stringify(productHistory), customers: JSON.stringify(customerDB) }; const res = await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify(payload) }); const json = await res.json(); if (json.status === 'success') showToast("저장 완료 (고객주소 및 주문내역)"); else throw new Error(json.message || "Unknown Error"); } catch (e) { showToast("저장 실패 (설정에서 코드를 업데이트했는지 확인하세요)", "error"); console.error(e); } finally { setIsSyncing(false); } };
             const handleDownloadHTML = () => { const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const date = new Date(); const timestamp = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}`; a.download = `강은지_주문서_백업_${timestamp}.html`; a.click(); URL.revokeObjectURL(url); showToast('백업 완료'); };
             const handleUploadClick = () => fileInputRef.current && fileInputRef.current.click();
             const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { const uploaded = results.data.map((row, i) => sanitizeOrder({ id: Date.now() + i, originalText: `UPLOAD: ${row['상품명']}`, customer: row['닉네임']?.trim(), product: row['상품명'], quantity: Number(row['수량']) || 1, price: Number(row['금액']?.replace(/,/g, '')) || 0, deposit: Number(row['입금액(현금)']), cardAmount: Number(row['카드결제액']), recipientName: row['수령인'], phone: row['연락처'], zipCode: row['우편번호'], addressText: row['주소'], shippingMemo: row['배송메모'], memo: row['메모'] })).filter(o => o.customer); setOrders(prev => [...uploaded, ...prev]); showToast(`${uploaded.length}건 업로드 완료`); } }); e.target.value = null; };
@@ -1183,7 +1244,7 @@ function saveToSheet(doc, sheetName, headers, rows) {
                                             )) : <div className="h-full flex items-center justify-center text-slate-400 text-xs">최근 등록된 상품이 없습니다.</div>}
                                         </div>
                                     </div>
-                                    <div className="lg:col-span-1 h-full overflow-hidden"><AddressAdminPanel selectedOrder={focusedOrder} handleUpdateOrderBatch={(id, up) => setOrders(p => p.map(o => o.id===id ? {...o, ...up} : o))} showToast={showToast} /></div>
+                                    <div className="lg:col-span-1 h-full overflow-hidden"><AddressAdminPanel selectedOrder={focusedOrder} onSaveAddress={handleSaveAddress} showToast={showToast} /></div>
                                     <div className="lg:col-span-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col shadow-soft h-full overflow-hidden">
                                         <div className="flex justify-between items-center mb-1 px-1"><h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1"><Icon name="chat-text" className="text-accent-amber"/> 카카오톡 주문서</h3><button onClick={() => { handleCopy(manualMessage); }} className="text-[10px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 px-2 py-0.5 rounded text-slate-600 dark:text-slate-300 flex items-center gap-1"><Icon name="copy"/> 복사하기</button></div>
                                         <textarea className="flex-1 w-full p-2 bg-yellow-50/50 dark:bg-yellow-900/10 border border-yellow-100 dark:border-yellow-900/20 rounded-md resize-none text-xs outline-none font-mono" value={manualMessage} onChange={e => setManualMessage(e.target.value)}></textarea>
