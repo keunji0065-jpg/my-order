@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Lite) - v4.15 (최종 통합 완성)</title>
+    <title>강은지 주문서 PRO (Lite) - v4.21 (고객관리 핸들러 수정)</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -49,7 +49,8 @@
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         *:focus { outline: none !important; }
         
-        .grid-rows-compact { grid-template-columns: 30px 60px 75px 100px 70px 1.8fr 50px 80px 30px 1fr 30px; }
+        /* 리스트 레이아웃 조정: 닉네임 확보 */
+        .grid-rows-compact { grid-template-columns: 30px 60px 85px 140px 45px 1.5fr 45px 70px 30px 1fr 30px; }
         .dragging { opacity: 0.5; border: 2px dashed #627d98; }
         
         /* --- 인쇄 전용 스타일 --- */
@@ -122,6 +123,7 @@
                 id: order.id || Date.now() + Math.random(),
                 customer: order.customer || '',
                 product: order.product || '',
+                code: order.code || '',
                 quantity: rawQty,
                 price: rawPrice,
                 deposit: Number(order.deposit) || 0,
@@ -161,7 +163,8 @@
             );
         });
 
-        // --- Components ---
+        // --- COMPONENTS ---
+        
         const SummarySection = ({ stats, handleUnpaidFilterClick, unpaidFilter }) => (
             <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm w-full grid grid-cols-4 divide-x divide-slate-100 dark:divide-slate-700 h-auto overflow-hidden">
                 <div className="px-4 py-1 flex flex-col justify-center items-start text-left min-w-0">
@@ -216,7 +219,104 @@
             </div>
         );
 
-        // --- AddressAdminPanel: 헤더 제거, 기능만 유지 ---
+        const ArchiveTab = ({ archives, setArchives, onRestore, onDeleteArchive }) => {
+            const [selectedFolder, setSelectedFolder] = useState(null);
+
+            const sortedArchives = useMemo(() => {
+                return [...archives].sort((a, b) => new Date(b.date) - new Date(a.date));
+            }, [archives]);
+
+            const currentFolder = sortedArchives.find(a => a.id === selectedFolder);
+
+            const handleDownloadFolder = (folder) => {
+                 const csvString = "\ufeff닉네임,상품명,수량,금액,수령인,연락처,주소,메모\n" + 
+                    folder.orders.map(o => {
+                         const clean = (val) => '"' + String(val || '').replace(/"/g, '""') + '"';
+                         let phone = o.phone || '';
+                         if (phone && (phone.startsWith('0') || phone.includes('-'))) phone = `="${phone}"`;
+                         let zip = o.zipCode || '';
+                         if (zip && /^\d+$/.test(zip) && (zip.startsWith('0') || zip.length === 5)) zip = `="${zip}"`;
+
+                         return [clean(o.customer), clean(o.product), o.quantity, o.price, clean(o.recipientName), phone, clean((o.addressText||'')+' '+(o.addressDetail||'')), clean(o.memo)].join(',');
+                    }).join('\n');
+                
+                const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', `${folder.name}_${new Date(folder.date).toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            return (
+                <div className="flex h-full tab-content gap-4 p-4">
+                    <div className="w-64 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm flex flex-col overflow-hidden">
+                         <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20">
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="archive-box" size={14}/> 주문 보관함</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-1 space-y-0.5">
+                            {sortedArchives.map(arch => (
+                                <button key={arch.id} onClick={() => setSelectedFolder(arch.id)} className={`w-full text-left px-3 py-2 text-xs rounded transition-colors flex items-center justify-between group ${selectedFolder === arch.id ? 'bg-brand-50 text-brand-700 font-bold dark:bg-brand-900/30 dark:text-brand-400' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+                                    <div className="flex flex-col overflow-hidden">
+                                        <span className="truncate font-bold">{arch.name}</span>
+                                        <span className="text-[9px] text-slate-400">{new Date(arch.date).toLocaleString()} • {arch.orders.length}건</span>
+                                    </div>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                         <div onClick={(e) => { e.stopPropagation(); onDeleteArchive(arch.id); }} className="p-1 hover:bg-white rounded text-rose-500"><Icon name="trash" size={12}/></div>
+                                    </div>
+                                </button>
+                            ))}
+                            {sortedArchives.length === 0 && <div className="p-4 text-center text-slate-400 text-xs">보관된 주문이 없습니다.</div>}
+                        </div>
+                    </div>
+                     <div className="flex-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm flex flex-col overflow-hidden">
+                        {currentFolder ? (
+                            <>
+                                <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 flex justify-between items-center">
+                                    <h3 className="text-sm font-bold flex items-center gap-2"><Icon name="folder-open" className="text-brand-500"/> {currentFolder.name} <span className="text-xs font-normal text-slate-400">({currentFolder.orders.length}건)</span></h3>
+                                    <div className="flex gap-2">
+                                         <button onClick={() => onRestore(currentFolder.id)} className="text-xs bg-white border border-slate-300 px-2 py-1 rounded hover:bg-slate-50 flex items-center gap-1"><Icon name="arrow-u-up-left"/> 주문목록으로 복원</button>
+                                         <button onClick={() => handleDownloadFolder(currentFolder)} className="text-xs bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 flex items-center gap-1"><Icon name="download-simple"/> 엑셀 저장</button>
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto">
+                                    <table className="w-full text-xs text-left">
+                                        <thead className="bg-slate-50 dark:bg-dark-input text-slate-500 border-b dark:border-slate-700 sticky top-0">
+                                            <tr>
+                                                <th className="p-2">닉네임</th>
+                                                <th className="p-2">상품명</th>
+                                                <th className="p-2 text-right">수량</th>
+                                                <th className="p-2 text-right">금액</th>
+                                                <th className="p-2">주소</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            {currentFolder.orders.map((o, idx) => (
+                                                <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                    <td className="p-2 font-bold">{o.customer}</td>
+                                                    <td className="p-2">{o.product}</td>
+                                                    <td className="p-2 text-right">{o.quantity}</td>
+                                                    <td className="p-2 text-right font-mono">{o.price.toLocaleString()}</td>
+                                                    <td className="p-2 truncate max-w-xs">{o.addressText} {o.addressDetail}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-sm">
+                                <Icon name="archive-box" size={48} className="mb-2 opacity-20"/>
+                                <p>좌측에서 보관된 폴더를 선택하세요.</p>
+                            </div>
+                        )}
+                     </div>
+                </div>
+            );
+        };
+
         const AddressAdminPanel = ({ selectedOrder, onSaveAddress, showToast }) => {
             const [localAddr, setLocalAddr] = useState({ recipientName: '', phone: '', zipCode: '', addressText: '', addressDetail: '', shippingMemo: '' });
             const [tab, setTab] = useState('input');
@@ -256,7 +356,6 @@
                 let text = rawText; 
                 let name = '', phone = '', address = '', memo = ''; 
                 
-                // [수정] 전화번호 파싱 및 포맷팅 (010-xxxx-xxxx)
                 const phoneMatch = text.match(/(01[016789])\D*(\d{3,4})\D*(\d{4})/); 
                 if (phoneMatch) { 
                     phone = `${phoneMatch[1]}-${phoneMatch[2]}-${phoneMatch[3]}`; 
@@ -387,7 +486,7 @@
                 showToast(`닉네임이 '${selectedCustomer}' → '${newName}'으로 변경되었습니다.`);
             };
             
-            // [스마트 업로드] 엑셀(.xlsx) 및 CSV 원본 지원 + 데이터 자동 정제
+            // [스마트 업로드] 엑셀/CSV 호환 + 데이터 자동 정제
             const handleFileUpload = async (e) => { 
                 const file = e.target.files[0]; 
                 if (!file) return; 
@@ -596,7 +695,6 @@
                 </div>
             );
         };
-
         const ReceiptTab = ({ orders, productNumbers, quickShipping }) => {
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedCustomers, setSelectedCustomers] = useState([]);
@@ -628,6 +726,30 @@
                 }
                 setIsAllSelected(!isAllSelected);
             };
+
+            const handleExportSimpleExcel = () => {
+                if (selectedCustomers.length === 0) {
+                    alert("고객을 먼저 선택해주세요.");
+                    return;
+                }
+                const targetOrders = orders.filter(o => selectedCustomers.includes(o.customer));
+                
+                const csvString = "\ufeff닉네임,상품명,수량,금액,수령인,연락처,주소,메모\n" + 
+                    targetOrders.map(o => {
+                         const clean = (val) => '"' + String(val || '').replace(/"/g, '""') + '"';
+                         return [clean(o.customer), clean(o.product), o.quantity, o.price, clean(o.recipientName), clean(o.phone), clean((o.addressText||'')+' '+(o.addressDetail||'')), clean(o.memo)].join(',');
+                    }).join('\n');
+                
+                const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', `구매내역_간략_${new Date().toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
 
             const ReceiptContent = ({ customer, orders, pageIndex, totalPages, grandTotal, isLastPage }) => {
                 return (
@@ -750,7 +872,10 @@
                     <div className="flex-1 bg-slate-100 dark:bg-dark-bg rounded-lg border border-slate-200 dark:border-dark-border flex flex-col overflow-hidden relative">
                         <div className="p-2 border-b border-slate-200 dark:border-dark-border bg-white dark:bg-dark-card flex justify-between items-center no-print shrink-0">
                             <span className="text-xs font-bold text-slate-500 ml-2">미리보기 (총 {selectedCustomers.length}명 / {allReceiptPages.length}쪽)</span>
-                            <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded text-xs font-bold hover:bg-slate-700 flex items-center gap-2"><Icon name="printer"/> 인쇄하기</button>
+                            <div className="flex gap-2">
+                                <button onClick={handleExportSimpleExcel} className="bg-emerald-600 text-white px-4 py-2 rounded text-xs font-bold hover:bg-emerald-700 flex items-center gap-2"><Icon name="file-xls"/> 엑셀 저장 (간략)</button>
+                                <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded text-xs font-bold hover:bg-slate-700 flex items-center gap-2"><Icon name="printer"/> 인쇄하기</button>
+                            </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-8" id="print-area-wrapper">
                             {allReceiptPages.length > 0 ? (
@@ -778,104 +903,6 @@
                             )}
                         </div>
                     </div>
-                </div>
-            );
-        };
-
-        const ArchiveTab = ({ archives, setArchives, onRestore, onDeleteArchive }) => {
-            const [selectedFolder, setSelectedFolder] = useState(null);
-
-            const sortedArchives = useMemo(() => {
-                return [...archives].sort((a, b) => new Date(b.date) - new Date(a.date));
-            }, [archives]);
-
-            const currentFolder = sortedArchives.find(a => a.id === selectedFolder);
-
-            const handleDownloadFolder = (folder) => {
-                 const csvString = "\ufeff닉네임,상품명,수량,금액,수령인,연락처,주소,메모\n" + 
-                    folder.orders.map(o => {
-                         const clean = (val) => '"' + String(val || '').replace(/"/g, '""') + '"';
-                         let phone = o.phone || '';
-                         if (phone && (phone.startsWith('0') || phone.includes('-'))) phone = `="${phone}"`;
-                         let zip = o.zipCode || '';
-                         if (zip && /^\d+$/.test(zip) && (zip.startsWith('0') || zip.length === 5)) zip = `="${zip}"`;
-
-                         return [clean(o.customer), clean(o.product), o.quantity, o.price, clean(o.recipientName), phone, clean((o.addressText||'')+' '+(o.addressDetail||'')), clean(o.memo)].join(',');
-                    }).join('\n');
-                
-                const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.setAttribute('download', `${folder.name}_${new Date(folder.date).toISOString().slice(0,10)}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            };
-
-            return (
-                <div className="flex h-full tab-content gap-4 p-4">
-                    <div className="w-64 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm flex flex-col overflow-hidden">
-                         <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20">
-                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="archive-box" size={14}/> 주문 보관함</h3>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-1 space-y-0.5">
-                            {sortedArchives.map(arch => (
-                                <button key={arch.id} onClick={() => setSelectedFolder(arch.id)} className={`w-full text-left px-3 py-2 text-xs rounded transition-colors flex items-center justify-between group ${selectedFolder === arch.id ? 'bg-brand-50 text-brand-700 font-bold dark:bg-brand-900/30 dark:text-brand-400' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
-                                    <div className="flex flex-col overflow-hidden">
-                                        <span className="truncate font-bold">{arch.name}</span>
-                                        <span className="text-[9px] text-slate-400">{new Date(arch.date).toLocaleString()} • {arch.orders.length}건</span>
-                                    </div>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                         <div onClick={(e) => { e.stopPropagation(); onDeleteArchive(arch.id); }} className="p-1 hover:bg-white rounded text-rose-500"><Icon name="trash" size={12}/></div>
-                                    </div>
-                                </button>
-                            ))}
-                            {sortedArchives.length === 0 && <div className="p-4 text-center text-slate-400 text-xs">보관된 주문이 없습니다.</div>}
-                        </div>
-                    </div>
-                     <div className="flex-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm flex flex-col overflow-hidden">
-                        {currentFolder ? (
-                            <>
-                                <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 flex justify-between items-center">
-                                    <h3 className="text-sm font-bold flex items-center gap-2"><Icon name="folder-open" className="text-brand-500"/> {currentFolder.name} <span className="text-xs font-normal text-slate-400">({currentFolder.orders.length}건)</span></h3>
-                                    <div className="flex gap-2">
-                                         <button onClick={() => onRestore(currentFolder.id)} className="text-xs bg-white border border-slate-300 px-2 py-1 rounded hover:bg-slate-50 flex items-center gap-1"><Icon name="arrow-u-up-left"/> 주문목록으로 복원</button>
-                                         <button onClick={() => handleDownloadFolder(currentFolder)} className="text-xs bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 flex items-center gap-1"><Icon name="download-simple"/> 엑셀 저장</button>
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-y-auto">
-                                    <table className="w-full text-xs text-left">
-                                        <thead className="bg-slate-50 dark:bg-dark-input text-slate-500 border-b dark:border-slate-700 sticky top-0">
-                                            <tr>
-                                                <th className="p-2">닉네임</th>
-                                                <th className="p-2">상품명</th>
-                                                <th className="p-2 text-right">수량</th>
-                                                <th className="p-2 text-right">금액</th>
-                                                <th className="p-2">주소</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                            {currentFolder.orders.map((o, idx) => (
-                                                <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                                    <td className="p-2 font-bold">{o.customer}</td>
-                                                    <td className="p-2">{o.product}</td>
-                                                    <td className="p-2 text-right">{o.quantity}</td>
-                                                    <td className="p-2 text-right font-mono">{o.price.toLocaleString()}</td>
-                                                    <td className="p-2 truncate max-w-xs">{o.addressText} {o.addressDetail}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-sm">
-                                <Icon name="archive-box" size={48} className="mb-2 opacity-20"/>
-                                <p>좌측에서 보관된 폴더를 선택하세요.</p>
-                            </div>
-                        )}
-                     </div>
                 </div>
             );
         };
@@ -1660,6 +1687,14 @@
                 }
             
                 document.body.removeChild(textArea);
+            };
+            
+            // [NEW] Define handleSidebarClick here, inside App component
+            const handleSidebarClick = (customerName) => { 
+                setSelectedCustomerFolder(customerName); 
+                const msg = generateOrderSummary(customerName); 
+                setManualMessage(msg); 
+                handleCopy(msg); 
             };
 
             const handleUnpaidFilterClick = useCallback((type) => {
