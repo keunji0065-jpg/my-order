@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Lite) - v4.02 (오류 완전 수정)</title>
+    <title>강은지 주문서 PRO (Lite) - v4.03 (설문결과 원본 업로드 지원)</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -214,6 +214,7 @@
             </div>
         );
 
+        // --- AddressAdminPanel: 헤더 제거, 기능만 유지 ---
         const AddressAdminPanel = ({ selectedOrder, onSaveAddress, showToast }) => {
             const [localAddr, setLocalAddr] = useState({ recipientName: '', phone: '', zipCode: '', addressText: '', addressDetail: '', shippingMemo: '' });
             const [tab, setTab] = useState('input');
@@ -380,10 +381,12 @@
                 showToast(`닉네임이 '${selectedCustomer}' → '${newName}'으로 변경되었습니다.`);
             };
             
+            // [스마트 업로드] 설문 결과 파일 호환성 개선 + 전화번호/우편번호 0 복원
             const handleFileUpload = (e) => { 
                 const file = e.target.files[0]; 
                 if (!file) return; 
                 
+                // 엑셀(.xlsx) 파일 업로드 시도 시 경고
                 if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
                     showToast("엑셀 파일(.xlsx)은 업로드할 수 없습니다. [다른 이름으로 저장] -> [CSV UTF-8]로 저장 후 올려주세요.", "error");
                     e.target.value = null;
@@ -393,11 +396,11 @@
                 Papa.parse(file, { 
                     header: true, 
                     skipEmptyLines: true, 
-                    encoding: "UTF-8", 
                     complete: (results) => { 
                         const newDB = { ...customerDB }; 
                         let count = 0; 
                         
+                        // 헤더 매핑 도우미 함수 (키워드 매칭)
                         const findColumn = (keywords) => {
                             const headers = results.meta.fields || [];
                             for (const keyword of keywords) {
@@ -407,6 +410,7 @@
                             return null;
                         };
 
+                        // 필수 및 선택 컬럼 자동 매핑
                         const nameField = findColumn(['닉네임', '이름', '성함', '참여자']);
                         const recipientField = findColumn(['성함', '수령인', '받는분', '이름']);
                         const phoneField = findColumn(['핸드폰', '연락처', '전화']);
@@ -422,6 +426,7 @@
                         results.data.forEach(row => { 
                             const nick = row[nameField]?.trim();
                             if (nick) { 
+                                // 전화번호: 010... 또는 ="010..." 형태 모두 처리 + 포맷팅
                                 let phone = row[phoneField] || '';
                                 if (phone && typeof phone === 'string' && phone.startsWith('="') && phone.endsWith('"')) {
                                     phone = phone.slice(2, -1);
@@ -429,10 +434,12 @@
                                 const phoneMatch = phone.match(/(01[016789])\D*(\d{3,4})\D*(\d{4})/);
                                 if (phoneMatch) phone = `${phoneMatch[1]}-${phoneMatch[2]}-${phoneMatch[3]}`;
 
+                                // 주소 & 우편번호 파싱
                                 let fullAddr = row[addrField] || '';
-                                let zipCode = row[zipField] || '';
+                                let zipCode = row[zipField] || ''; // 별도 우편번호 컬럼이 있으면 우선 사용
                                 let addressText = fullAddr;
                                 
+                                // 별도 컬럼이 없고 주소에 (12345)가 포함된 경우 분리
                                 if (!zipCode && fullAddr) {
                                     const zipMatch = fullAddr.match(/^\(?(\d{5})\)?\s*(.*)$/);
                                     if (zipMatch) {
@@ -441,6 +448,7 @@
                                     }
                                 }
 
+                                // 우편번호 복원 (="12345" -> 12345)
                                 if (zipCode && typeof zipCode === 'string' && zipCode.startsWith('="') && zipCode.endsWith('"')) {
                                     zipCode = zipCode.slice(2, -1);
                                 }
@@ -450,7 +458,7 @@
                                     phone: phone, 
                                     zipCode: zipCode, 
                                     addressText: addressText, 
-                                    addressDetail: '', 
+                                    addressDetail: '', // 상세주소 자동 분리는 어려우므로 일단 비움
                                     shippingMemo: row[memoField] || '' 
                                 }; 
                                 count++; 
@@ -463,14 +471,22 @@
                 e.target.value = null; 
             };
 
+            // [데이터 보존] 다운로드 시 우편번호/전화번호 0 유지 (="010..." 포맷 사용)
             const handleFileDownload = () => { 
                 try {
+                    if (!customerDB) {
+                        showToast("고객 데이터가 없습니다.", "error");
+                        return;
+                    }
+
                     const rows = Object.entries(customerDB).map(([nick, info]) => {
+                        // 우편번호 0 유지 처리
                         let zip = info.zipCode || '';
                         if (zip && /^\d+$/.test(zip) && (zip.startsWith('0') || zip.length === 5)) {
                              zip = `="${zip}"`; 
                         }
 
+                        // 전화번호 0 유지 처리 (010... -> ="010...")
                         let phone = info.phone || '';
                          if (phone && (phone.includes('-') || phone.startsWith('0'))) {
                              phone = `="${phone}"`;
