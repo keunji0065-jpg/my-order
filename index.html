@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Lite) - v4.21 (고객관리 핸들러 수정)</title>
+    <title>강은지 주문서 PRO (Lite) - v4.22 (미수금 필터 정밀화)</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -1575,11 +1575,27 @@
                             if (currentProductUnpaid > 0) { eligibleCustomers.add(customer); } 
                         }
                     });
-                    result = result.filter(o => eligibleCustomers.has(o.customer || '미지정'));
+                    
+                    // [Modified] Filter orders: Must be eligible customer AND meet specific row criteria
+                    result = result.filter(o => {
+                        if (!eligibleCustomers.has(o.customer || '미지정')) return false;
+
+                        if (unpaidFilter === 'cash') {
+                            // Only show rows that are not fully paid
+                            return !o.isPaid;
+                        }
+                        if (unpaidFilter === 'ship') {
+                            // Only show rows that have unpaid shipping
+                            const isFirst = firstOrderIds[o.customer] === o.id;
+                            const hasShipping = (o.customShippingFee !== null && o.customShippingFee !== undefined) || (isFirst && quickShipping > 0);
+                            return hasShipping && !o.isShippingPaid;
+                        }
+                        return true;
+                    });
                 }
                 if (selectedCustomerFolder !== 'all') { result = result.filter(o => o.customer === selectedCustomerFolder); }
                 return result;
-            }, [orders, filterText, unpaidFilter, quickShipping, selectedCustomerFolder]);
+            }, [orders, filterText, unpaidFilter, quickShipping, selectedCustomerFolder, firstOrderIds]);
 
             const customerFolders = useMemo(() => {
                 let base = orders;
