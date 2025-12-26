@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO (Lite) - v4.22 (미수금 필터 정밀화)</title>
+    <title>강은지 주문서 PRO (Lite) - v4.60 (레이아웃 틀어짐 수정)</title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -49,11 +49,11 @@
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         *:focus { outline: none !important; }
         
-        /* 리스트 레이아웃 조정: 닉네임 확보 */
-        .grid-rows-compact { grid-template-columns: 30px 60px 85px 140px 45px 1.5fr 45px 70px 30px 1fr 30px; }
+        /* [수정] 그리드 레이아웃 완전 재조정 (11개 컬럼) */
+        /* 체크(30) 날짜(60) 상태(100) 닉네임(150) 코드(40) 상품명(1.8fr) 수량(40) 금액(80) 주소(30) 메모(1fr) 삭제(30) */
+        .grid-rows-compact { grid-template-columns: 30px 60px 100px 150px 40px 1.8fr 40px 80px 30px 1fr 30px; }
         .dragging { opacity: 0.5; border: 2px dashed #627d98; }
         
-        /* --- 인쇄 전용 스타일 --- */
         @media print {
             @page { size: A4; margin: 0; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -285,21 +285,25 @@
                                     <table className="w-full text-xs text-left">
                                         <thead className="bg-slate-50 dark:bg-dark-input text-slate-500 border-b dark:border-slate-700 sticky top-0">
                                             <tr>
-                                                <th className="p-2">닉네임</th>
+                                                <th className="p-2 w-20">닉네임</th>
                                                 <th className="p-2">상품명</th>
-                                                <th className="p-2 text-right">수량</th>
-                                                <th className="p-2 text-right">금액</th>
+                                                <th className="p-2 w-12 text-right">수량</th>
+                                                <th className="p-2 w-20 text-right">금액</th>
+                                                <th className="p-2 w-20">수령인</th>
+                                                <th className="p-2 w-28">전화번호</th>
                                                 <th className="p-2">주소</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                             {currentFolder.orders.map((o, idx) => (
                                                 <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                                    <td className="p-2 font-bold">{o.customer}</td>
-                                                    <td className="p-2">{o.product}</td>
+                                                    <td className="p-2 font-bold truncate">{o.customer}</td>
+                                                    <td className="p-2 truncate">{o.product}</td>
                                                     <td className="p-2 text-right">{o.quantity}</td>
                                                     <td className="p-2 text-right font-mono">{o.price.toLocaleString()}</td>
-                                                    <td className="p-2 truncate max-w-xs">{o.addressText} {o.addressDetail}</td>
+                                                    <td className="p-2 truncate">{o.recipientName}</td>
+                                                    <td className="p-2 font-mono text-[11px]">{o.phone}</td>
+                                                    <td className="p-2 truncate max-w-xs" title={o.addressText + ' ' + o.addressDetail}>{o.addressText} {o.addressDetail}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -439,7 +443,7 @@
             );
         };
 
-        const CustomerTab = ({ customerDB, setCustomerDB, orders, showToast, setOrders, onResetCustomers }) => {
+        const CustomerTab = ({ customerDB, setCustomerDB, orders, showToast, setOrders, onResetCustomers, handleSidebarClick }) => {
             const [selectedCustomer, setSelectedCustomer] = useState(null);
             const [search, setSearch] = useState('');
             const [isRenaming, setIsRenaming] = useState(false);
@@ -486,7 +490,6 @@
                 showToast(`닉네임이 '${selectedCustomer}' → '${newName}'으로 변경되었습니다.`);
             };
             
-            // [스마트 업로드] 엑셀/CSV 호환 + 데이터 자동 정제
             const handleFileUpload = async (e) => { 
                 const file = e.target.files[0]; 
                 if (!file) return; 
@@ -497,7 +500,6 @@
                     
                     const headers = Object.keys(data[0] || {});
                     
-                    // [수정] 닉네임 인식 우선순위 (닉네임 > 이름 > 성함)
                     const findColumn = (keywords) => {
                          for (const keyword of keywords) {
                              const match = headers.find(h => h.includes(keyword));
@@ -521,14 +523,12 @@
                     data.forEach(row => {
                         const nick = row[nameField]?.toString().trim();
                         if (nick) {
-                            // 전화번호 포맷팅 (010-xxxx-xxxx)
                             let phone = row[phoneField] ? row[phoneField].toString() : '';
                             if (phone.startsWith('="') && phone.endsWith('"')) phone = phone.slice(2, -1);
                             
                             const phoneMatch = phone.match(/(01[016789])\D*(\d{3,4})\D*(\d{4})/);
                             if (phoneMatch) phone = `${phoneMatch[1]}-${phoneMatch[2]}-${phoneMatch[3]}`;
 
-                            // 주소 파싱 및 우편번호 분리
                             let fullAddr = row[addrField] ? row[addrField].toString() : '';
                             let zipCode = row[zipField] ? row[zipField].toString() : '';
                             let addressText = fullAddr;
@@ -926,7 +926,7 @@
             const [customerDB, setCustomerDB] = useState(() => JSON.parse(localStorage.getItem('customerDB')) || {}); 
             const [orders, setOrders] = useState(() => JSON.parse(localStorage.getItem('youtubeOrders')) || []);
             const [archives, setArchives] = useState(() => JSON.parse(localStorage.getItem('orderArchives')) || []); 
-            const [googleScriptUrl, setGoogleScriptUrl] = useState('https://script.google.com/macros/s/AKfycbyYfKsuD0NIn9F2JiRzUwKM3s9vjs6RGuidiJJooeioWm8C2EGhgPrxMCUrpXbnSiz90Q/exec');
+            const [googleScriptUrl, setGoogleScriptUrl] = useState('https://script.google.com/macros/s/AKfycbzw-bZdXE5B6jzSCv0YYblSrUTiS9jwa0bJAVWyTYkfTIujkZ6Wd0z7Os-_b-_H-aCl1g/exec');
             const [quickShipping, setQuickShipping] = useState(4000); 
             const [speedInput, setSpeedInput] = useState('');
             const [isProcessing, setIsProcessing] = useState(false);
@@ -1290,6 +1290,10 @@
                         setCustomerDB(newDB);
                         customerCount = Object.keys(newDB).length;
                     } 
+                    // [NEW] Load Archives
+                    if (data.archives) {
+                        setArchives(JSON.parse(data.archives));
+                    }
                     showToast(`불러오기 완료 (고객 ${customerCount}명 / 주문 ${orderCount}건)`); 
                 } catch (e) { 
                     showToast("실패: " + e.message, "error"); 
@@ -1302,12 +1306,17 @@
                 if (!googleScriptUrl) { showToast("설정된 Google Script URL이 없습니다.", "error"); return; } 
                 setIsSyncing(true); 
                 try { 
-                    const payload = { orders: JSON.stringify(orders), products: JSON.stringify(productHistory), customers: JSON.stringify(customerDB) }; 
+                    const payload = { 
+                        orders: JSON.stringify(orders), 
+                        products: JSON.stringify(productHistory), 
+                        customers: JSON.stringify(customerDB),
+                        archives: JSON.stringify(archives) // [NEW] Save Archives
+                    }; 
                     const res = await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify(payload) }); 
                     const json = await res.json(); 
                     
                     if (json.result === 'success') {
-                        showToast("저장 완료 (고객주소 및 주문내역)"); 
+                        showToast("저장 완료 (고객주소, 주문내역 및 보관함)"); 
                     } else {
                         throw new Error(json.error || json.message || "Unknown Error"); 
                     }
@@ -1842,7 +1851,7 @@
                                 </div>
                             </>
                         )}
-                        {activeTab === 'customer' && <CustomerTab customerDB={customerDB} setCustomerDB={setCustomerDB} orders={orders} showToast={showToast} setOrders={setOrders} onResetCustomers={handleResetCustomers} />}
+                        {activeTab === 'customer' && <CustomerTab customerDB={customerDB} setCustomerDB={setCustomerDB} orders={orders} showToast={showToast} setOrders={setOrders} onResetCustomers={handleResetCustomers} handleSidebarClick={handleSidebarClick} />}
                         {activeTab === 'receipt' && <ReceiptTab orders={orders} productNumbers={productNumbers} quickShipping={quickShipping} />}
                         {activeTab === 'archive' && <ArchiveTab archives={archives} setArchives={setArchives} onRestore={(id) => handleRestoreArchive(id)} onDeleteArchive={(id) => handleDeleteArchive(id)} />}
                     </main>
