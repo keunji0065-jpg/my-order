@@ -116,19 +116,16 @@
         const sanitizeOrder = (order) => {
             if (!order || typeof order !== 'object') return null;
             
-            // [중요] 한글 키 폴백 추가 (불러오기 문제 해결)
             const customer = order.customer || order['닉네임'] || order['이름'] || order['성함'] || order['주문자'] || order['구매자'] || '';
             const product = order.product || order['상품명'] || order['상품'] || order['품목'] || order['내용'] || '';
             const code = order.code || order['코드'] || order['제품코드'] || '';
             
-            // 금액/수량 폴백 및 파싱 (단가, 비용 추가)
             const rawPriceVal = order.price !== undefined ? order.price : (order['금액'] || order['가격'] || order['판매가'] || order['총금액'] || order['주문금액'] || order['결제금액'] || order['단가'] || order['비용'] || order['상품대금'] || 0);
             const rawPrice = parseNum(rawPriceVal);
             
             const rawQtyVal = order.quantity !== undefined ? order.quantity : (order['수량'] || order['개수'] || 1);
             const rawQty = parseNum(rawQtyVal);
 
-            // 기타 필드 폴백
             const recipientName = order.recipientName || order['수령인'] || order['받는분'] || order['성함(수령인)'] || '';
             const phone = order.phone || order['연락처'] || order['전화번호'] || order['핸드폰'] || '';
             const zipCode = order.zipCode || order['우편번호'] || '';
@@ -478,9 +475,18 @@
             const allCustomers = useMemo(() => { const orderCustomers = new Set(orders.map(o => o.customer)); const dbCustomers = Object.keys(customerDB); const merged = new Set([...orderCustomers, ...dbCustomers]); return Array.from(merged).filter(c => c && c.toLowerCase().includes(search.toLowerCase())).sort(); }, [orders, customerDB, search]);
             const customerOrders = useMemo(() => { if (!selectedCustomer) return []; return orders.filter(o => o.customer === selectedCustomer).sort((a,b) => b.id - a.id); }, [orders, selectedCustomer]);
             
+            // [수정] 수동 수정 시 즉시 기존 주문도 업데이트되도록 setOrders 추가
             const handleUpdateCustomer = (field, value) => { 
                 if (!selectedCustomer) return; 
-                setCustomerDB(prev => ({ ...prev, [selectedCustomer]: { ...prev[selectedCustomer], [field]: value } })); 
+                setCustomerDB(prev => ({ ...prev, [selectedCustomer]: { ...prev[selectedCustomer], [field]: value } }));
+                
+                // 해당 고객의 모든 주문 건에 대해 변경된 정보 즉시 반영
+                setOrders(prev => prev.map(o => {
+                    if (o.customer === selectedCustomer) {
+                        return { ...o, [field]: value, isAddressFilled: true }; // 수정했으므로 주소 입력된 것으로 간주
+                    }
+                    return o;
+                }));
             };
 
             const startRenaming = () => {
@@ -580,6 +586,22 @@
                         }
                     });
                     setCustomerDB(newDB); 
+                    
+                    // [수정] 엑셀 업로드 시 기존 주문에도 주소 자동 적용 (이미 있어도 덮어쓰기 X -> 질문의 요지상 파일 업로드는 그대로 둠, 수동 수정만 연동)
+                    // 질문자가 '업데이트되면 반영'을 원했으므로, 파일 업로드 시에도 새로운 정보가 들어오면 기존 주문에 반영되도록 수정
+                    setOrders(prev => prev.map(o => {
+                        if (o.customer && newDB[o.customer]) {
+                            const info = newDB[o.customer];
+                            // 기존에는 !o.isAddressFilled 일 때만 넣었으나, 최신 정보 업데이트를 위해 항상 반영하도록 수정 (또는 기존 값이 없을 때만)
+                            // "주소 업데이트되면 기존 주문건 찾아서 일치하면 주소 넣어주는 기능" -> 보통은 빈값 채우기를 의미하나,
+                            // 정보 갱신의 의미라면 덮어쓰기가 맞음. 여기서는 안전하게 '빈 값' 채우기 로직 유지하되, 수동 수정은 덮어쓰기로 구현.
+                            if (!o.isAddressFilled) {
+                                return sanitizeOrder({ ...o, recipientName: info.recipientName, phone: info.phone, zipCode: info.zipCode, addressText: info.addressText, shippingMemo: info.shippingMemo, isAddressFilled: true });
+                            }
+                        }
+                        return o;
+                    }));
+
                     showToast(`총 ${count}명 고객 정보가 업데이트되었습니다.`, 'success');
                 };
 
@@ -1192,7 +1214,56 @@
             const handleToggleShippingEdit = (id) => { setEditingShippingId(id === editingShippingId ? null : id); setEditingAmountId(null); };
             const handleShippingToggle = (id) => { const targetOrder = orders.find(o => o.id === id); if (!targetOrder) return; const customer = targetOrder.customer; const newStatus = !targetOrder.isShippingPaid; if (window.event && window.event.type === 'contextmenu') { window.event.preventDefault(); setEditingShippingId(id === editingShippingId ? null : id); return; } setOrders(prev => prev.map(o => { if (o.customer === customer) { return sanitizeOrder({ ...o, isShippingPaid: newStatus }); } return o; })); };
             const handleGridKeyDown = (e, field, idx) => { if (e.key === 'Enter') { e.preventDefault(); const nextId = `cell-${field}-${idx + 1}`; const nextEl = document.getElementById(nextId); if (nextEl) { nextEl.focus(); nextEl.select(); } } };
-            const getCSVString = (listData, mode) => { const list = [...listData].map(sanitizeOrder).sort((a, b) => (a.customer || '').localeCompare(b.customer || '')); const firstIds = {}; list.forEach(o => { if (o.customer) { if (!firstIds[o.customer] || o.id < firstIds[o.customer]) { firstIds[o.customer] = o.id; } } }); const clean = (val) => '"' + String(val || '').replace(/"/g, '""') + '"'; const cleanPhone = (val) => { if (!val) return '""'; const strVal = String(val); return "\"\u200B" + strVal + '"'; }; if (mode === 'invoice') { const excelHeaders = ['', '', '', '', '상품명', '수령인', '연락처', '주소', '배송메모', '', '메모', '우편번호', '']; const csv = [excelHeaders.join(',')].concat(list.map(o => { let quantitySuffix = ''; const qtyNum = parseNum(o.quantity); if (qtyNum >= 2) { quantitySuffix = ` ★${qtyNum}`; } const code = productNumbers[o.product] ? `[${o.customer}] ${productNumbers[o.product]} - ` : `[${o.customer || '미지정'}] `; const productName = `${code}${o.product}${quantitySuffix}`; return ['', '', '', '', clean(productName), clean(o.recipientName), cleanPhone(o.phone), clean((o.addressText||'') + ' ' + (o.addressDetail||'')), clean(o.shippingMemo), '', clean(o.memo), cleanPhone(o.zipCode), ''].join(','); })).join('\n'); return "\ufeff" + csv; } else { const headers = ['닉네임', '입금명', '상품명', '수량', '금액', '입금액(현금)', '카드결제액', '배송비', '미수금', '수령인', '연락처', '우편번호', '주소', '배송메모', '메모']; const csv = [headers.join(',')].concat(list.map(o => { const isFirst = firstIds[o.customer] === o.id; const ship = o.customShippingFee ?? quickShipping; const shipCharge = isFirst ? ship : 0; const priceNum = parseNum(o.price); const unpaid = Math.max(0, (priceNum + shipCharge) - (o.deposit + o.cardAmount + (isFirst && o.isShippingPaid ? ship : 0))); const code = productNumbers[o.product] ? `[${productNumbers[o.product]}] ` : ''; return [clean(o.customer), clean(o.phone), clean(code + o.product), o.quantity, priceNum, clean(o.deposit), clean(o.cardAmount), clean(shipCharge), clean(unpaid), clean(o.recipientName), cleanPhone(o.phone), cleanPhone(o.zipCode), clean((o.addressText||'') + ' ' + (o.addressDetail||'')), clean(o.shippingMemo), clean(o.memo)].join(','); })).join('\n'); return "\ufeff" + csv; } };
+            const getCSVString = (listData, mode) => { 
+                const list = [...listData].map(sanitizeOrder).sort((a, b) => (a.customer || '').localeCompare(b.customer || '')); 
+                const clean = (val) => '"' + String(val || '').replace(/"/g, '""') + '"';
+                const cleanPhone = (val) => { if (!val) return '""'; const strVal = String(val); return "\"\u200B" + strVal + '"'; };
+                
+                if (mode === 'invoice') { 
+                    const excelHeaders = ['', '', '', '', '상품명', '수령인', '연락처', '주소', '배송메모', '', '메모', '우편번호', '']; 
+                    const lines = [excelHeaders.join(',')];
+                    
+                    let prevCustomer = null;
+                    
+                    list.forEach(o => {
+                        // [수정] 고객이 바뀌면 [닉네임] 만 있는 행을 먼저 추가하되, 배송 정보(수령인, 연락처, 주소 등)도 포함
+                        if (o.customer !== prevCustomer) {
+                            prevCustomer = o.customer;
+                            const customerName = o.customer ? `[${o.customer}]` : `[미지정]`;
+                            // 닉네임 행에 배송 정보 매핑
+                            lines.push(['', '', '', '', clean(customerName), clean(o.recipientName), cleanPhone(o.phone), clean((o.addressText||'') + ' ' + (o.addressDetail||'')), clean(o.shippingMemo), '', clean(o.memo), cleanPhone(o.zipCode), ''].join(','));
+                        }
+                        
+                        let quantitySuffix = ''; 
+                        const qtyNum = parseNum(o.quantity); 
+                        if (qtyNum >= 2) { quantitySuffix = ` ★${qtyNum}`; } 
+                        
+                        // 상품명에는 코드와 상품명만 들어감 (닉네임 제외)
+                        const code = productNumbers[o.product] ? `${productNumbers[o.product]} - ` : ''; 
+                        const productName = `${code}${o.product}${quantitySuffix}`; 
+                        
+                        // 상품 행에도 배송 정보 포함 (기존 로직 유지)
+                        lines.push(['', '', '', '', clean(productName), clean(o.recipientName), cleanPhone(o.phone), clean((o.addressText||'') + ' ' + (o.addressDetail||'')), clean(o.shippingMemo), '', clean(o.memo), cleanPhone(o.zipCode), ''].join(','));
+                    });
+                    
+                    return "\ufeff" + lines.join('\n'); 
+                } else { 
+                    const headers = ['닉네임', '입금명', '상품명', '수량', '금액', '입금액(현금)', '카드결제액', '배송비', '미수금', '수령인', '연락처', '우편번호', '주소', '배송메모', '메모']; 
+                    const firstIds = {}; 
+                    list.forEach(o => { if (o.customer) { if (!firstIds[o.customer] || o.id < firstIds[o.customer]) { firstIds[o.customer] = o.id; } } });
+                    
+                    const csv = [headers.join(',')].concat(list.map(o => { 
+                        const isFirst = firstIds[o.customer] === o.id; 
+                        const ship = o.customShippingFee ?? quickShipping; 
+                        const shipCharge = isFirst ? ship : 0; 
+                        const priceNum = parseNum(o.price); 
+                        const unpaid = Math.max(0, (priceNum + shipCharge) - (o.deposit + o.cardAmount + (isFirst && o.isShippingPaid ? ship : 0))); 
+                        const code = productNumbers[o.product] ? `[${productNumbers[o.product]}] ` : ''; 
+                        return [clean(o.customer), clean(o.phone), clean(code + o.product), o.quantity, priceNum, clean(o.deposit), clean(o.cardAmount), clean(shipCharge), clean(unpaid), clean(o.recipientName), cleanPhone(o.phone), cleanPhone(o.zipCode), clean((o.addressText||'') + ' ' + (o.addressDetail||'')), clean(o.shippingMemo), clean(o.memo)].join(','); 
+                    })).join('\n'); 
+                    return "\ufeff" + csv; 
+                } 
+            };
             const handleDownloadCSV = (mode) => { const csvString = getCSVString(orders, mode); const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; const timestamp = new Date().toISOString().slice(0, 10); link.setAttribute('download', `${mode === 'invoice' ? '송장용_' : '전체주문_'}${timestamp}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
             const handleDownloadProductCSV = () => { const summary = {}; orders.forEach(o => { const code = productNumbers[o.product] ? `[${productNumbers[o.product]}] ` : ''; const key = (code + o.product) || '미지정'; summary[key] = (summary[key] || 0) + parseNum(o.quantity); }); const csvContent = "\ufeff상품명,수량\n" + Object.entries(summary).map(e => e.join(',')).join('\n'); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.setAttribute('download', `발주리스트_${new Date().toISOString().slice(0, 10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
 
@@ -1616,13 +1687,13 @@
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                         {recentProducts.map(([name, price]) => (
-                                            <tr key={name} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                                            <tr key={name} onClick={() => startEdit(name, price, productNumbers[name])} className="hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
                                                 <td className="p-2 font-mono text-slate-400">{productNumbers[name] || '-'}</td>
                                                 <td className="p-2 font-bold">{name}</td>
                                                 <td className="p-2 text-right">{price.toLocaleString()}</td>
                                                 <td className="p-2 text-center">
-                                                    <button onClick={() => startEdit(name, price, productNumbers[name])} className="text-brand-600 hover:text-brand-700 p-1"><Icon name="pencil-simple"/></button>
-                                                    <button onClick={() => { if(window.confirm('삭제하시겠습니까?')) handleDeleteProductHistory(name); }} className="text-rose-500 hover:text-rose-600 p-1 ml-1"><Icon name="trash"/></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); startEdit(name, price, productNumbers[name]); }} className="text-brand-600 hover:text-brand-700 p-1"><Icon name="pencil-simple"/></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); if(window.confirm('삭제하시겠습니까?')) handleDeleteProductHistory(name); }} className="text-rose-500 hover:text-rose-600 p-1 ml-1"><Icon name="trash"/></button>
                                                 </td>
                                             </tr>
                                         ))}
