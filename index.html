@@ -49,7 +49,7 @@
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         *:focus { outline: none !important; }
         
-        /* 5번 요청 해결: 체크(30) 날짜(60) 상태(100) 닉네임(100) 코드(40) 상품명(2.5fr) 수량(35) 금액(70) 주소(30) 메모(0.7fr) 삭제(30) */
+        /* 체크(30) 날짜(60) 상태(100) 닉네임(100) 코드(40) 상품명(2.5fr) 수량(35) 금액(70) 주소(30) 메모(0.7fr) 삭제(30) */
         .grid-rows-compact { grid-template-columns: 30px 60px 100px 100px 40px 2.5fr 35px 70px 30px 0.7fr 30px; }
         .dragging { opacity: 0.5; border: 2px dashed #627d98; }
         
@@ -93,11 +93,13 @@
         const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
         // --- GLOBAL UTILITIES ---
+        // 숫자 변환 강화: "10,000원", "₩10000" 등 문자 섞여도 숫자만 추출
         const parseNum = (val) => {
             if (typeof val === 'number') return val;
             if (!val) return 0;
-            const firstLine = String(val).split('\n')[0].replace(/,/g, '');
-            const num = parseFloat(firstLine);
+            const str = String(val).split('\n')[0].replace(/,/g, '');
+            const cleanStr = str.replace(/[^0-9.-]/g, ''); // 숫자, 점(.), 마이너스(-) 제외 모두 제거
+            const num = parseFloat(cleanStr);
             return isNaN(num) ? 0 : num;
         };
         
@@ -113,31 +115,56 @@
 
         const sanitizeOrder = (order) => {
             if (!order || typeof order !== 'object') return null;
-            const rawPrice = parseNum(order.price !== undefined ? order.price : 0);
-            const rawQty = parseNum(order.quantity !== undefined ? order.quantity : 1);
             
-            const isAddressFilled = !!order.recipientName && !!order.phone && !!order.addressText;
+            // [중요] 한글 키 폴백 추가 (불러오기 문제 해결)
+            const customer = order.customer || order['닉네임'] || order['이름'] || order['성함'] || order['주문자'] || order['구매자'] || '';
+            const product = order.product || order['상품명'] || order['상품'] || order['품목'] || order['내용'] || '';
+            const code = order.code || order['코드'] || order['제품코드'] || '';
+            
+            // 금액/수량 폴백 및 파싱 (단가, 비용 추가)
+            const rawPriceVal = order.price !== undefined ? order.price : (order['금액'] || order['가격'] || order['판매가'] || order['총금액'] || order['주문금액'] || order['결제금액'] || order['단가'] || order['비용'] || order['상품대금'] || 0);
+            const rawPrice = parseNum(rawPriceVal);
+            
+            const rawQtyVal = order.quantity !== undefined ? order.quantity : (order['수량'] || order['개수'] || 1);
+            const rawQty = parseNum(rawQtyVal);
+
+            // 기타 필드 폴백
+            const recipientName = order.recipientName || order['수령인'] || order['받는분'] || order['성함(수령인)'] || '';
+            const phone = order.phone || order['연락처'] || order['전화번호'] || order['핸드폰'] || '';
+            const zipCode = order.zipCode || order['우편번호'] || '';
+            const addressText = order.addressText || order['주소'] || order['기본주소'] || order['배송지'] || '';
+            const addressDetail = order.addressDetail || order['상세주소'] || '';
+            const shippingMemo = order.shippingMemo || order['배송메모'] || order['배송요청사항'] || order['요청사항'] || '';
+            const memo = order.memo || order['메모'] || order['비고'] || '';
+            
+            const deposit = parseNum(order.deposit || order['입금액'] || order['입금'] || order['현금'] || 0);
+            const cardAmount = parseNum(order.cardAmount || order['카드'] || order['카드금액'] || order['카드결제'] || 0);
+            const customShippingFee = (order.customShippingFee !== undefined && order.customShippingFee !== null) 
+                                      ? parseNum(order.customShippingFee) 
+                                      : ((order['배송비'] !== undefined) ? parseNum(order['배송비']) : null);
+
+            const isAddressFilled = !!recipientName && !!phone && !!addressText;
 
             return {
                 id: order.id || Date.now() + Math.random(),
-                customer: order.customer || '',
-                product: order.product || '',
-                code: order.code || '',
+                customer: customer,
+                product: product,
+                code: code,
                 quantity: rawQty,
                 price: rawPrice,
-                deposit: Number(order.deposit) || 0,
-                cardAmount: Number(order.cardAmount) || 0,
-                isPaid: !!order.isPaid,
+                deposit: deposit,
+                cardAmount: cardAmount,
+                isPaid: !!order.isPaid || String(order.isPaid).toUpperCase() === 'TRUE',
                 isCardPaid: !!order.isCardPaid,
-                isShippingPaid: !!order.isShippingPaid,
-                customShippingFee: order.customShippingFee === null ? null : (Number(order.customShippingFee) || 0),
-                memo: order.memo || '',
-                recipientName: order.recipientName || '',
-                phone: order.phone || '', 
-                zipCode: order.zipCode || '',
-                addressText: order.addressText || '',
-                addressDetail: order.addressDetail || '',
-                shippingMemo: order.shippingMemo || '',
+                isShippingPaid: !!order.isShippingPaid || String(order.isShippingPaid || order['배송비결제']).toUpperCase() === 'TRUE',
+                customShippingFee: customShippingFee,
+                memo: memo,
+                recipientName: recipientName,
+                phone: phone, 
+                zipCode: zipCode,
+                addressText: addressText,
+                addressDetail: addressDetail,
+                shippingMemo: shippingMemo,
                 isCRM: !!order.isCRM,
                 isAddressFilled: isAddressFilled
             };
@@ -1169,7 +1196,8 @@
             const handleDownloadCSV = (mode) => { const csvString = getCSVString(orders, mode); const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; const timestamp = new Date().toISOString().slice(0, 10); link.setAttribute('download', `${mode === 'invoice' ? '송장용_' : '전체주문_'}${timestamp}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
             const handleDownloadProductCSV = () => { const summary = {}; orders.forEach(o => { const code = productNumbers[o.product] ? `[${productNumbers[o.product]}] ` : ''; const key = (code + o.product) || '미지정'; summary[key] = (summary[key] || 0) + parseNum(o.quantity); }); const csvContent = "\ufeff상품명,수량\n" + Object.entries(summary).map(e => e.join(',')).join('\n'); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.setAttribute('download', `발주리스트_${new Date().toISOString().slice(0, 10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
 
-            // --- 8번 해결: 구글 시트 불러오기 오류 수정 ---
+            // --- 8번 해결: 구글 시트 불러오기 오류 수정 (헤더 매핑 추가) ---
+            // [수정] 닉네임/금액이 넘어오지 않는 문제 해결 (공백 제거 및 다양한 헤더명 매핑)
             const handleLoadFromGoogle = async () => { 
                 if (!googleScriptUrl) { showToast("설정된 Google Script URL이 없습니다.", "error"); return; } 
                 setIsSyncing(true); 
@@ -1184,25 +1212,87 @@
                         let loadedOrders = [];
                         try {
                             const parsed = JSON.parse(data.orders);
-                            // 구글 스크립트가 2차원 배열로 주는지, 객체 배열로 주는지 체크
+                            
+                            // 헤더 매핑 (한글 -> 영문 키)
+                            const getMappedKey = (header) => {
+                                const h = String(header).trim().replace(/\s+/g, ''); // 모든 공백 제거
+                                const map = {
+                                    '닉네임': 'customer', '이름': 'customer', '성함': 'customer', '구매자': 'customer', 'customer': 'customer', '주문자': 'customer',
+                                    '상품명': 'product', '상품': 'product', '품목': 'product', 'product': 'product', '주문내역': 'product',
+                                    '코드': 'code', '제품코드': 'code', 'code': 'code',
+                                    '수량': 'quantity', '개수': 'quantity', 'qty': 'quantity', 'quantity': 'quantity',
+                                    
+                                    // [수정] 금액 관련 키워드 대폭 추가 (비용, 단가 포함)
+                                    '금액': 'price', '가격': 'price', '판매가': 'price', '총금액': 'price', 'price': 'price', 
+                                    '주문금액': 'price', '결제금액': 'price', '상품금액': 'price', '단가': 'price', '비용': 'price', 
+                                    '공급가액': 'price', '합계': 'price',
+                                    
+                                    '입금액': 'deposit', '입금': 'deposit', '현금': 'deposit', '입금액(현금)': 'deposit', 'deposit': 'deposit',
+                                    '카드': 'cardAmount', '카드금액': 'cardAmount', '카드결제': 'cardAmount', '카드결제액': 'cardAmount', 'cardAmount': 'cardAmount',
+                                    '배송비': 'customShippingFee', '개별배송비': 'customShippingFee', 'customShippingFee': 'customShippingFee',
+                                    '수령인': 'recipientName', '받는분': 'recipientName', 'recipientName': 'recipientName',
+                                    '연락처': 'phone', '전화번호': 'phone', '핸드폰': 'phone', 'phone': 'phone',
+                                    '우편번호': 'zipCode', 'zipCode': 'zipCode',
+                                    '주소': 'addressText', '기본주소': 'addressText', '배송지': 'addressText', 'addressText': 'addressText',
+                                    '상세주소': 'addressDetail', 'addressDetail': 'addressDetail',
+                                    '배송메모': 'shippingMemo', '배송요청사항': 'shippingMemo', '요청사항': 'shippingMemo', 'shippingMemo': 'shippingMemo',
+                                    '메모': 'memo', '비고': 'memo', 'memo': 'memo',
+                                    '배송비결제': 'isShippingPaid', 'isShippingPaid': 'isShippingPaid',
+                                    
+                                    // [충돌 방지용]
+                                    '입금자': 'depositor', '입금자명': 'depositor' 
+                                };
+                                
+                                // 1. 정확한 매칭 (공백제거 후)
+                                if (map[h]) return map[h];
+                                
+                                // 2. 포함 여부 확인 (예: "주문자(닉네임)" -> "customer")
+                                // [수정] 긴 키워드부터 매칭하여 '입금액'이 '금액'에 매칭되는 오류 방지
+                                const sortedKeys = Object.keys(map).sort((a, b) => b.length - a.length);
+                                for (const key of sortedKeys) {
+                                    if (h.includes(key)) return map[key];
+                                }
+                                return h; 
+                            };
+
                             if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
                                 // 2차원 배열(헤더 포함)인 경우
                                 const headers = parsed[0];
                                 loadedOrders = parsed.slice(1).map(row => { 
                                     const obj = {}; 
-                                    headers.forEach((h, i) => obj[h] = row[i]); 
+                                    headers.forEach((h, i) => {
+                                        const key = getMappedKey(h); 
+                                        // 'depositor' 같은 임시 키는 제외하거나 그대로 둠 (sanitizeOrder에서 무시됨)
+                                        obj[key] = row[i];
+                                    }); 
+                                    // boolean 값 처리 (문자열 'TRUE'/'FALSE' 등이 올 수 있음)
+                                    if (String(obj.isPaid).toUpperCase() === 'TRUE') obj.isPaid = true;
+                                    if (String(obj.isShippingPaid).toUpperCase() === 'TRUE') obj.isShippingPaid = true;
+                                    
                                     return sanitizeOrder(obj); 
                                 }); 
                             } else {
                                 // 객체 배열인 경우
-                                loadedOrders = parsed.map(sanitizeOrder);
+                                loadedOrders = parsed.map(o => {
+                                    // 객체 키가 한글일 경우를 대비해 매핑 적용
+                                    const newObj = {};
+                                    Object.keys(o).forEach(k => {
+                                        const key = getMappedKey(k);
+                                        newObj[key] = o[k];
+                                    });
+                                    return sanitizeOrder(newObj);
+                                });
                             }
                         } catch (e) {
                              loadedOrders = [];
+                             console.error("Parsing error", e);
                         }
                         
-                        setOrders(loadedOrders);
-                        orderCount = loadedOrders.length;
+                        // 데이터가 있을 때만 업데이트
+                        if (loadedOrders.length > 0) {
+                            setOrders(loadedOrders);
+                            orderCount = loadedOrders.length;
+                        }
                     } 
                     if (data.products) setProductHistory(JSON.parse(data.products)); 
                     if (data.customers) { 
