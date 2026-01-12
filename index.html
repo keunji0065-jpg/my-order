@@ -137,13 +137,16 @@
             const cardAmount = parseNum(order.cardAmount || order['카드'] || order['카드금액'] || order['카드결제'] || 0);
             
             let customShippingFee = null;
-            if (order.customShippingFee !== undefined && order.customShippingFee !== null && order.customShippingFee !== '') {
+            if (order.customShippingFee !== undefined && order.customShippingFee !== null && String(order.customShippingFee).trim() !== '') {
                  customShippingFee = parseNum(order.customShippingFee);
-            } else if (order['배송비'] !== undefined && order['배송비'] !== null && order['배송비'] !== '') {
-                 const fee = order['배송비'];
-                 customShippingFee = (fee === '' || fee === null) ? null : parseNum(fee);
-            } else if (order['개별배송비'] !== undefined) {
-                 customShippingFee = (order['개별배송비'] === '' || order['개별배송비'] === null) ? null : parseNum(order['개별배송비']);
+            } else {
+                 const potentialFeeKeys = ['배송비', '배송료', '택배비', '개별배송비', '운송료'];
+                 for (const key of potentialFeeKeys) {
+                     if (order[key] !== undefined && order[key] !== null && String(order[key]).trim() !== '') {
+                         customShippingFee = parseNum(order[key]);
+                         break;
+                     }
+                 }
             }
 
             const isAddressFilled = !!recipientName && !!phone && !!addressText;
@@ -151,6 +154,30 @@
             const calculatedIsPaid = (deposit + cardAmount) >= rawPrice;
             const originalIsPaid = !!order.isPaid || String(order.isPaid).toUpperCase() === 'TRUE';
             const finalIsPaid = originalIsPaid || calculatedIsPaid;
+
+            let rawShipPaid = order.isShippingPaid;
+            if (rawShipPaid === undefined) rawShipPaid = order['배송비결제'];
+            if (rawShipPaid === undefined) rawShipPaid = order['배송결제'];
+            if (rawShipPaid === undefined) rawShipPaid = order['배송료결제'];
+            if (rawShipPaid === undefined) rawShipPaid = order['택배비결제'];
+            if (rawShipPaid === undefined) rawShipPaid = order['선불배송'];
+
+            if (rawShipPaid === undefined) {
+                 const allKeys = Object.keys(order);
+                 const paidKey = allKeys.find(k => 
+                    (k.includes('배송') || k.includes('택배')) && 
+                    (k.includes('결제') || k.includes('완료') || k.includes('여부') || k.includes('유무') || k.includes('확인') || k.includes('선불'))
+                 );
+                 if (paidKey) rawShipPaid = order[paidKey];
+            }
+
+            let isShippingPaid = false;
+            if (typeof rawShipPaid === 'boolean') {
+                isShippingPaid = rawShipPaid;
+            } else if (rawShipPaid !== undefined && rawShipPaid !== null) {
+                const s = String(rawShipPaid).trim().toUpperCase();
+                isShippingPaid = (s === 'TRUE' || s === 'Y' || s === 'YES' || s === '1' || s === '예' || s === '완료' || s === 'O' || s === 'ON');
+            }
 
             return {
                 id: order.id || Date.now() + Math.random(),
@@ -163,7 +190,7 @@
                 cardAmount: cardAmount,
                 isPaid: finalIsPaid, 
                 isCardPaid: !!order.isCardPaid,
-                isShippingPaid: !!order.isShippingPaid || String(order.isShippingPaid || order['배송비결제']).toUpperCase() === 'TRUE',
+                isShippingPaid: isShippingPaid,
                 customShippingFee: customShippingFee,
                 memo: memo,
                 recipientName: recipientName,
@@ -235,7 +262,6 @@
             </div>
         );
 
-        // --- ProductManagementTab (Moved Outside App for Stability) ---
         const ProductManagementTab = React.memo(({ 
             recentProducts, 
             productNumbers, 
@@ -270,7 +296,6 @@
 
                 if (!newName) return;
 
-                // Update Data
                 setProductHistory(prev => {
                     const next = { ...prev };
                     if (newName !== oldName) delete next[oldName];
@@ -295,7 +320,6 @@
                     return next;
                 });
 
-                // Update Orders
                 setOrders(prev => prev.map(o => {
                     if (o.product === oldName) {
                         return sanitizeOrder({ 
@@ -404,7 +428,6 @@
             );
         });
 
-        // ... Other Components (ArchiveTab, AddressAdminPanel, CustomerTab, ReceiptTab) ...
         const ArchiveTab = ({ archives, setArchives, onRestore, onDeleteArchive }) => {
             const [selectedFolder, setSelectedFolder] = useState(null);
 
@@ -551,7 +574,6 @@
                     text = text.replace(phoneMatch[0], ''); 
                 } 
                 
-                // [수정] 우편번호 파싱 로직 강화
                 const zipMatch = text.match(/\d{5}/); 
                 if(zipMatch) {
                     zip = zipMatch[0];
@@ -572,7 +594,7 @@
                     ...prev, 
                     recipientName: name || prev.recipientName, 
                     phone: phone || prev.phone, 
-                    zipCode: zip || prev.zipCode, // [수정] 우편번호 적용
+                    zipCode: zip || prev.zipCode, 
                     addressText: address || prev.addressText, 
                     shippingMemo: memo || prev.shippingMemo 
                 })); 
@@ -642,21 +664,13 @@
             const allCustomers = useMemo(() => { const orderCustomers = new Set(orders.map(o => o.customer)); const dbCustomers = Object.keys(customerDB); const merged = new Set([...orderCustomers, ...dbCustomers]); return Array.from(merged).filter(c => c && c.toLowerCase().includes(search.toLowerCase())).sort(); }, [orders, customerDB, search]);
             const customerOrders = useMemo(() => { if (!selectedCustomer) return []; return orders.filter(o => o.customer === selectedCustomer).sort((a,b) => b.id - a.id); }, [orders, selectedCustomer]);
             
-            // [수정] 고객 정보 수정 시 즉시 모든 관련 주문 업데이트 (공백 무시 비교)
             const handleUpdateCustomer = (field, value) => { 
                 if (!selectedCustomer) return; 
                 const cleanKey = selectedCustomer.trim();
-                
-                // 1. 현재 DB 정보 가져와서 새 정보 객체 생성 (비동기 상태 문제 해결)
                 const currentInfo = customerDB[cleanKey] || {};
                 const newInfo = { ...currentInfo, [field]: value };
-                
-                // 2. 고객 DB 업데이트
                 setCustomerDB(prev => ({ ...prev, [cleanKey]: newInfo }));
-                
-                // 3. 해당 고객의 모든 주문 건에 대해 변경된 주소/연락처 정보 강제 동기화
                 setOrders(prev => prev.map(o => {
-                    // 닉네임 비교 시 양쪽 공백 제거 후 비교 (매칭율 상승)
                     if (o.customer && o.customer.trim() === cleanKey) {
                         const isAddressFilled = !!(newInfo.recipientName && newInfo.phone && newInfo.addressText);
                         return sanitizeOrder({ 
@@ -772,7 +786,6 @@
                     });
                     setCustomerDB(newDB); 
                     
-                    // 엑셀 업로드 시 기존 주문의 주소 정보도 최신으로 덮어쓰기 (갱신)
                     setOrders(prev => prev.map(o => {
                         if (o.customer && newDB[o.customer]) {
                             const info = newDB[o.customer];
@@ -1164,7 +1177,7 @@
             const [customerDB, setCustomerDB] = useState(() => JSON.parse(localStorage.getItem('customerDB')) || {}); 
             const [orders, setOrdersState] = useState(() => JSON.parse(localStorage.getItem('youtubeOrders')) || []); 
             const [archives, setArchives] = useState(() => JSON.parse(localStorage.getItem('orderArchives')) || []); 
-            const [googleScriptUrl, setGoogleScriptUrl] = useState('https://script.google.com/macros/s/AKfycbxTnz-75lpaGVw1FuGyAp5svDYeQIp1oLmcgvwoXrKN8XPM1SANjfS0P-1iWKaxi6Bamg/exec');
+            const [googleScriptUrl, setGoogleScriptUrl] = useState('https://script.google.com/macros/s/AKfycbxcPMS0lzM3AwqNqX4MR1INqciIYTepqPtFJgnxjII8M-WeRhFyZTkhkPoAfbj5sR4BgQ/exec');
             
             const [quickShipping, setQuickShipping] = useState(() => Number(localStorage.getItem('quickShipping')) || 4000); 
             
@@ -1312,7 +1325,22 @@
                     }
                 });
             };
-            const handleRestoreArchive = (archiveId) => { const archive = archives.find(a => a.id === archiveId); if (!archive) return; setConfirmModal({ open: true, message: `"${archive.name}" 보관함의 주문들을 복원하시겠습니까?`, onConfirm: () => { setOrders(prev => [...archive.orders, ...prev]); setConfirmModal({ open: false, message: '', onConfirm: null }); showToast("주문이 복원되었습니다."); } }); };
+
+            const handleRestoreArchive = (archiveId) => { 
+                const archive = archives.find(a => a.id === archiveId); 
+                if (!archive) return; 
+                setConfirmModal({ 
+                    open: true, 
+                    message: `"${archive.name}"의 주문들을 다시 주문관리 목록으로 이동하시겠습니까?\n(보관함에서는 사라집니다)`, 
+                    onConfirm: () => { 
+                        setOrders(prev => [...archive.orders, ...prev]); 
+                        setArchives(prev => prev.filter(a => a.id !== archiveId));
+                        setConfirmModal({ open: false, message: '', onConfirm: null }); 
+                        showToast("주문이 주문관리 목록으로 이동되었습니다."); 
+                    } 
+                }); 
+            };
+            
             const handleDeleteArchive = (archiveId) => { setConfirmModal({ open: true, message: "정말로 이 보관함을 삭제하시겠습니까?", onConfirm: () => { setArchives(prev => prev.filter(a => a.id !== archiveId)); setConfirmModal({ open: false, message: '', onConfirm: null }); showToast("보관함이 삭제되었습니다."); } }); };
             const toggleSelectAll = () => { if (selectedOrderIds.size === filteredOrders.length && filteredOrders.length > 0) { setSelectedOrderIds(new Set()); } else { setSelectedOrderIds(new Set(filteredOrders.map(o => o.id))); } };
             const toggleSelectOrder = (id) => { const newSet = new Set(selectedOrderIds); if (newSet.has(id)) newSet.delete(id); else newSet.add(id); setSelectedOrderIds(newSet); };
@@ -1358,22 +1386,16 @@
                     
                     if (field === 'customer') {
                         let newCustomer = value.trim();
-                        
-                        // 1. 전화번호 형식인지 확인하여 고객 찾기
                         const phoneMatch = newCustomer.match(/(01[016789])[- .]?(\d{3,4})[- .]?(\d{4})/);
                         if (phoneMatch) {
                             const formattedPhone = `${phoneMatch[1]}-${phoneMatch[2]}-${phoneMatch[3]}`;
                             const foundNick = findCustomerByPhone(formattedPhone);
                             if (foundNick) newCustomer = foundNick;
                         }
-
-                        // 2. DB에서 고객 매칭 (강화된 findCustomerKey 사용)
                         const dbKey = findCustomerKey(newCustomer);
-                        
                         if (dbKey) {
-                            newCustomer = dbKey; // DB에 저장된 정확한 닉네임으로 교체 (중요)
+                            newCustomer = dbKey; 
                             const info = customerDB[dbKey];
-                            
                             updates.recipientName = info.recipientName || '';
                             updates.phone = info.phone || '';
                             updates.zipCode = info.zipCode || '';
@@ -1382,7 +1404,6 @@
                             updates.shippingMemo = info.shippingMemo || '';
                             updates.isAddressFilled = !!(info.recipientName && info.phone && info.addressText);
                         }
-                        
                         updates.customer = newCustomer;
                     }
 
@@ -1453,73 +1474,42 @@
             const handleShippingToggle = (id) => { const targetOrder = orders.find(o => o.id === id); if (!targetOrder) return; const customer = targetOrder.customer; const newStatus = !targetOrder.isShippingPaid; if (window.event && window.event.type === 'contextmenu') { window.event.preventDefault(); setEditingShippingId(id === editingShippingId ? null : id); return; } setOrders(prev => prev.map(o => { if (o.customer === customer) { return sanitizeOrder({ ...o, isShippingPaid: newStatus }); } return o; })); };
             const handleGridKeyDown = (e, field, idx) => { if (e.key === 'Enter') { e.preventDefault(); const nextId = `cell-${field}-${idx + 1}`; const nextEl = document.getElementById(nextId); if (nextEl) { nextEl.focus(); nextEl.select(); } } };
             
-            // [수정] 엑셀(.xlsx) 파일 다운로드 함수 추가 (기존 CSV 다운로드 대체)
             const handleDownloadExcel = (mode) => {
                 const list = [...orders].map(sanitizeOrder).sort((a, b) => (a.customer || '').localeCompare(b.customer || ''));
                 const timestamp = new Date().toISOString().slice(0, 10);
-                
-                // 워크북 생성
                 const wb = XLSX.utils.book_new();
                 let ws;
 
                 if (mode === 'invoice') { 
-                    // [송장용 엑셀]
-                    // 헤더: [공백, 공백, 공백, 공백, 상품명, 수령인, 연락처, 주소, 배송메모, 공백, 메모, 우편번호, 공백]
                     const headers = ['', '', '', '', '상품명', '수령인', '연락처', '주소', '배송메모', '', '메모', '우편번호', ''];
                     const aoa = [headers];
-                    
                     let prevCustomer = null;
-                    
                     list.forEach(o => {
                         const fullAddr = ((o.addressText||'') + ' ' + (o.addressDetail||'')).trim();
                         const phone = o.phone || '';
                         const zip = o.zipCode || '';
                         const shipMemo = o.shippingMemo || '';
-
                         if (o.customer !== prevCustomer) {
                             prevCustomer = o.customer;
                             const customerName = o.customer ? `[${o.customer}]` : `[미지정]`;
-                            // 고객명 행 (엑셀 스타일: 상품명 칸에 고객명 표시)
                             aoa.push(['', '', '', '', customerName, o.recipientName, phone, fullAddr, shipMemo, '', o.memo, zip, '']);
                         }
-                        
                         let quantitySuffix = ''; 
                         const qtyNum = parseNum(o.quantity); 
                         if (qtyNum >= 2) { quantitySuffix = ` ★${qtyNum}`; } 
-                        
                         const code = productNumbers[o.product] ? `${productNumbers[o.product]} - ` : ''; 
                         const productName = `${code}${o.product}${quantitySuffix}`; 
-                        
                         aoa.push(['', '', '', '', productName, o.recipientName, phone, fullAddr, shipMemo, '', o.memo, zip, '']);
                     });
-                    
                     ws = XLSX.utils.aoa_to_sheet(aoa);
-                    
-                    // 컬럼 너비 설정 (보기 좋게)
-                    ws['!cols'] = [
-                        { wch: 5 }, { wch: 5 }, { wch: 5 }, { wch: 5 }, // 앞 공백
-                        { wch: 35 }, // 상품명
-                        { wch: 10 }, // 수령인
-                        { wch: 15 }, // 연락처
-                        { wch: 50 }, // 주소
-                        { wch: 20 }, // 배송메모
-                        { wch: 5 },  // 공백
-                        { wch: 20 }, // 메모
-                        { wch: 10 }, // 우편번호
-                        { wch: 5 }   // 공백
-                    ];
-
+                    ws['!cols'] = [{ wch: 5 }, { wch: 5 }, { wch: 5 }, { wch: 5 }, { wch: 35 }, { wch: 10 }, { wch: 15 }, { wch: 50 }, { wch: 20 }, { wch: 5 }, { wch: 20 }, { wch: 10 }, { wch: 5 }];
                     XLSX.utils.book_append_sheet(wb, ws, "송장");
                     XLSX.writeFile(wb, `송장용_${timestamp}.xlsx`);
-
                 } else { 
-                    // [전체주문 엑셀]
                     const headers = ['닉네임', '입금명', '상품명', '수량', '금액', '입금액(현금)', '카드결제액', '배송비', '미수금', '수령인', '연락처', '우편번호', '주소', '배송메모', '메모']; 
                     const aoa = [headers];
-                    
                     const firstIds = {}; 
                     list.forEach(o => { if (o.customer) { if (!firstIds[o.customer] || o.id < firstIds[o.customer]) { firstIds[o.customer] = o.id; } } });
-                    
                     list.forEach(o => { 
                         const isFirst = firstIds[o.customer] === o.id; 
                         const ship = o.customShippingFee ?? quickShipping; 
@@ -1527,26 +1517,8 @@
                         const priceNum = parseNum(o.price); 
                         const unpaid = Math.max(0, (priceNum + shipCharge) - (o.deposit + o.cardAmount + (isFirst && o.isShippingPaid ? ship : 0))); 
                         const code = productNumbers[o.product] ? `[${productNumbers[o.product]}] ` : ''; 
-                        
-                        aoa.push([
-                            o.customer,
-                            o.customer,
-                            code + o.product,
-                            o.quantity,
-                            priceNum,
-                            o.deposit,
-                            o.cardAmount,
-                            shipCharge,
-                            unpaid,
-                            o.recipientName,
-                            o.phone,
-                            o.zipCode,
-                            (o.addressText||'') + ' ' + (o.addressDetail||''),
-                            o.shippingMemo,
-                            o.memo
-                        ]);
+                        aoa.push([o.customer, o.customer, code + o.product, o.quantity, priceNum, o.deposit, o.cardAmount, shipCharge, unpaid, o.recipientName, o.phone, o.zipCode, (o.addressText||'') + ' ' + (o.addressDetail||''), o.shippingMemo, o.memo]);
                     }); 
-                    
                     ws = XLSX.utils.aoa_to_sheet(aoa);
                     XLSX.utils.book_append_sheet(wb, ws, "전체주문");
                     XLSX.writeFile(wb, `전체주문_${timestamp}.xlsx`);
@@ -1564,8 +1536,6 @@
                     const data = await res.json(); 
                     let orderCount = 0;
                     let customerCount = 0;
-                    
-                    // 1. 고객 데이터 먼저 파싱 (주문 데이터 보정에 필요)
                     let newDB = {};
                     if (data.customers) { 
                         const custRows = JSON.parse(data.customers); 
@@ -1579,8 +1549,6 @@
                         setCustomerDB(newDB);
                         customerCount = Object.keys(newDB).length;
                     } 
-
-                    // 2. 주문 데이터 파싱 및 우편번호/주소 보정
                     if (data.orders) { 
                         let loadedOrders = [];
                         try {
@@ -1597,7 +1565,6 @@
                                     '공급가액': 'price', '합계': 'price',
                                     '입금액': 'deposit', '입금': 'deposit', '현금': 'deposit', '입금액(현금)': 'deposit', 'deposit': 'deposit',
                                     '카드': 'cardAmount', '카드금액': 'cardAmount', '카드결제': 'cardAmount', '카드결제액': 'cardAmount', 'cardAmount': 'cardAmount',
-                                    '배송비': 'customShippingFee', '개별배송비': 'customShippingFee', 'customShippingFee': 'customShippingFee',
                                     '수령인': 'recipientName', '받는분': 'recipientName', 'recipientName': 'recipientName',
                                     '연락처': 'phone', '전화번호': 'phone', '핸드폰': 'phone', 'phone': 'phone',
                                     '우편번호': 'zipCode', 'zipCode': 'zipCode',
@@ -1605,8 +1572,12 @@
                                     '상세주소': 'addressDetail', 'addressDetail': 'addressDetail',
                                     '배송메모': 'shippingMemo', '배송요청사항': 'shippingMemo', '요청사항': 'shippingMemo', 'shippingMemo': 'shippingMemo',
                                     '메모': 'memo', '비고': 'memo', 'memo': 'memo',
-                                    '배송비결제': 'isShippingPaid', 'isShippingPaid': 'isShippingPaid',
-                                    '입금자': 'depositor', '입금자명': 'depositor' 
+                                    '입금자': 'depositor', '입금자명': 'depositor',
+                                    '배송비': 'customShippingFee', '개별배송비': 'customShippingFee', 'customShippingFee': 'customShippingFee', 
+                                    '배송료': 'customShippingFee', '택배비': 'customShippingFee', '운송비': 'customShippingFee', '운송료': 'customShippingFee',
+                                    '배송비결제': 'isShippingPaid', 'isShippingPaid': 'isShippingPaid', '배송결제': 'isShippingPaid', 
+                                    '배송료결제': 'isShippingPaid', '택배비결제': 'isShippingPaid', '배송비확인': 'isShippingPaid', 
+                                    '선불배송': 'isShippingPaid', '배송비포함': 'isShippingPaid', '택배선불': 'isShippingPaid'
                                 };
                                 if (map[h]) return map[h];
                                 const sortedKeys = Object.keys(map).sort((a, b) => b.length - a.length);
@@ -1617,7 +1588,6 @@
                             };
 
                             const processOrder = (o) => {
-                                // [수정] 주문의 주소/우편번호가 비어있으면 고객 정보(newDB)에서 채워넣기
                                 if (o.customer && newDB[o.customer]) {
                                     const c = newDB[o.customer];
                                     if (!o.zipCode && c.zipCode) o.zipCode = c.zipCode;
@@ -1648,6 +1618,10 @@
                                         const key = getMappedKey(k);
                                         newObj[key] = o[k];
                                     });
+                                    if (newObj.isShippingPaid !== undefined) {
+                                        const s = String(newObj.isShippingPaid).toUpperCase();
+                                        if(s === 'TRUE' || s === 'Y' || s === 'YES' || s === '1') newObj.isShippingPaid = true;
+                                    }
                                     return processOrder(newObj);
                                 });
                             }
@@ -1661,17 +1635,14 @@
                             orderCount = loadedOrders.length;
                         }
                     } 
-                    
                     if (data.products) setProductHistory(JSON.parse(data.products)); 
                     if (data.archives) setArchives(JSON.parse(data.archives));
-                    
                     if (data.settings) {
                         try {
                             const settings = JSON.parse(data.settings);
                             if (settings.quickShipping) setQuickShipping(Number(settings.quickShipping));
                         } catch(e) { console.error(e); }
                     }
-
                     showToast(`불러오기 완료 (고객 ${customerCount}명 / 주문 ${orderCount}건)`); 
                 } catch (e) { 
                     showToast("실패: " + e.message, "error"); 
@@ -1689,7 +1660,7 @@
                         products: JSON.stringify(productHistory), 
                         customers: JSON.stringify(customerDB), 
                         archives: JSON.stringify(archives),
-                        settings: JSON.stringify({ quickShipping }) // 설정도 함께 저장
+                        settings: JSON.stringify({ quickShipping }) 
                     }; 
                     const res = await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify(payload) }); 
                     const json = await res.json(); 
@@ -1700,16 +1671,13 @@
             const handleDownloadHTML = () => { const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const date = new Date(); const timestamp = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}`; a.download = `강은지_주문서_백업_${timestamp}.html`; a.click(); URL.revokeObjectURL(url); showToast('백업 완료'); };
             const handleUploadClick = () => fileInputRef.current && fileInputRef.current.click();
             
-            // [수정] 주문 내역 업로드 핸들러 개선 (우편번호 자동 매칭)
             const handleFileUpload = (e) => { 
                 const file = e.target.files[0]; 
                 if (!file) return; 
                 Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => { 
                     const uploaded = results.data.map((row, i) => {
-                        // 고객 DB에서 정보 조회
                         const nick = row['닉네임']?.trim();
                         const cInfo = nick ? customerDB[nick] : null;
-                        
                         return sanitizeOrder({ 
                             id: Date.now() + i, 
                             originalText: `UPLOAD: ${row['상품명']}`, 
@@ -1721,7 +1689,7 @@
                             cardAmount: Number(row['카드결제액']), 
                             recipientName: row['수령인'] || (cInfo ? cInfo.recipientName : ''), 
                             phone: row['연락처'] || (cInfo ? cInfo.phone : ''), 
-                            zipCode: row['우편번호'] || row['Zip'] || row['zipCode'] || (cInfo ? cInfo.zipCode : ''), // [수정] 여러 컬럼명 체크 및 고객정보 백업
+                            zipCode: row['우편번호'] || row['Zip'] || row['zipCode'] || (cInfo ? cInfo.zipCode : ''), 
                             addressText: row['주소'] || (cInfo ? cInfo.addressText : ''), 
                             shippingMemo: row['배송메모'] || (cInfo ? cInfo.shippingMemo : ''), 
                             memo: row['메모'] 
@@ -1748,7 +1716,6 @@
                         } 
                     }); 
                     setCustomerDB(newDB); 
-                    
                     setOrders(prev => prev.map(o => {
                         if (o.customer && newDB[o.customer]) {
                             const info = newDB[o.customer];
@@ -1758,32 +1725,30 @@
                         }
                         return o;
                     }));
-
                     showToast(`총 ${count}명 고객 등록 및 기존 주문 업데이트 완료`, 'success'); 
                 } }); 
                 e.target.value = null; 
             };
             
-            const handleReset = () => { setConfirmModal({ open: true, message: "정말로 모든 주문 내역을 삭제하시겠습니까? (고객 데이터는 유지됩니다)", onConfirm: () => { setOrders([]); showToast("초기화 완료", "error"); setConfirmModal({ open: false, message: '', onConfirm: null }); } }); };
+            const handleReset = () => { 
+                setConfirmModal({ 
+                    open: true, 
+                    message: "현재 작업 중인 주문 목록만 비우시겠습니까?\n(고객 정보와 주문완료 보관함은 삭제되지 않습니다)", 
+                    onConfirm: () => { 
+                        setOrders([]); 
+                        showToast("주문 목록이 초기화되었습니다."); 
+                        setConfirmModal({ open: false, message: '', onConfirm: null }); 
+                    } 
+                }); 
+            };
+            
             const firstOrderIds = useMemo(() => { const ids = {}; orders.forEach(o => { if (o.customer) { if (!ids[o.customer] || o.id < ids[o.customer]) { ids[o.customer] = o.id; } } }); return ids; }, [orders]);
             
             const stats = useMemo(() => {
-                let totalProduct = 0; 
-                let totalQty = 0; 
-                let productUnpaid = 0; 
-                let shipUnpaid = 0; 
-                let totalCard = 0; 
-                let totalDeposit = 0; 
-                let totalShipping = 0;
-                const shippingCustomers = new Set(); 
-                const processedCustomers = {};
-
+                let totalProduct = 0; let totalQty = 0; let productUnpaid = 0; let shipUnpaid = 0; let totalCard = 0; let totalDeposit = 0; let totalShipping = 0;
+                const shippingCustomers = new Set(); const processedCustomers = {};
                 orders.forEach(o => {
-                    totalProduct += parseNum(o.price); 
-                    totalQty += parseNum(o.quantity);
-                    totalCard += (o.cardAmount || 0);
-                    totalDeposit += (o.deposit || 0); 
-
+                    totalProduct += parseNum(o.price); totalQty += parseNum(o.quantity); totalCard += (o.cardAmount || 0); totalDeposit += (o.deposit || 0); 
                     if (!o.customer) return;
                     if (!processedCustomers[o.customer]) {
                         const customerGroupOrders = orders.filter(groupO => groupO.customer === o.customer);
@@ -1793,7 +1758,6 @@
                         const mainOrder = customerGroupOrders.reduce((oldest, current) => (current.id < oldest.id ? current : oldest), customerGroupOrders[0]);
                         const groupShipFee = (mainOrder.customShippingFee !== null && mainOrder.customShippingFee !== undefined) ? mainOrder.customShippingFee : Number(quickShipping);
                         const isShippingPaid = mainOrder.isShippingPaid;
-                        
                         totalShipping += groupShipFee;
                         const groupTotalPaid = groupDeposit + groupCard + (isShippingPaid ? groupShipFee : 0); 
                         const groupTotalRequired = groupProductTotal + groupShipFee;
@@ -1805,7 +1769,6 @@
                         processedCustomers[o.customer] = true;
                     }
                 });
-                
                 const totalRev = totalProduct + totalShipping;
                 return { totalRev, totalCash: totalDeposit, totalCard, totalShipping, qty: totalQty, shippingCount: shippingCustomers.size, productUnpaid, shipUnpaid, totalCard };
             }, [orders, quickShipping]);
@@ -1813,7 +1776,6 @@
             const processTextLine = (text) => {
                 if (!text) return null;
                 const cleanText = text.trim();
-                
                 const phoneMatch = cleanText.match(/(01[016789])[- .]?(\d{3,4})[- .]?(\d{4})/);
                 if (phoneMatch) {
                       const formattedPhone = `${phoneMatch[1]}-${phoneMatch[2]}-${phoneMatch[3]}`;
@@ -1840,15 +1802,12 @@
                           });
                       }
                 }
-                
                 if (converterTab === 'batch') {
                     if (!cleanText.startsWith('@')) return null;
                     let customer = cleanText.substring(1).trim(); 
                     if (!customer) return null;
-                    
                     const dbKey = findCustomerKey(customer);
                     if (dbKey) customer = dbKey;
-
                     const product = batchProduct || '기본 상품'; 
                     const unitPrice = Number(batchPrice) || productHistory[product] || productHistory[product.trim()] || 0;
                     const quantity = 1; 
@@ -1874,18 +1833,14 @@
                         isAddressFilled: !!(crmData?.recipientName && crmData?.phone && crmData?.addressText)
                     });
                 }
-                
                 const parts = cleanText.split(/\s+/);
                 let customer = parts[0];
                 let code = '';
                 if (customer.includes('#')) { const split = customer.split('#'); customer = split[0]; code = split[1]; } 
                 else if (customer.includes('/')) { const split = customer.split('/'); customer = split[0]; code = split[1]; }
-                
                 customer = customer.replace(/^@/, '').replace(/[:.,]$/, '');
-                
                 const dbKey = findCustomerKey(customer);
                 const finalCustomerName = dbKey || customer;
-
                 let product = ''; let quantity = 1; let productStartIndex = 1;
                 if (!code && parts.length > 1 && parts[1].startsWith('#')) { code = parts[1].substring(1); productStartIndex = 2; }
                 const productRaw = parts.slice(productStartIndex).join(' ');
@@ -1893,12 +1848,9 @@
                 const pName = product.trim();
                 const unitPrice = productHistory[product] || productHistory[pName] || 0;
                 const price = quantity * unitPrice;
-                
                 const crmData = customerDB[finalCustomerName];
-                
                 if (product && !productCategories[product]) { setProductCategories(prev => ({ ...prev, [product]: currentSite })); }
                 if (code) { setProductNumbers(prev => ({...prev, [pName]: code})); }
-                
                 return sanitizeOrder({ 
                     id: Date.now() + Math.random(), 
                     originalText: text, 
@@ -2150,7 +2102,6 @@
                                                         <div className="flex justify-center"><div className={`w-5 h-5 rounded-sm flex items-center justify-center cursor-default ${order.isAddressFilled ? 'bg-brand-600 text-white' : 'text-slate-300 bg-slate-100 dark:bg-slate-800'}`}><Icon name="map-pin" size={12} weight={order.isAddressFilled ? "fill" : "regular"}/></div></div>
                                                         <div><input id={`cell-memo-${idx}`} className="w-full bg-transparent text-slate-500 outline-none" value={order.memo} onChange={e => handleUpdateOrder(order.id, 'memo', e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'memo', idx)} /></div>
                                                         <div className="flex justify-end"><button onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }} className="text-slate-300 hover:text-rose-500"><Icon name="x" size={10}/></button></div>
-                                                        
                                                         {editingAmountId === order.id && (<div className="col-span-full p-2 bg-slate-50 flex gap-2 justify-start pl-4 items-center border-y border-slate-100" onClick={e=>e.stopPropagation()}><span className="text-[10px] text-slate-500 font-bold">현금:</span><input type="number" placeholder="현금 금액" className="w-20 p-1 border rounded text-xs text-right font-mono outline-none focus:border-brand-500" value={order.deposit} autoFocus={true} onChange={e => { const val = Number(e.target.value); handleSetDepositAmount(order.id, val); if (editSource === 'card') { const priceNum = parseNum(order.price); const remainder = Math.max(0, priceNum - val); handleSetCardAmount(order.id, remainder); } }} onBlur={() => handleToggleAmountEdit(null)} onKeyDown={(e) => { if (e.key === 'Enter') handleToggleAmountEdit(null); }} /><span className="text-[10px] text-slate-500 font-bold ml-4">카드:</span><input type="number" placeholder="카드 금액" className="w-20 p-1 border rounded text-xs text-right font-mono outline-none focus:border-rose-500" value={order.cardAmount} onChange={e => handleSetCardAmount(order.id, e.target.value)} onBlur={() => handleToggleAmountEdit(null)} onKeyDown={(e) => { if (e.key === 'Enter') handleToggleAmountEdit(null); }} /></div>)}
                                                         {editingShippingId === order.id && (<div className="col-span-full p-1.5 bg-brand-50 dark:bg-brand-900/20 border-y border-brand-100 dark:border-brand-800 flex gap-2 justify-start pl-4 items-center animate-fade-in shadow-inner" onClick={e=>e.stopPropagation()}><span className="text-[10px] font-bold text-brand-600 dark:text-brand-300">개별 배송비:</span><input type="number" className="w-16 p-0.5 rounded-sm border border-brand-200 text-right font-bold text-xs text-brand-700 outline-none" value={order.customShippingFee ?? quickShipping} onChange={e => handleUpdateOrder(order.id, 'customShippingFee', Number(e.target.value))} onBlur={() => setEditingShippingId(null)} onKeyDown={(e) => { if (e.key === 'Enter') setEditingShippingId(null); }} /><button onClick={() => handleUpdateOrder(order.id, 'customShippingFee', null)} className="text-[10px] bg-white text-brand-600 px-2 py-0.5 rounded-sm border border-brand-200 hover:bg-brand-50">기본값</button><button onClick={() => setEditingShippingId(null)} className="text-[10px] bg-brand-600 text-white px-2 py-0.5 rounded-sm hover:bg-brand-700 ml-1">확인</button></div>)}
                                                     </div>
@@ -2161,38 +2112,11 @@
                                 </div>
                             </>
                         )}
-                        {activeTab === 'product' && <ProductManagementTab recentProducts={recentProducts} productNumbers={productNumbers} setProductHistory={setProductHistory} setProductNumbers={setProductNumbers} setProductCategories={setProductCategories} setOrders={setOrders} showToast={showToast} handleDeleteProductHistory={handleDeleteProductHistory} />} 
+                        {activeTab === 'product' && <ProductManagementTab recentProducts={recentProducts} productNumbers={productNumbers} setProductHistory={setProductHistory} setProductNumbers={setProductNumbers} setProductCategories={setProductCategories} setOrders={setOrders} showToast={showToast} handleDeleteProductHistory={handleDeleteProductHistory} />}
                         {activeTab === 'customer' && <CustomerTab customerDB={customerDB} setCustomerDB={setCustomerDB} orders={orders} showToast={showToast} setOrders={setOrders} onResetCustomers={handleResetCustomers} handleSidebarClick={handleSidebarClick} />}
                         {activeTab === 'receipt' && <ReceiptTab orders={orders} productNumbers={productNumbers} quickShipping={quickShipping} />}
-                        {activeTab === 'archive' && <ArchiveTab archives={archives} setArchives={setArchives} onRestore={(id) => handleRestoreArchive(id)} onDeleteArchive={(id) => handleDeleteArchive(id)} />}
+                        {activeTab === 'archive' && <ArchiveTab archives={archives} setArchives={setArchives} onRestore={handleRestoreArchive} onDeleteArchive={handleDeleteArchive} />}
                     </main>
-                    
-                    {toast && <div className="fixed top-6 right-6 px-4 py-2.5 bg-slate-800 text-white rounded-md shadow-lg flex items-center gap-2 animate-fade-in z-[100]"><Icon name="check-circle" size={14} className="ph-fill"/><span className="text-xs">{toast.message}</span></div>}
-                    
-                    {confirmModal.open && (
-                        <div className="modal-overlay">
-                            <div className="modal-content !w-80">
-                                <p className="mb-4 text-sm">{confirmModal.message}</p>
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => setConfirmModal({ ...confirmModal, open: false })} className="px-3 py-1 text-xs rounded border border-slate-300 hover:bg-slate-100">취소</button>
-                                    <button onClick={confirmModal.onConfirm} className="px-3 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700">확인</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {promptModal.open && (
-                        <div className="modal-overlay">
-                            <div className="modal-content !w-80">
-                                <p className="mb-2 text-sm font-bold">{promptModal.message}</p>
-                                <input className="w-full p-2 border rounded mb-4 text-sm dark:bg-dark-input dark:border-slate-600" value={promptModal.value} onChange={(e) => setPromptModal({ ...promptModal, value: e.target.value })} autoFocus />
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => setPromptModal({ ...promptModal, open: false })} className="px-3 py-1 text-xs rounded border border-slate-300 hover:bg-slate-100">취소</button>
-                                    <button onClick={() => promptModal.onConfirm(promptModal.value)} className="px-3 py-1 text-xs rounded bg-brand-600 text-white hover:bg-brand-700">확인</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         };
