@@ -1,14 +1,20 @@
-<html lang="ko" class="antialiased"><head>
+<!DOCTYPE html>
+<html lang="ko" class="antialiased">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 전용 주문서 </title>
+    <title>강은지 전용 주문서 Pro</title>
     
+    <!-- 필수 라이브러리 -->
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 아이콘 라이브러리 -->
     <script src="https://unpkg.com/@phosphor-icons/web" crossorigin="anonymous"></script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparser.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     
@@ -49,7 +55,6 @@
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         *:focus { outline: none !important; }
         
-        /* 체크(30) 날짜(60) 상태(100) 닉네임(100) 코드(40) 상품명(2.5fr) 수량(35) 금액(70) 주소(30) 메모(0.7fr) 삭제(30) */
         .grid-rows-compact { grid-template-columns: 30px 60px 100px 100px 40px 2.5fr 35px 70px 30px 0.7fr 30px; }
         .dragging { opacity: 0.5; border: 2px dashed #627d98; }
         
@@ -83,7 +88,7 @@
         .tab-content { animation: fadeIn 0.2s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-        .modal-content { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 600px; max-width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 400px; max-width: 90%; }
         .dark .modal-content { background: #1e1e1e; border: 1px solid #333; color: #fff; }
     </style>
 </head>
@@ -218,7 +223,7 @@
             };
             return (
                 <button onClick={onClick} disabled={loading} className={`${base} ${colors[color] || colors.white} ${loading ? 'opacity-70 cursor-wait' : ''}`}>
-                    {loading ? <Icon name="spinner" size={12} className="animate-spin"/> : <Icon name={icon.toLowerCase()} size={12}/>} {text}
+                    {loading ? <Icon name="spinner" size={12} className="animate-spin"/> : <Icon name={icon} size={12}/>} {text}
                 </button>
             );
         });
@@ -262,16 +267,8 @@
             </div>
         );
 
-        const ProductManagementTab = React.memo(({ 
-            recentProducts, 
-            productNumbers, 
-            setProductHistory, 
-            setProductNumbers, 
-            setProductCategories, 
-            setOrders, 
-            showToast,
-            handleDeleteProductHistory 
-        }) => {
+        // ... (이전 코드와 동일한 컴포넌트들 생략) ...
+        const ProductManagementTab = React.memo(({ recentProducts, productNumbers, setProductHistory, setProductNumbers, setProductCategories, setOrders, showToast, handleDeleteProductHistory }) => {
             const [editingProductName, setEditingProductName] = useState(null);
             const [editForm, setEditForm] = useState({ name: '', price: '', code: '' });
             
@@ -899,7 +896,7 @@
                             </div>
                             <div className="relative"><input className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-dark-input border border-slate-200 dark:border-slate-700 rounded text-xs outline-none focus:border-brand-500" placeholder="고객명 검색..." value={search} onChange={e => setSearch(e.target.value)} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="magnifying-glass" size={12}/></div></div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-1 space-y-0.5">{allCustomers.map(c => (<button key={c} onClick={() => { setSelectedCustomer(c); setIsRenaming(false); }} className={`w-full text-left px-3 py-2 text-xs rounded transition-colors flex items-center justify-between group ${selectedCustomer === c ? 'bg-brand-50 text-brand-700 font-bold dark:bg-brand-900/30 dark:text-brand-400' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span className="truncate">{c}</span>{customerDB[c] && <Icon name="check-circle" size={10} className="text-emerald-500"/>}</button>))}</div>
+                        <div className="flex-1 overflow-y-auto p-1 space-y-0.5">{allCustomers.map(c => (<button key={c} onClick={() => { setSelectedCustomerFolder(c); setSelectedCustomer(c); setIsRenaming(false); }} className={`w-full text-left px-3 py-2 text-xs rounded transition-colors flex items-center justify-between group ${selectedCustomer === c ? 'bg-brand-50 text-brand-700 font-bold dark:bg-brand-900/30 dark:text-brand-400' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span className="truncate">{c}</span>{customerDB[c] && <Icon name="check-circle" size={10} className="text-emerald-500"/>}</button>))}</div>
                     </div>
                     <div className="flex-1 flex flex-col gap-4 overflow-hidden">
                         {selectedCustomer ? (
@@ -1333,6 +1330,7 @@
                     open: true, 
                     message: `"${archive.name}"의 주문들을 다시 주문관리 목록으로 이동하시겠습니까?\n(보관함에서는 사라집니다)`, 
                     onConfirm: () => { 
+                        // [수정] 이동(Move) 개념으로 구현: 주문 목록에 추가 후 보관함에서 삭제
                         setOrders(prev => [...archive.orders, ...prev]); 
                         setArchives(prev => prev.filter(a => a.id !== archiveId));
                         setConfirmModal({ open: false, message: '', onConfirm: null }); 
@@ -1730,6 +1728,7 @@
                 e.target.value = null; 
             };
             
+            // [수정] 초기화 시 보관함 유지 안내
             const handleReset = () => { 
                 setConfirmModal({ 
                     open: true, 
@@ -2117,6 +2116,46 @@
                         {activeTab === 'receipt' && <ReceiptTab orders={orders} productNumbers={productNumbers} quickShipping={quickShipping} />}
                         {activeTab === 'archive' && <ArchiveTab archives={archives} setArchives={setArchives} onRestore={handleRestoreArchive} onDeleteArchive={handleDeleteArchive} />}
                     </main>
+                    
+                    {/* [수정] 확인/입력 모달창 렌더링 추가 */}
+                    {confirmModal.open && (
+                        <div className="modal-overlay">
+                            <div className="modal-content">
+                                <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-white">확인</h3>
+                                <p className="mb-6 whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300">{confirmModal.message}</p>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setConfirmModal({ ...confirmModal, open: false })} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-300 dark:hover:bg-slate-600 text-sm font-bold">취소</button>
+                                    <button onClick={confirmModal.onConfirm} className="px-4 py-2 bg-brand-600 text-white rounded hover:bg-brand-700 text-sm font-bold">확인</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {promptModal.open && (
+                        <div className="modal-overlay">
+                            <div className="modal-content">
+                                <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-white">{promptModal.message}</h3>
+                                <input 
+                                    className="w-full p-2 border rounded mb-6 dark:bg-dark-input dark:border-slate-700 text-sm" 
+                                    value={promptModal.value} 
+                                    onChange={(e) => setPromptModal({ ...promptModal, value: e.target.value })} 
+                                    autoFocus
+                                    onKeyDown={(e) => { if(e.key === 'Enter') promptModal.onConfirm(promptModal.value); }}
+                                />
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setPromptModal({ ...promptModal, open: false })} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-300 dark:hover:bg-slate-600 text-sm font-bold">취소</button>
+                                    <button onClick={() => promptModal.onConfirm(promptModal.value)} className="px-4 py-2 bg-brand-600 text-white rounded hover:bg-brand-700 text-sm font-bold">확인</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {toast && (
+                        <div className={`fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-full text-white text-sm font-bold shadow-lg z-50 animate-fade-in flex items-center gap-2 ${toast.type === 'error' ? 'bg-rose-500' : 'bg-slate-800'}`}>
+                            <Icon name={toast.type === 'error' ? 'warning' : 'check-circle'} size={16} weight="fill"/>
+                            {toast.message}
+                        </div>
+                    )}
                 </div>
             );
         };
