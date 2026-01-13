@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO 2.3 </title>
+    <title>강은지 주문서 PRO 2.2 </title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -1159,7 +1159,7 @@
             const [customerDB, setCustomerDB] = useState(() => JSON.parse(localStorage.getItem('customerDB')) || {}); 
             const [orders, setOrdersState] = useState(() => JSON.parse(localStorage.getItem('youtubeOrders')) || []); 
             const [archives, setArchives] = useState(() => JSON.parse(localStorage.getItem('orderArchives')) || []); 
-            const [googleScriptUrl, setGoogleScriptUrl] = useState('https://script.google.com/macros/s/AKfycbxjgkyG2C6EWNj7nZ6lDiZFqhncSd2qiaHvKzEyboWwC7IQXe7hq7kLHRt34_9u3O47oQ/exec');
+            const [googleScriptUrl, setGoogleScriptUrl] = useState('https://script.google.com/macros/s/AKfycbzX2MiBJBnD2HLn99iKn7KTXdtNR364baGPV8QUAz3NNqigrApDuNd8O1jHCuYtWZrfoA/exec');
             
             const [quickShipping, setQuickShipping] = useState(() => Number(localStorage.getItem('quickShipping')) || 4000); 
             
@@ -1591,10 +1591,7 @@
                     if (data.settings) {
                         try {
                             const settings = JSON.parse(data.settings);
-                            // [수정] 0원일 때도 정상적으로 로드되도록 조건 수정
-                            if (settings.quickShipping !== undefined && settings.quickShipping !== null) {
-                                setQuickShipping(Number(settings.quickShipping));
-                            }
+                            if (settings.quickShipping) setQuickShipping(Number(settings.quickShipping));
                         } catch(e) { console.error(e); }
                     }
 
