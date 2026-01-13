@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>강은지 주문서 PRO 2.2 </title>
+    <title>강은지 주문서 </title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -415,25 +415,22 @@
             const currentFolder = sortedArchives.find(a => a.id === selectedFolder);
 
             const handleDownloadFolder = (folder) => {
-                 const csvString = "\ufeff닉네임,상품명,수량,금액,수령인,연락처,주소,메모\n" + 
-                    folder.orders.map(o => {
-                         const clean = (val) => '"' + String(val || '').replace(/"/g, '""') + '"';
-                         let phone = o.phone || '';
-                         if (phone && (phone.startsWith('0') || phone.includes('-'))) phone = `="${phone}"`;
-                         let zip = o.zipCode || '';
-                         if (zip && /^\d+$/.test(zip) && (zip.startsWith('0') || zip.length === 5)) zip = `="${zip}"`;
-
-                         return [clean(o.customer), clean(o.product), o.quantity, o.price, clean(o.recipientName), phone, clean((o.addressText||'')+' '+(o.addressDetail||'')), clean(o.memo)].join(',');
-                    }).join('\n');
+                 // [수정] CSV 대신 XLSX 데이터 생성
+                 const data = folder.orders.map(o => ({
+                     '닉네임': o.customer,
+                     '상품명': o.product,
+                     '수량': o.quantity,
+                     '금액': o.price,
+                     '수령인': o.recipientName,
+                     '연락처': o.phone,
+                     '주소': (o.addressText||'')+' '+(o.addressDetail||''),
+                     '메모': o.memo
+                 }));
                 
-                const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.setAttribute('download', `${folder.name}_${new Date(folder.date).toISOString().slice(0,10)}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "주문내역");
+                XLSX.writeFile(wb, `${folder.name}_${new Date(folder.date).toISOString().slice(0,10)}.xlsx`);
             };
 
             return (
@@ -964,20 +961,22 @@
                 }
                 const targetOrders = orders.filter(o => selectedCustomers.includes(o.customer));
                 
-                const csvString = "\ufeff닉네임,상품명,수량,금액,수령인,연락처,주소,메모\n" + 
-                    targetOrders.map(o => {
-                         const clean = (val) => '"' + String(val || '').replace(/"/g, '""') + '"';
-                         return [clean(o.customer), clean(o.product), o.quantity, o.price, clean(o.recipientName), clean(o.phone), clean((o.addressText||'')+' '+(o.addressDetail||'')), clean(o.memo)].join(',');
-                    }).join('\n');
+                // [수정] CSV 대신 XLSX 데이터 생성
+                const data = targetOrders.map(o => ({
+                     '닉네임': o.customer,
+                     '상품명': o.product,
+                     '수량': o.quantity,
+                     '금액': o.price,
+                     '수령인': o.recipientName,
+                     '연락처': o.phone,
+                     '주소': (o.addressText||'')+' '+(o.addressDetail||''),
+                     '메모': o.memo
+                }));
                 
-                const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.setAttribute('download', `구매내역_간략_${new Date().toISOString().slice(0,10)}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "구매내역");
+                XLSX.writeFile(wb, `구매내역_간략_${new Date().toISOString().slice(0,10)}.xlsx`);
             };
 
 
@@ -1307,7 +1306,20 @@
                     }
                 });
             };
-            const handleRestoreArchive = (archiveId) => { const archive = archives.find(a => a.id === archiveId); if (!archive) return; setConfirmModal({ open: true, message: `"${archive.name}" 보관함의 주문들을 복원하시겠습니까?`, onConfirm: () => { setOrders(prev => [...archive.orders, ...prev]); setConfirmModal({ open: false, message: '', onConfirm: null }); showToast("주문이 복원되었습니다."); } }); };
+            const handleRestoreArchive = (archiveId) => { 
+                const archive = archives.find(a => a.id === archiveId); 
+                if (!archive) return; 
+                setConfirmModal({ 
+                    open: true, 
+                    message: `"${archive.name}" 보관함의 주문들을 복원하시겠습니까? (보관함은 사라집니다)`, 
+                    onConfirm: () => { 
+                        setOrders(prev => [...archive.orders, ...prev]); 
+                        setArchives(prev => prev.filter(a => a.id !== archiveId)); // 보관함 삭제 (이동 처리)
+                        setConfirmModal({ open: false, message: '', onConfirm: null }); 
+                        showToast("주문이 복원되었습니다."); 
+                    } 
+                }); 
+            };
             const handleDeleteArchive = (archiveId) => { setConfirmModal({ open: true, message: "정말로 이 보관함을 삭제하시겠습니까?", onConfirm: () => { setArchives(prev => prev.filter(a => a.id !== archiveId)); setConfirmModal({ open: false, message: '', onConfirm: null }); showToast("보관함이 삭제되었습니다."); } }); };
             const toggleSelectAll = () => { if (selectedOrderIds.size === filteredOrders.length && filteredOrders.length > 0) { setSelectedOrderIds(new Set()); } else { setSelectedOrderIds(new Set(filteredOrders.map(o => o.id))); } };
             const toggleSelectOrder = (id) => { const newSet = new Set(selectedOrderIds); if (newSet.has(id)) newSet.delete(id); else newSet.add(id); setSelectedOrderIds(newSet); };
@@ -1447,14 +1459,14 @@
             const handleToggleShippingEdit = (id) => { setEditingShippingId(id === editingShippingId ? null : id); setEditingAmountId(null); };
             const handleShippingToggle = (id) => { const targetOrder = orders.find(o => o.id === id); if (!targetOrder) return; const customer = targetOrder.customer; const newStatus = !targetOrder.isShippingPaid; if (window.event && window.event.type === 'contextmenu') { window.event.preventDefault(); setEditingShippingId(id === editingShippingId ? null : id); return; } setOrders(prev => prev.map(o => { if (o.customer === customer) { return sanitizeOrder({ ...o, isShippingPaid: newStatus }); } return o; })); };
             const handleGridKeyDown = (e, field, idx) => { if (e.key === 'Enter') { e.preventDefault(); const nextId = `cell-${field}-${idx + 1}`; const nextEl = document.getElementById(nextId); if (nextEl) { nextEl.focus(); nextEl.select(); } } };
-            const getCSVString = (listData, mode) => { 
+            
+            // [수정] CSV 생성 함수 대신 2차원 배열 데이터 반환 함수로 변경
+            const getXLSXData = (listData, mode) => { 
                 const list = [...listData].map(sanitizeOrder).sort((a, b) => (a.customer || '').localeCompare(b.customer || '')); 
-                const clean = (val) => '"' + String(val || '').replace(/"/g, '""') + '"';
-                const cleanPhone = (val) => { if (!val) return '""'; const strVal = String(val); return "\"\u200B" + strVal + '"'; };
                 
                 if (mode === 'invoice') { 
-                    const excelHeaders = ['', '', '', '', '상품명', '수령인', '연락처', '주소', '배송메모', '', '메모', '우편번호', '']; 
-                    const lines = [excelHeaders.join(',')];
+                    const header = ['', '', '', '', '상품명', '수령인', '연락처', '주소', '배송메모', '', '메모', '우편번호', '']; 
+                    const rows = [header];
                     
                     let prevCustomer = null;
                     
@@ -1462,7 +1474,7 @@
                         if (o.customer !== prevCustomer) {
                             prevCustomer = o.customer;
                             const customerName = o.customer ? `[${o.customer}]` : `[미지정]`;
-                            lines.push(['', '', '', '', clean(customerName), clean(o.recipientName), cleanPhone(o.phone), clean((o.addressText||'') + ' ' + (o.addressDetail||'')), clean(o.shippingMemo), '', clean(o.memo), cleanPhone(o.zipCode), ''].join(','));
+                            rows.push(['', '', '', '', customerName, o.recipientName, o.phone, (o.addressText||'') + ' ' + (o.addressDetail||''), o.shippingMemo, '', o.memo, o.zipCode, '']);
                         }
                         
                         let quantitySuffix = ''; 
@@ -1472,29 +1484,55 @@
                         const code = productNumbers[o.product] ? `${productNumbers[o.product]} - ` : ''; 
                         const productName = `${code}${o.product}${quantitySuffix}`; 
                         
-                        lines.push(['', '', '', '', clean(productName), clean(o.recipientName), cleanPhone(o.phone), clean((o.addressText||'') + ' ' + (o.addressDetail||'')), clean(o.shippingMemo), '', clean(o.memo), cleanPhone(o.zipCode), ''].join(','));
+                        rows.push(['', '', '', '', productName, o.recipientName, o.phone, (o.addressText||'') + ' ' + (o.addressDetail||''), o.shippingMemo, '', o.memo, o.zipCode, '']);
                     });
                     
-                    return "\ufeff" + lines.join('\n'); 
+                    return rows; 
                 } else { 
-                    const headers = ['닉네임', '입금명', '상품명', '수량', '금액', '입금액(현금)', '카드결제액', '배송비', '미수금', '수령인', '연락처', '우편번호', '주소', '배송메모', '메모']; 
+                    const header = ['닉네임', '입금명', '상품명', '수량', '금액', '입금액(현금)', '카드결제액', '배송비', '미수금', '수령인', '연락처', '우편번호', '주소', '배송메모', '메모']; 
+                    const rows = [header];
                     const firstIds = {}; 
                     list.forEach(o => { if (o.customer) { if (!firstIds[o.customer] || o.id < firstIds[o.customer]) { firstIds[o.customer] = o.id; } } });
                     
-                    const csv = [headers.join(',')].concat(list.map(o => { 
+                    list.forEach(o => { 
                         const isFirst = firstIds[o.customer] === o.id; 
                         const ship = o.customShippingFee ?? quickShipping; 
                         const shipCharge = isFirst ? ship : 0; 
                         const priceNum = parseNum(o.price); 
                         const unpaid = Math.max(0, (priceNum + shipCharge) - (o.deposit + o.cardAmount + (isFirst && o.isShippingPaid ? ship : 0))); 
                         const code = productNumbers[o.product] ? `[${productNumbers[o.product]}] ` : ''; 
-                        return [clean(o.customer), clean(o.phone), clean(code + o.product), o.quantity, priceNum, clean(o.deposit), clean(o.cardAmount), clean(shipCharge), clean(unpaid), clean(o.recipientName), cleanPhone(o.phone), cleanPhone(o.zipCode), clean((o.addressText||'') + ' ' + (o.addressDetail||'')), clean(o.shippingMemo), clean(o.memo)].join(','); 
-                    })).join('\n'); 
-                    return "\ufeff" + csv; 
+                        rows.push([o.customer, o.phone, code + o.product, o.quantity, priceNum, o.deposit, o.cardAmount, shipCharge, unpaid, o.recipientName, o.phone, o.zipCode, (o.addressText||'') + ' ' + (o.addressDetail||''), o.shippingMemo, o.memo]); 
+                    });
+                    return rows; 
                 } 
             };
-            const handleDownloadCSV = (mode) => { const csvString = getCSVString(orders, mode); const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; const timestamp = new Date().toISOString().slice(0, 10); link.setAttribute('download', `${mode === 'invoice' ? '송장용_' : '전체주문_'}${timestamp}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
-            const handleDownloadProductCSV = () => { const summary = {}; orders.forEach(o => { const code = productNumbers[o.product] ? `[${productNumbers[o.product]}] ` : ''; const key = (code + o.product) || '미지정'; summary[key] = (summary[key] || 0) + parseNum(o.quantity); }); const csvContent = "\ufeff상품명,수량\n" + Object.entries(summary).map(e => e.join(',')).join('\n'); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.setAttribute('download', `발주리스트_${new Date().toISOString().slice(0, 10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+
+            // [수정] XLSX 다운로드 핸들러
+            const handleDownloadXLSX = (mode) => { 
+                const data = getXLSXData(orders, mode); 
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+                const timestamp = new Date().toISOString().slice(0, 10);
+                XLSX.writeFile(wb, `${mode === 'invoice' ? '송장용_' : '전체주문_'}${timestamp}.xlsx`);
+            };
+
+            // [수정] 발주 리스트 XLSX 다운로드 핸들러
+            const handleDownloadProductXLSX = () => { 
+                const summary = {}; 
+                orders.forEach(o => { 
+                    const code = productNumbers[o.product] ? `[${productNumbers[o.product]}] ` : ''; 
+                    const key = (code + o.product) || '미지정'; 
+                    summary[key] = (summary[key] || 0) + parseNum(o.quantity); 
+                }); 
+                const rows = [['상품명', '수량']];
+                Object.entries(summary).forEach(([k, v]) => rows.push([k, v]));
+                
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "발주리스트");
+                XLSX.writeFile(wb, `발주리스트_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            };
 
             const handleLoadFromGoogle = async () => { 
                 if (!googleScriptUrl) { showToast("설정된 Google Script URL이 없습니다.", "error"); return; } 
@@ -1914,7 +1952,7 @@
                             <div className="h-3 w-px bg-slate-300 dark:bg-slate-700 mx-1"></div>
                             <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-500"><Icon name={isDarkMode ? "sun" : "moon"} size={14}/></button>
                             <div className="h-3 w-px bg-slate-300 dark:bg-slate-700 mx-1"></div>
-                            <div className="relative" ref={excelMenuRef}><ActionButton onClick={()=>setIsExcelMenuOpen(!isExcelMenuOpen)} color="ghost" icon="file-xls" text="엑셀"/>{isExcelMenuOpen && (<div className="absolute top-full right-0 mt-1 w-32 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border shadow-soft rounded-md z-50 py-1"><button onClick={()=>{handleDownloadCSV('full'); setIsExcelMenuOpen(false);}} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 text-slate-700 dark:text-gray-300"><Icon name="file-xls" className="text-accent-teal"/> 전체</button><button onClick={()=>{handleDownloadCSV('invoice'); setIsExcelMenuOpen(false);}} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 text-slate-700 dark:text-gray-300"><Icon name="truck" className="text-brand-600"/> 송장</button><button onClick={()=>{handleDownloadProductCSV(); setIsExcelMenuOpen(false);}} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 border-t border-slate-100 dark:border-dark-border mt-0.5 pt-0.5 text-slate-700 dark:text-gray-300"><Icon name="list" className="text-accent-amber"/> 발주</button></div>)}</div>
+                            <div className="relative" ref={excelMenuRef}><ActionButton onClick={()=>setIsExcelMenuOpen(!isExcelMenuOpen)} color="ghost" icon="file-xls" text="엑셀"/>{isExcelMenuOpen && (<div className="absolute top-full right-0 mt-1 w-32 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border shadow-soft rounded-md z-50 py-1"><button onClick={()=>{handleDownloadXLSX('full'); setIsExcelMenuOpen(false);}} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 text-slate-700 dark:text-gray-300"><Icon name="file-xls" className="text-accent-teal"/> 전체</button><button onClick={()=>{handleDownloadXLSX('invoice'); setIsExcelMenuOpen(false);}} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 text-slate-700 dark:text-gray-300"><Icon name="truck" className="text-brand-600"/> 송장</button><button onClick={()=>{handleDownloadProductXLSX(); setIsExcelMenuOpen(false);}} className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-slate-50 dark:hover:bg-dark-input flex items-center gap-2 border-t border-slate-100 dark:border-dark-border mt-0.5 pt-0.5 text-slate-700 dark:text-gray-300"><Icon name="list" className="text-accent-amber"/> 발주</button></div>)}</div>
                             <ActionButton onClick={handleReset} color="ghost" icon="eraser" text="초기화"/>
                             <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv,.xlsx,.xls" style={{display:'none'}} />
                             <input type="file" ref={customerFileRef} onChange={handleCustomerFileUpload} accept=".csv" style={{display:'none'}} />
@@ -2036,7 +2074,15 @@
                                                         <div className="flex justify-end"><button onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }} className="text-slate-300 hover:text-rose-500"><Icon name="x" size={10}/></button></div>
                                                         
                                                         {editingAmountId === order.id && (<div className="col-span-full p-2 bg-slate-50 flex gap-2 justify-start pl-4 items-center border-y border-slate-100" onClick={e=>e.stopPropagation()}><span className="text-[10px] text-slate-500 font-bold">현금:</span><input type="number" placeholder="현금 금액" className="w-20 p-1 border rounded text-xs text-right font-mono outline-none focus:border-brand-500" value={order.deposit} autoFocus={true} onChange={e => { const val = Number(e.target.value); handleSetDepositAmount(order.id, val); if (editSource === 'card') { const priceNum = parseNum(order.price); const remainder = Math.max(0, priceNum - val); handleSetCardAmount(order.id, remainder); } }} onBlur={() => handleToggleAmountEdit(null)} onKeyDown={(e) => { if (e.key === 'Enter') handleToggleAmountEdit(null); }} /><span className="text-[10px] text-slate-500 font-bold ml-4">카드:</span><input type="number" placeholder="카드 금액" className="w-20 p-1 border rounded text-xs text-right font-mono outline-none focus:border-rose-500" value={order.cardAmount} onChange={e => handleSetCardAmount(order.id, e.target.value)} onBlur={() => handleToggleAmountEdit(null)} onKeyDown={(e) => { if (e.key === 'Enter') handleToggleAmountEdit(null); }} /></div>)}
-                                                        {editingShippingId === order.id && (<div className="col-span-full p-1.5 bg-brand-50 dark:bg-brand-900/20 border-y border-brand-100 dark:border-brand-800 flex gap-2 justify-start pl-4 items-center animate-fade-in shadow-inner" onClick={e=>e.stopPropagation()}><span className="text-[10px] font-bold text-brand-600 dark:text-brand-300">개별 배송비:</span><input type="number" className="w-16 p-0.5 rounded-sm border border-brand-200 text-right font-bold text-xs text-brand-700 outline-none" value={order.customShippingFee ?? quickShipping} onChange={e => handleUpdateOrder(order.id, 'customShippingFee', Number(e.target.value))} onBlur={() => setEditingShippingId(null)} onKeyDown={(e) => { if (e.key === 'Enter') setEditingShippingId(null); }} /><button onClick={() => handleUpdateOrder(order.id, 'customShippingFee', null)} className="text-[10px] bg-white text-brand-600 px-2 py-0.5 rounded-sm border border-brand-200 hover:bg-brand-50">기본값</button><button onClick={() => setEditingShippingId(null)} className="text-[10px] bg-brand-600 text-white px-2 py-0.5 rounded-sm hover:bg-brand-700 ml-1">확인</button></div>)}
+                                                        {editingShippingId === order.id && (
+                                                            <div className="col-span-full p-1.5 bg-brand-50 dark:bg-brand-900/20 border-y border-brand-100 dark:border-brand-800 flex gap-2 justify-start pl-4 items-center animate-fade-in shadow-inner" onClick={e=>e.stopPropagation()}>
+                                                                <span className="text-[10px] font-bold text-brand-600 dark:text-brand-300">개별 배송비:</span>
+                                                                <input type="number" className="w-16 p-0.5 rounded-sm border border-brand-200 text-right font-bold text-xs text-brand-700 outline-none" value={order.customShippingFee ?? quickShipping} onChange={e => handleUpdateOrder(order.id, 'customShippingFee', Number(e.target.value))} onBlur={() => setEditingShippingId(null)} onKeyDown={(e) => { if (e.key === 'Enter') setEditingShippingId(null); }} />
+                                                                <button onClick={() => handleUpdateOrder(order.id, 'customShippingFee', 0)} className="text-[10px] bg-white text-emerald-600 px-2 py-0.5 rounded-sm border border-emerald-200 hover:bg-emerald-50 flex items-center gap-1" title="무료배송 (0원 설정)"><Icon name="gift" size={10} weight="fill"/>무료</button>
+                                                                <button onClick={() => handleUpdateOrder(order.id, 'customShippingFee', null)} className="text-[10px] bg-white text-brand-600 px-2 py-0.5 rounded-sm border border-brand-200 hover:bg-brand-50">기본값</button>
+                                                                <button onClick={() => setEditingShippingId(null)} className="text-[10px] bg-brand-600 text-white px-2 py-0.5 rounded-sm hover:bg-brand-700 ml-1">확인</button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
