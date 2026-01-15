@@ -1222,7 +1222,7 @@
                         {activeTab === 'order' && (
                             <>
                                 <div className="shrink-0"><SummarySection stats={stats} handleUnpaidFilterClick={handleUnpaidFilterClick} unpaidFilter={unpaidFilter}/></div>
-                                <div className="shrink-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1.5fr_0.8fr_1.5fr] gap-2 h-64">
+                                <div className="shrink-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 h-64">
                                     <div className="lg:col-span-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg flex flex-col shadow-soft overflow-hidden">
                                         <div className="flex items-center justify-between px-2 pt-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20">
                                             <div className="flex gap-1"><button onClick={()=>setConverterTab('general')} className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition-all ${converterTab==='general' ? 'bg-white dark:bg-dark-card text-brand-600 dark:text-brand-400 border-x border-t border-slate-200 dark:border-slate-700 border-b-white dark:border-b-dark-card -mb-px z-10' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>스피드입력</button><button onClick={()=>setConverterTab('batch')} className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition-all ${converterTab==='batch' ? 'bg-white dark:bg-dark-card text-accent-rose border-x border-t border-slate-200 dark:border-slate-700 border-b-white dark:border-b-dark-card -mb-px z-10' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>일괄입력</button></div>
