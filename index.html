@@ -1092,8 +1092,9 @@
                       const formattedPhone = `${phoneMatch[1]}-${phoneMatch[2]}-${phoneMatch[3]}`;
                       const foundNick = findCustomerByPhone(formattedPhone);
                       if (foundNick) {
-                          const product = quickName || '';
-                          const unitPrice = Number(quickPrice) || productHistory[product] || 0;
+                          // [수정] 스피드 입력 시 전화번호만 입력하면 상품 자동완성 안 함 (빈 값)
+                          const product = '';
+                          const unitPrice = 0;
                           const crmData = customerDB[foundNick];
                           return sanitizeOrder({ 
                               id: Date.now() + Math.random(), 
@@ -1165,7 +1166,9 @@
                 let product = ''; let quantity = 1; let productStartIndex = 1;
                 if (!code && parts.length > 1 && parts[1].startsWith('#')) { code = parts[1].substring(1); productStartIndex = 2; }
                 const productRaw = parts.slice(productStartIndex).join(' ');
-                if (productRaw) { const qtyMatch = productRaw.match(/(\d+)\s*(?:개|set|ea|box)?$/i); if (qtyMatch) { quantity = parseInt(qtyMatch[1], 10); product = productRaw.replace(qtyMatch[0], '').trim() || productRaw.replace(/(\s*(?:개|set|ea|box)?)$/i, '').trim(); } else { product = productRaw.trim(); } } else { if (code) { const foundName = Object.keys(productNumbers).find(key => productNumbers[key] == code); if (foundName) { product = foundName; } } if (!product) { product = quickName || ''; } }
+                if (productRaw) { const qtyMatch = productRaw.match(/(\d+)\s*(?:개|set|ea|box)?$/i); if (qtyMatch) { quantity = parseInt(qtyMatch[1], 10); product = productRaw.replace(qtyMatch[0], '').trim() || productRaw.replace(/(\s*(?:개|set|ea|box)?)$/i, '').trim(); } else { product = productRaw.trim(); } } else { if (code) { const foundName = Object.keys(productNumbers).find(key => productNumbers[key] == code); if (foundName) { product = foundName; } } 
+                // [수정] 닉네임만 입력 시 이전에 선택한 상품(quickName)을 자동으로 채우는 로직 제거 (빈 상품으로 등록)
+                }
                 const pName = product.trim();
                 const unitPrice = productHistory[product] || productHistory[pName] || 0;
                 const price = quantity * unitPrice;
