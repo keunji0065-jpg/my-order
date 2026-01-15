@@ -562,6 +562,68 @@
                 setIsAddressModalOpen(true);
             };
 
+            // [NEW] 상품명 입력 완료(Blur) 시 실행: 코드 매칭 및 가격 조회, 학습
+            const handleProductBlur = (id, val) => {
+                const pName = val.trim();
+                if (!pName) return;
+
+                setOrders(prev => prev.map(o => {
+                    if (o.id !== id) return o;
+                    let updates = {};
+
+                    // 1. 저장된 코드가 있으면 불러오기
+                    if (productNumbers[pName]) {
+                        updates.code = productNumbers[pName];
+                    } 
+                    // 2. 저장된 코드는 없는데 현재 주문서에 코드가 있다면? (새로운 상품-코드 매칭 학습)
+                    else if (o.code) {
+                        setProductNumbers(prevNums => ({...prevNums, [pName]: o.code}));
+                    }
+
+                    // 3. 가격이 0원일 때 가격 불러오기
+                    if (o.price === 0) {
+                        const unitPrice = productHistory[pName] || 0;
+                        if (unitPrice > 0) updates.price = parseNum(o.quantity) * unitPrice;
+                    }
+
+                    return sanitizeOrder({ ...o, ...updates });
+                }));
+            };
+
+            // [NEW] 코드 입력 완료(Blur) 시 실행: 상품명 역추적 또는 학습
+            const handleCodeBlur = (id, val) => {
+                const code = val.trim();
+                if (!code) return;
+
+                setOrders(prev => prev.map(o => {
+                    if (o.id !== id) return o;
+                    
+                    let updates = {};
+
+                    // 1. 상품명이 비어있다면? 코드로 상품명 찾기 (역추적)
+                    if (!o.product || !o.product.trim()) {
+                        const foundName = Object.keys(productNumbers).find(key => productNumbers[key] == code);
+                        if (foundName) {
+                            updates.product = foundName;
+                            const unitPrice = productHistory[foundName] || 0;
+                            if (unitPrice > 0 && o.price === 0) {
+                                updates.price = parseNum(o.quantity) * unitPrice;
+                            }
+                        }
+                    } 
+                    // 2. 상품명이 이미 있다면? (학습 모드) -> 이 상품명에 이 코드를 매핑
+                    else {
+                        const pName = o.product.trim();
+                        // 기존에 저장된 코드와 다를 때만 업데이트 (불필요한 리렌더링 방지)
+                        if (productNumbers[pName] !== code) {
+                            setProductNumbers(prevNums => ({...prevNums, [pName]: code}));
+                        }
+                    }
+
+                    return sanitizeOrder({ ...o, ...updates });
+                }));
+            };
+
             const handleUpdateOrder = (id, field, value) => { 
                 setOrders(prev => prev.map(o => { 
                     if (o.id !== id) return o; 
@@ -595,23 +657,19 @@
                         const unitPrice = productHistory[o.product] || productHistory[pName] || 0; 
                         if (unitPrice > 0) updates.price = numValue * unitPrice; 
                     }
+                    
+                    // [수정] 입력 중에는 단순히 값만 업데이트 (자동완성 로직 제거 -> onBlur로 이동)
                     if (field === 'codeInput') {
                         updates.code = value;
-                        if (o.product) setProductNumbers(prev => ({...prev, [o.product.trim()]: value}));
+                        // 기존의 실시간 학습 로직 제거됨 (handleCodeBlur로 이동)
                         return { ...o, ...updates };
                     }
+                    
+                    // [수정] 입력 중에는 단순히 값만 업데이트 (자동완성 로직 제거 -> onBlur로 이동)
                     if (field === 'product') { 
-                        const pName = value.trim();
-                        if (o.price === 0) {
-                            const unitPrice = productHistory[value] || productHistory[pName] || 0; 
-                            if (unitPrice > 0) updates.price = parseNum(o.quantity) * unitPrice; 
-                        }
-                        if (productNumbers[pName]) {
-                            updates.code = productNumbers[pName];
-                        } else if (o.code) {
-                            setProductNumbers(prev => ({...prev, [pName]: o.code}));
-                        }
+                        // 기존의 실시간 코드 찾기 로직 제거됨
                     }
+                    
                     if (field === 'price' && o.product) { 
                         const qty = parseNum(o.quantity); 
                         if (qty > 0) setProductHistory(h => ({...h, [o.product.trim()]: numValue/qty})); 
@@ -1223,7 +1281,7 @@
                             <>
                                 <div className="shrink-0"><SummarySection stats={stats} handleUnpaidFilterClick={handleUnpaidFilterClick} unpaidFilter={unpaidFilter}/></div>
                                 <div className="shrink-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-2 h-64">
-                                    <div className="lg:col-span-4 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg flex flex-col shadow-soft overflow-hidden">
+                                    <div className="lg:col-span-3 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg flex flex-col shadow-soft overflow-hidden">
                                         <div className="flex items-center justify-between px-2 pt-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20">
                                             <div className="flex gap-1"><button onClick={()=>setConverterTab('general')} className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition-all ${converterTab==='general' ? 'bg-white dark:bg-dark-card text-brand-600 dark:text-brand-400 border-x border-t border-slate-200 dark:border-slate-700 border-b-white dark:border-b-dark-card -mb-px z-10' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>스피드입력</button><button onClick={()=>setConverterTab('batch')} className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition-all ${converterTab==='batch' ? 'bg-white dark:bg-dark-card text-accent-rose border-x border-t border-slate-200 dark:border-slate-700 border-b-white dark:border-b-dark-card -mb-px z-10' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>일괄입력</button></div>
                                             <div className="pb-1 pr-1 text-slate-400"><Icon name="clipboard-text"/></div>
@@ -1264,7 +1322,7 @@
                                             )) : <div className="col-span-2 h-full flex items-center justify-center text-slate-400 text-xs">최근 등록된 상품이 없습니다.</div>}
                                         </div>
                                     </div>
-                                    <div className="lg:col-span-2 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col shadow-soft h-full overflow-hidden">
+                                    <div className="lg:col-span-3 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col shadow-soft h-full overflow-hidden">
                                         <div className="flex justify-between items-center mb-1 px-1"><h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1"><Icon name="chat-text" className="text-accent-amber"/> 카카오톡 주문서</h3><button onClick={() => { handleCopy(manualMessage); }} className="text-[10px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 px-2 py-0.5 rounded text-slate-600 dark:text-slate-300 flex items-center gap-1"><Icon name="copy"/> 복사하기</button></div>
                                         <textarea className="flex-1 w-full p-2 bg-yellow-50/50 dark:bg-yellow-900/10 border border-yellow-100 dark:border-yellow-900/20 rounded-md resize-none text-xs outline-none font-mono" value={manualMessage} onChange={e => setManualMessage(e.target.value)}></textarea>
                                     </div>
@@ -1312,8 +1370,8 @@
                                                             <button onClick={(e) => { e.stopPropagation(); handleAutoCardFull(order.id); }} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleAmountEdit(order.id, 'card'); }} className={`w-full h-4 rounded-[3px] text-[9px] font-bold border transition-all flex items-center justify-center ${cardButtonClass}`} title={`카드 결제 ${order.cardAmount > 0 ? `(${order.cardAmount.toLocaleString()}원)` : '(클릭: 전액, 우클릭: 복합/입력)'}`}>카드</button>
                                                         </div>
                                                         <div className="relative"><input id={`cell-customer-${idx}`} className="w-full bg-transparent font-bold outline-none" value={order.customer} onChange={e => handleUpdateOrder(order.id, 'customer', e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'customer', idx)} /></div>
-                                                        <div className="relative"><input id={`cell-code-${idx}`} className="w-full bg-transparent font-mono outline-none text-slate-500" value={order.code || productNumbers[order.product] || ''} onChange={e => handleUpdateOrder(order.id, 'codeInput', e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'code', idx)} /></div>
-                                                        <div className="relative"><input id={`cell-product-${idx}`} className="w-full bg-transparent font-bold outline-none" value={order.product} onChange={e => handleUpdateOrder(order.id, 'product', e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'product', idx)} /></div>
+                                                        <div className="relative"><input id={`cell-code-${idx}`} className="w-full bg-transparent font-mono outline-none text-slate-500" value={order.code || productNumbers[order.product] || ''} onChange={e => handleUpdateOrder(order.id, 'codeInput', e.target.value)} onBlur={e => handleCodeBlur(order.id, e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'code', idx)} /></div>
+                                                        <div className="relative"><input id={`cell-product-${idx}`} className="w-full bg-transparent font-bold outline-none" value={order.product} onChange={e => handleUpdateOrder(order.id, 'product', e.target.value)} onBlur={e => handleProductBlur(order.id, e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'product', idx)} /></div>
                                                         <div className="flex justify-center"><input id={`cell-quantity-${idx}`} type="number" className="w-full text-center bg-transparent font-bold outline-none" value={order.quantity} onChange={e => handleUpdateOrder(order.id, 'quantity', e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'quantity', idx)} /></div>
                                                         <div className="text-right"><input id={`cell-price-${idx}`} className="w-full text-right bg-transparent font-mono outline-none focus:border-b focus:border-blue-500 cursor-text" value={order.price.toLocaleString()} onChange={e => handleUpdateOrder(order.id, 'price', e.target.value)} onKeyDown={e => handleGridKeyDown(e, 'price', idx)} /></div>
                                                         <div className="flex justify-center"><button onClick={(e) => { e.stopPropagation(); handleOpenAddressModal(order.id); }} className={`w-5 h-5 rounded-sm flex items-center justify-center hover:scale-110 transition-transform ${order.isAddressFilled ? 'bg-brand-600 text-white' : 'text-slate-300 bg-slate-100 dark:bg-slate-800'}`} title="주소 관리 (클릭 시 팝업)"><Icon name="map-pin" size={12} weight={order.isAddressFilled ? "fill" : "regular"}/></button></div>
