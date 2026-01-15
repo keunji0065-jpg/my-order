@@ -1,7 +1,7 @@
 <html lang="ko" class="antialiased"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>깔로 주문서 PRO 2.2 </title>
+    <title>깔로 주문서 PRO </title>
     
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -395,7 +395,7 @@
             return (
                 <div className="flex h-full tab-content gap-4 p-4">
                     <div className="w-64 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm flex flex-col overflow-hidden">
-                        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 flex flex-col gap-2"><div className="flex justify-between items-center"><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="address-book" size={14}/> 고객 목록</h3><div className="flex gap-1"><button onClick={() => fileInputRef.current.click()} className="text-[10px] bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 flex items-center gap-1" title="[스마트 업로드] 엑셀(.xlsx) 또는 CSV 파일을 업로드하세요."><Icon name="file-xls" /> 업로드</button><button onClick={handleFileDownload} className="text-[10px] bg-slate-500 text-white px-2 py-1 rounded hover:bg-slate-600 flex items-center gap-1"><Icon name="download-simple"/> 다운</button><button onClick={onResetCustomers} className="text-[10px] bg-rose-500 text-white px-2 py-1 rounded hover:bg-rose-600 flex items-center gap-1" title="고객 목록 초기화"><Icon name="trash" weight="fill"/></button></div><input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv,.xlsx,.xls" style={{display:'none'}} /></div><div className="relative"><input className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-dark-input border border-slate-200 dark:border-slate-700 rounded text-xs outline-none focus:border-brand-500" placeholder="고객명 검색..." value={search} onChange={e => setSearch(e.target.value)} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="magnifying-glass" size={12}/></div></div></div>
+                        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 flex flex-col gap-2"><div className="flex justify-between items-center"><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="address-book" size={14}/> 고객 목록</h3><div className="flex gap-1"><button onClick={() => fileInputRef.current.click()} className="text-[10px] bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 flex items-center gap-1" title="[스마트 업로드] 엑셀(.xlsx) 또는 CSV 파일을 업로드하세요."><Icon name="file-xls" /> 업로드</button><button onClick={handleFileDownload} className="text-[10px] bg-slate-500 text-white px-2 py-1 rounded hover:bg-slate-600 flex items-center gap-1"><Icon name="download-simple"/> 다운</button><button onClick={onResetCustomers} className="text-[10px] bg-rose-500 text-white px-2 py-1 rounded hover:bg-rose-600 flex items-center gap-1" title="고객 목록 초기화"><Icon name="trash" weight="fill"/></button></div><input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv,.xlsx,.xls" style={{display:'none'}} /></div><div className="relative"><input className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-dark-input border border-slate-200 dark:border-slate-700 rounded text-xs outline-none focus:border-brand-500" placeholder="고객명 검색..." value={search} onChange={e => setSearchTerm(e.target.value)} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="magnifying-glass" size={12}/></div></div></div>
                         <div className="flex-1 overflow-y-auto p-1 space-y-0.5">{allCustomers.map(c => (<button key={c} onClick={() => { setSelectedCustomer(c); setIsRenaming(false); }} className={`w-full text-left px-3 py-2 text-xs rounded transition-colors flex items-center justify-between group ${selectedCustomer === c ? 'bg-brand-50 text-brand-700 font-bold dark:bg-brand-900/30 dark:text-brand-400' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span className="truncate">{c}</span>{customerDB[c] && <Icon name="check-circle" size={10} className="text-emerald-500"/>}</button>))}</div>
                     </div>
                     <div className="flex-1 flex flex-col gap-4 overflow-hidden">
@@ -497,6 +497,15 @@
             const [quickPrice, setQuickPrice] = useState('');
             // ADDED: Address Modal State
             const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+            
+            // [NEW] 상단 미니 상품 등록 입력 상태
+            const [quickRegCode, setQuickRegCode] = useState('');
+            const [quickRegName, setQuickRegName] = useState('');
+            const [quickRegPrice, setQuickRegPrice] = useState('');
+
+            // [NEW] 최근 등록 상품 수정 상태
+            const [editingRecentProduct, setEditingRecentProduct] = useState(null);
+            const [editRecentForm, setEditRecentForm] = useState({ name: '', price: '', code: '' });
 
             const fileInputRef = useRef(null);
             const customerFileRef = useRef(null);
@@ -532,6 +541,95 @@
             const handleRecentProductClick = (name, price) => { if (activeTab === 'order' && focusedOrderId) { setOrders(prev => prev.map(o => { if (o.id === focusedOrderId) { const existingCode = productNumbers[name] || ''; return { ...o, product: name, price: o.quantity * price, code: existingCode || o.code }; } return o; })); showToast("선택된 주문의 상품이 업데이트되었습니다."); } else { if (converterTab === 'batch') { setBatchProduct(name); setBatchPrice(price); setBatchCode(productNumbers[name]||''); } else { setQuickName(name); setQuickPrice(price); setQuickCode(productNumbers[name]||''); } } };
             const handleDeleteProductHistory = (productName) => { setProductHistory(prev => { const newHistory = { ...prev }; delete newHistory[productName]; return newHistory; }); };
             const handleClearProductHistory = () => { setConfirmModal({ open: true, message: "최근 등록 상품 목록을 모두 삭제하시겠습니까?", onConfirm: () => { setProductHistory({}); setConfirmModal({ open: false, message: '', onConfirm: null }); showToast("상품 목록이 초기화되었습니다."); } }); };
+            
+            // [NEW] 상단 미니 상품 등록 핸들러
+            const handleQuickRegisterProduct = () => {
+                if (!quickRegName.trim()) { showToast("상품명을 입력해주세요.", "error"); return; }
+                const pName = quickRegName.trim();
+                const pPrice = parseNum(quickRegPrice);
+                const pCode = quickRegCode.trim();
+
+                // 1. 가격 저장 (상품명 키)
+                setProductHistory(prev => ({ ...prev, [pName]: pPrice }));
+                
+                // 2. 코드 저장 (코드가 있을 경우만 업데이트, 없으면 기존 유지)
+                if (pCode) {
+                    setProductNumbers(prev => ({ ...prev, [pName]: pCode }));
+                }
+
+                // 3. 입력창 초기화
+                setQuickRegName('');
+                setQuickRegPrice('');
+                setQuickRegCode('');
+                showToast("상품이 등록되었습니다.");
+            };
+
+            // [NEW] 최근 등록 상품 수정 핸들러
+            const handleStartEditRecent = (name, price, code) => {
+                setEditingRecentProduct(name);
+                setEditRecentForm({ name, price, code: code || '' });
+            };
+
+            const handleEditRecentChange = (field, value) => {
+                setEditRecentForm(prev => ({ ...prev, [field]: value }));
+            };
+
+            const handleSaveEditRecent = () => {
+                const oldName = editingRecentProduct;
+                const newName = editRecentForm.name.trim();
+                const newPrice = Number(editRecentForm.price);
+                const newCode = editRecentForm.code.trim();
+
+                if (!newName) return;
+
+                // 1. 상품 이력 업데이트
+                setProductHistory(prev => {
+                    const next = { ...prev };
+                    if (newName !== oldName) delete next[oldName];
+                    next[newName] = newPrice;
+                    return next;
+                });
+
+                // 2. 상품 코드 업데이트
+                setProductNumbers(prev => {
+                    const next = { ...prev };
+                    if (newName !== oldName) delete next[oldName];
+                    if (newCode) next[newName] = newCode;
+                    else delete next[newName];
+                    return next;
+                });
+
+                // 3. 카테고리 정보 이동 (있다면)
+                setProductCategories(prev => {
+                    const next = { ...prev };
+                    if (next[oldName]) {
+                        next[newName] = next[oldName];
+                        if (newName !== oldName) delete next[oldName];
+                    }
+                    return next;
+                });
+
+                // 4. 기존 주문 내역 일괄 업데이트
+                setOrders(prev => prev.map(o => {
+                    if (o.product === oldName) {
+                        return sanitizeOrder({
+                            ...o,
+                            product: newName,
+                            price: parseNum(o.quantity) * newPrice,
+                            code: newCode // 코드가 비어있으면 빈 값으로 업데이트
+                        });
+                    }
+                    return o;
+                }));
+
+                setEditingRecentProduct(null);
+                showToast("상품 정보가 수정되었습니다 (주문 내역 반영)");
+            };
+
+            const handleCancelEditRecent = () => {
+                setEditingRecentProduct(null);
+            };
+
             const handleResetCustomers = () => { setConfirmModal({ open: true, message: "정말로 모든 고객 정보를 삭제하시겠습니까? (복구 불가)", onConfirm: () => { setCustomerDB({}); showToast("고객 목록이 초기화되었습니다."); setConfirmModal({ open: false, message: '', onConfirm: null }); } }); };
 
             const handleQuickAddOrder = () => {
@@ -1025,7 +1123,8 @@
                     const dbKey = findCustomerKey(customer);
                     if (dbKey) customer = dbKey;
 
-                    const product = batchProduct || '기본 상품'; 
+                    // [수정] 일괄 입력 시 상품명이 없으면 '기본 상품' 대신 빈 값('')으로 등록
+                    const product = batchProduct || ''; 
                     const unitPrice = Number(batchPrice) || productHistory[product] || productHistory[product.trim()] || 0;
                     const quantity = 1; 
                     const price = quantity * unitPrice;
@@ -1299,27 +1398,54 @@
                                         </div>
                                     </div>
                                     <div className="lg:col-span-6 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col shadow-soft h-full overflow-hidden">
-                                        <div className="flex justify-between items-center mb-1 px-1">
-                                            <h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
-                                                <Icon name="tag" className="text-brand-500"/> 최근 등록 상품 (클릭시 자동입력)
+                                        <div className="flex justify-between items-center mb-1 px-1 gap-2">
+                                            <h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 shrink-0">
+                                                <Icon name="tag" className="text-brand-500"/> 최근 상품
                                             </h3>
-                                            <button onClick={handleClearProductHistory} className="text-slate-400 hover:text-rose-500" title="전체 삭제">
-                                                <Icon name="trash" size={14}/>
-                                            </button>
+                                            <div className="flex-1 flex items-center justify-end gap-1 min-w-0">
+                                                <input className="w-10 p-0.5 border rounded text-[10px] font-mono outline-none focus:border-brand-500 text-center bg-slate-50 dark:bg-dark-input dark:border-slate-700" placeholder="코드" value={quickRegCode} onChange={e => setQuickRegCode(e.target.value)} />
+                                                <input className="w-20 lg:w-32 p-0.5 border rounded text-[10px] font-bold outline-none focus:border-brand-500 bg-slate-50 dark:bg-dark-input dark:border-slate-700" placeholder="상품명" value={quickRegName} onChange={e => setQuickRegName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleQuickRegisterProduct()} />
+                                                <input className="w-12 p-0.5 border rounded text-[10px] text-right outline-none focus:border-brand-500 bg-slate-50 dark:bg-dark-input dark:border-slate-700" type="number" placeholder="단가" value={quickRegPrice} onChange={e => setQuickRegPrice(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleQuickRegisterProduct()} />
+                                                <button onClick={handleQuickRegisterProduct} className="bg-brand-600 text-white px-2 py-0.5 rounded text-[10px] hover:bg-brand-700 shrink-0 font-bold">등록</button>
+                                                <div className="w-px h-3 bg-slate-300 mx-0.5"></div>
+                                                <button onClick={handleClearProductHistory} className="text-slate-400 hover:text-rose-500 shrink-0" title="전체 삭제">
+                                                    <Icon name="trash" size={14}/>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="flex-1 overflow-y-auto p-1 min-h-0 grid grid-cols-2 gap-1 content-start">
-                                            {recentProducts.length > 0 ? recentProducts.map(([name, price], i) => (
-                                                <div key={name} onClick={() => handleRecentProductClick(name, price)} className="flex justify-between items-center text-xs p-1.5 bg-slate-50 dark:bg-dark-input rounded border border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-brand-50 dark:hover:bg-slate-700 transition-colors group">
-                                                    <div className="flex-1 flex items-center min-w-0 gap-1.5"> 
-                                                        {productNumbers[name] && <span className="text-[11px] text-blue-600 dark:text-blue-300 font-bold font-mono bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded shrink-0 border border-blue-100 dark:border-blue-800">{productNumbers[name]}</span>}
-                                                        <span className="font-bold truncate text-slate-700 dark:text-slate-300 group-hover:text-brand-600 dark:group-hover:text-brand-400 text-[13px]" title={name}>{name}</span>
+                                            {recentProducts.length > 0 ? recentProducts.map(([name, price], i) => {
+                                                const isEditing = editingRecentProduct === name;
+                                                return (
+                                                    <div 
+                                                        key={name} 
+                                                        onClick={() => !isEditing && handleRecentProductClick(name, price)} 
+                                                        onDoubleClick={() => !isEditing && handleStartEditRecent(name, price, productNumbers[name])}
+                                                        className={`flex justify-between items-center text-xs p-1.5 rounded border transition-colors group ${isEditing ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-slate-50 dark:bg-dark-input border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-brand-50 dark:hover:bg-slate-700'}`}
+                                                    >
+                                                        {isEditing ? (
+                                                            <div className="flex gap-1 w-full items-center" onClick={e => e.stopPropagation()}>
+                                                                <input className="w-10 p-1 border rounded text-[10px] font-mono outline-none focus:border-blue-500" placeholder="코드" value={editRecentForm.code} onChange={e => handleEditRecentChange('code', e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEditRecent()} />
+                                                                <input className="flex-1 p-1 border rounded text-[11px] font-bold outline-none focus:border-blue-500" placeholder="상품명" value={editRecentForm.name} onChange={e => handleEditRecentChange('name', e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && handleSaveEditRecent()} />
+                                                                <input className="w-12 p-1 border rounded text-[11px] text-right outline-none focus:border-blue-500" type="number" placeholder="단가" value={editRecentForm.price} onChange={e => handleEditRecentChange('price', e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEditRecent()} />
+                                                                <button onClick={handleSaveEditRecent} className="text-blue-600 hover:text-blue-800 p-0.5"><Icon name="check" weight="bold"/></button>
+                                                                <button onClick={handleCancelEditRecent} className="text-slate-400 hover:text-slate-600 p-0.5"><Icon name="x" weight="bold"/></button>
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                <div className="flex-1 flex items-center min-w-0 gap-1.5"> 
+                                                                    {productNumbers[name] && <span className="text-[11px] text-blue-600 dark:text-blue-300 font-bold font-mono bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded shrink-0 border border-blue-100 dark:border-blue-800">{productNumbers[name]}</span>}
+                                                                    <span className="font-bold truncate text-slate-700 dark:text-slate-300 group-hover:text-brand-600 dark:group-hover:text-brand-400 text-[13px]" title={name}>{name}</span>
+                                                                </div>
+                                                                <span className="font-mono text-slate-500 text-[11px] mr-2 shrink-0">{price.toLocaleString()}원</span>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteProductHistory(name); }} className="text-slate-300 hover:text-rose-500 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                                    <Icon name="x" size={10} weight="bold"/>
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
-                                                    <span className="font-mono text-slate-500 text-[11px] mr-2 shrink-0">{price.toLocaleString()}원</span>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteProductHistory(name); }} className="text-slate-300 hover:text-rose-500 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                                        <Icon name="x" size={10} weight="bold"/>
-                                                    </button>
-                                                </div>
-                                            )) : <div className="col-span-2 h-full flex items-center justify-center text-slate-400 text-xs">최근 등록된 상품이 없습니다.</div>}
+                                                );
+                                            }) : <div className="col-span-2 h-full flex items-center justify-center text-slate-400 text-xs">최근 등록된 상품이 없습니다.</div>}
                                         </div>
                                     </div>
                                     <div className="lg:col-span-3 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col shadow-soft h-full overflow-hidden">
@@ -1329,8 +1455,18 @@
                                 </div>
                                 <div className="flex-1 flex gap-2 min-h-0">
                                     <div className="w-40 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm flex flex-col overflow-hidden">
-                                        <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 flex flex-col gap-1"><div className="relative"><input className="w-full pl-6 pr-2 py-1 bg-white dark:bg-dark-input border border-slate-200 dark:border-slate-700 rounded text-xs outline-none focus:border-brand-500" placeholder="주문자 검색..." value={folderSearch} onChange={e => setFolderSearch(e.target.value)} /><div className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="magnifying-glass" size={10}/></div></div></div>
-                                        <div className="p-1 border-b border-slate-50 dark:border-slate-800 shrink-0"><button onClick={() => { setSelectedCustomerFolder('all'); setFolderSearch(''); }} className={`w-full text-left px-2 py-1.5 text-xs rounded transition-colors flex items-center justify-between ${selectedCustomerFolder === 'all' ? 'bg-blue-50 text-blue-600 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span>전체 보기</span></button></div>
+                                        <div className="p-1.5 border-b border-slate-100 dark:border-dark-border bg-slate-50/50 dark:bg-dark-input/20 flex flex-col gap-1">
+                                            <div className="relative">
+                                                <input className="w-full pl-6 pr-2 h-7 bg-white dark:bg-dark-input border border-slate-200 dark:border-slate-700 rounded text-xs outline-none focus:border-brand-500" placeholder="주문자 검색..." value={folderSearch} onChange={e => setFolderSearch(e.target.value)} />
+                                                <div className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="magnifying-glass" size={10}/></div>
+                                            </div>
+                                        </div>
+                                        <div className="border-b border-slate-200 dark:border-slate-700 shrink-0 bg-slate-100 dark:bg-dark-card">
+                                            <button onClick={() => { setSelectedCustomerFolder('all'); setFolderSearch(''); }} className={`w-full text-left px-3 py-1 text-[10px] transition-colors flex items-center justify-between font-bold text-slate-500 h-[24px] ${selectedCustomerFolder === 'all' ? 'bg-blue-50 text-blue-600' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                                                <span>전체 보기</span>
+                                                <Icon name="list" size={12}/>
+                                            </button>
+                                        </div>
                                         <div className="flex-1 overflow-y-auto p-1 space-y-0.5">{customerFolders.map(c => (<button key={c.name} onClick={() => handleSidebarClick(c.name)} className={`w-full text-left px-2 py-1.5 text-xs rounded transition-colors flex items-center justify-between group ${selectedCustomerFolder === c.name ? 'bg-blue-50 text-blue-600 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><span className="truncate flex-1">{c.name}</span><div className="flex items-center gap-1">{c.unpaid && <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>}<span className="text-[10px] text-slate-400">{c.count}</span></div></button>))}</div>
                                     </div>
                                     <div className="flex-1 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg flex flex-col overflow-hidden shadow-soft min-h-0">
@@ -1351,7 +1487,7 @@
                                             </div>
                                         </div>
                                         <div className="flex-1 overflow-y-auto p-0 relative">
-                                            <div className="grid grid-rows-compact gap-2 px-3 py-1 bg-slate-100 dark:bg-dark-card border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 text-center sticky top-0 z-10 shadow-sm">
+                                            <div className="grid grid-rows-compact gap-2 px-3 py-1 bg-slate-100 dark:bg-dark-card border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 text-center sticky top-0 z-10 shadow-sm h-[24px] items-center">
                                                 <div className="flex items-center justify-center"><input type="checkbox" onChange={toggleSelectAll} checked={filteredOrders.length > 0 && selectedOrderIds.size === filteredOrders.length} className="cursor-pointer"/></div>
                                                 <div>날짜</div><div>상태</div><div className="text-left">닉네임</div><div className="text-left">코드</div><div className="text-left">상품명</div><div>수량</div><div className="text-right">금액</div><div>주소</div><div className="text-left">메모</div><div></div>
                                             </div>
