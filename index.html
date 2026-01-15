@@ -1397,19 +1397,20 @@
                                             )}
                                         </div>
                                     </div>
-                                    <div className="lg:col-span-6 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-2 flex flex-col shadow-soft h-full overflow-hidden">
-                                        <div className="flex justify-between items-center mb-1 px-1 gap-2">
-                                            <h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 shrink-0">
+                                    <div className="lg:col-span-6 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg p-1 flex flex-col shadow-soft h-full overflow-hidden">
+                                        {/* [수정] 배경색(bg-slate-50) 및 하단 테두리(border-b) 제거 -> bg-white로 변경하여 깔끔하게 */}
+                                        <div className="flex justify-between items-center mb-1 gap-1 px-1 pt-1 bg-white dark:bg-dark-input/20 rounded-t pb-1.5">
+                                            <h3 className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 shrink-0 pl-1 hidden xl:flex">
                                                 <Icon name="tag" className="text-brand-500"/> 최근 상품
                                             </h3>
                                             <div className="flex-1 flex items-center justify-end gap-1 min-w-0">
-                                                <input className="w-10 p-0.5 border rounded text-[10px] font-mono outline-none focus:border-brand-500 text-center bg-slate-50 dark:bg-dark-input dark:border-slate-700" placeholder="코드" value={quickRegCode} onChange={e => setQuickRegCode(e.target.value)} />
-                                                <input className="w-20 lg:w-32 p-0.5 border rounded text-[10px] font-bold outline-none focus:border-brand-500 bg-slate-50 dark:bg-dark-input dark:border-slate-700" placeholder="상품명" value={quickRegName} onChange={e => setQuickRegName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleQuickRegisterProduct()} />
-                                                <input className="w-12 p-0.5 border rounded text-[10px] text-right outline-none focus:border-brand-500 bg-slate-50 dark:bg-dark-input dark:border-slate-700" type="number" placeholder="단가" value={quickRegPrice} onChange={e => setQuickRegPrice(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleQuickRegisterProduct()} />
-                                                <button onClick={handleQuickRegisterProduct} className="bg-brand-600 text-white px-2 py-0.5 rounded text-[10px] hover:bg-brand-700 shrink-0 font-bold">등록</button>
-                                                <div className="w-px h-3 bg-slate-300 mx-0.5"></div>
-                                                <button onClick={handleClearProductHistory} className="text-slate-400 hover:text-rose-500 shrink-0" title="전체 삭제">
-                                                    <Icon name="trash" size={14}/>
+                                                <input className="w-12 p-1.5 border rounded text-xs font-mono outline-none focus:border-brand-500 text-center bg-white dark:bg-dark-input dark:border-slate-700 shadow-sm" placeholder="코드" value={quickRegCode} onChange={e => setQuickRegCode(e.target.value)} />
+                                                <input className="flex-1 min-w-[80px] p-1.5 border rounded text-xs font-bold outline-none focus:border-brand-500 bg-white dark:bg-dark-input dark:border-slate-700 shadow-sm" placeholder="상품명" value={quickRegName} onChange={e => setQuickRegName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleQuickRegisterProduct()} />
+                                                <input className="w-16 p-1.5 border rounded text-xs text-right outline-none focus:border-brand-500 bg-white dark:bg-dark-input dark:border-slate-700 shadow-sm" type="number" placeholder="단가" value={quickRegPrice} onChange={e => setQuickRegPrice(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleQuickRegisterProduct()} />
+                                                <button onClick={handleQuickRegisterProduct} className="bg-brand-600 text-white px-3 py-1.5 rounded text-xs hover:bg-brand-700 shrink-0 font-bold shadow-sm">등록</button>
+                                                <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                                                <button onClick={handleClearProductHistory} className="text-slate-400 hover:text-rose-500 shrink-0 p-1" title="전체 삭제">
+                                                    <Icon name="trash" size={15}/>
                                                 </button>
                                             </div>
                                         </div>
