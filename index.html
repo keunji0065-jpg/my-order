@@ -49,8 +49,8 @@
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         *:focus { outline: none !important; }
         
-        /* 체크(30) 날짜(60) 상태(100) 닉네임(100) 코드(40) 상품명(2.5fr) 수량(35) 금액(70) 주소(30) 메모(0.7fr) 삭제(30) */
-        .grid-rows-compact { grid-template-columns: 30px 60px 100px 100px 40px 2.5fr 35px 70px 30px 0.7fr 30px; }
+        /* [수정] 상태 열 너비 증가: 100px -> 135px (확인 버튼 추가 공간 확보) */
+        .grid-rows-compact { grid-template-columns: 30px 60px 135px 100px 40px 2.5fr 35px 70px 30px 0.7fr 30px; }
         .dragging { opacity: 0.5; border: 2px dashed #627d98; }
         
         @media print {
@@ -115,10 +115,11 @@
         const sanitizeOrder = (order) => {
             if (!order || typeof order !== 'object') return null;
             
-            const customer = String(order.customer || order['닉네임'] || order['이름'] || order['성함'] || order['주문자'] || order['구매자'] || '');
+            const customer = String(order.customer || order['닉네임'] || order['이름'] || order['성함'] || order['주문자'] || order['구매자'] || '').trim();
             const product = order.product || order['상품명'] || order['상품'] || order['품목'] || order['내용'] || '';
             const code = order.code || order['코드'] || order['제품코드'] || '';
             
+            // [수정] 0(Falsy) 값이 들어올 때 || 연산자로 인해 원본 데이터(엑셀 컬럼 등)가 덮어씌워지는 문제 해결 (undefined 체크로 변경)
             const rawPriceVal = order.price !== undefined ? order.price : (order['금액'] || order['가격'] || order['판매가'] || order['총금액'] || order['주문금액'] || order['결제금액'] || order['단가'] || order['비용'] || order['상품대금'] || 0);
             const rawPrice = parseNum(rawPriceVal);
             
@@ -152,6 +153,14 @@
                  isShippingPaid = String(order.isShippingPaid).toUpperCase() === 'TRUE';
             }
 
+            // [NEW] 확인(Verified) 상태 추가
+            let isVerified = !!order.isVerified;
+            if (order['확인'] !== undefined) {
+                isVerified = String(order['확인']).toUpperCase() === 'TRUE' || String(order['확인']) === 'O';
+            } else if (order['체크'] !== undefined) {
+                isVerified = String(order['체크']).toUpperCase() === 'TRUE';
+            }
+
             const recipientName = order.recipientName || order['수령인'] || order['받는분'] || order['성함(수령인)'] || order['recipientName'] || '';
             const phone = order.phone || order['연락처'] || order['전화번호'] || order['핸드폰'] || order['phone'] || order['휴대폰'] || '';
             const zipCode = order.zipCode || order['우편번호'] || order['zipCode'] || '';
@@ -163,13 +172,7 @@
             const isAddressFilled = !!recipientName && !!phone && !!addressText;
             
             const calculatedIsPaid = (deposit + cardAmount) >= rawPrice;
-            let originalIsPaid = false;
-            if (order.isPaid !== undefined) {
-                originalIsPaid = order.isPaid === true || String(order.isPaid).toUpperCase() === 'TRUE';
-            } else {
-                originalIsPaid = String(order['결제완료']).toUpperCase() === 'TRUE' || String(order['완납']).toUpperCase() === 'TRUE';
-            }
-            
+            const originalIsPaid = order.isPaid !== undefined ? (order.isPaid === true || String(order.isPaid).toUpperCase() === 'TRUE') : (String(order['결제완료']).toUpperCase() === 'TRUE' || String(order['완납']).toUpperCase() === 'TRUE');
             const finalIsPaid = originalIsPaid || calculatedIsPaid;
 
             return {
@@ -184,6 +187,7 @@
                 isPaid: finalIsPaid, 
                 isCardPaid: !!order.isCardPaid || cardAmount > 0,
                 isShippingPaid: isShippingPaid,
+                isVerified: isVerified, // [NEW] 확인 상태
                 customShippingFee: customShippingFee,
                 memo: memo,
                 recipientName: recipientName,
@@ -544,7 +548,7 @@
             return (
                 <div className="flex h-full tab-content gap-4 p-4">
                     <div className="w-64 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-lg shadow-sm flex flex-col overflow-hidden">
-                        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 flex flex-col gap-2"><div className="flex justify-between items-center"><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="address-book" size={14}/> 고객 목록</h3><div className="flex gap-1"><button onClick={() => fileInputRef.current.click()} className="text-[10px] bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 flex items-center gap-1" title="[스마트 업로드] 엑셀(.xlsx) 또는 CSV 파일을 업로드하세요."><Icon name="file-xls" /> 업로드</button><button onClick={handleFileDownload} className="text-[10px] bg-slate-500 text-white px-2 py-1 rounded hover:bg-slate-600 flex items-center gap-1"><Icon name="download-simple"/> 다운</button><button onClick={onResetCustomers} className="text-[10px] bg-rose-500 text-white px-2 py-1 rounded hover:bg-rose-600 flex items-center gap-1" title="고객 목록 초기화"><Icon name="trash" weight="fill"/></button></div><input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv,.xlsx,.xls" style={{display:'none'}} /></div><div className="relative"><input className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-dark-input border border-slate-200 dark:border-slate-700 rounded text-xs outline-none focus:border-brand-500" placeholder="이름, 전화번호, 주소 검색..." value={search} onChange={e => setSearch(e.target.value)} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="magnifying-glass" size={12}/></div></div></div>
+                        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-dark-input/20 flex flex-col gap-2"><div className="flex justify-between items-center"><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Icon name="address-book" size={14}/> 고객 목록</h3><div className="flex gap-1"><button onClick={() => fileInputRef.current.click()} className="text-[10px] bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 flex items-center gap-1" title="[스마트 업로드] 엑셀(.xlsx) 또는 CSV 파일을 업로드하세요."><Icon name="file-xls" /> 업로드</button><button onClick={handleFileDownload} className="text-[10px] bg-slate-500 text-white px-2 py-1 rounded hover:bg-slate-600 flex items-center gap-1"><Icon name="download-simple"/> 다운</button><button onClick={onResetCustomers} className="text-[10px] bg-rose-500 text-white px-2 py-1 rounded hover:bg-rose-600 flex items-center gap-1" title="고객 목록 초기화"><Icon name="trash" weight="fill"/></button></div><input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv,.xlsx,.xls" style={{display:'none'}} /></div><div className="relative"><input className="w-full pl-7 pr-2 py-1.5 bg-white dark:bg-dark-input border border-slate-200 dark:border-slate-700 rounded text-xs outline-none focus:border-brand-500" placeholder="고객명 검색..." value={search} onChange={e => setSearch(e.target.value)} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"><Icon name="magnifying-glass" size={12}/></div></div></div>
                         <div className="flex-1 overflow-y-auto p-1 space-y-0.5">{allCustomers.map(c => {
                             const ambiguousColor = ambiguousColorMap[c];
                             return (
@@ -814,8 +818,28 @@
             const toggleSelectOrder = (id) => { const newSet = new Set(selectedOrderIds); if (newSet.has(id)) newSet.delete(id); else newSet.add(id); setSelectedOrderIds(newSet); };
             const handleSaveAddress = (orderId, addrData) => { const targetOrder = orders.find(o => o.id === orderId); const targetCustomer = targetOrder ? targetOrder.customer : ''; setOrders(prev => prev.map(o => { if (o.id === orderId || (targetCustomer && o.customer === targetCustomer)) { return sanitizeOrder({ ...o, ...addrData }); } return o; })); if (targetCustomer) { setCustomerDB(prev => ({ ...prev, [targetCustomer]: { ...prev[targetCustomer], ...addrData } })); showToast(`[${targetCustomer}] 님의 주문에 주소가 저장되었습니다.`); } else { showToast('주문서에 주소가 저장되었습니다.'); } setIsAddressModalOpen(false); };
             const handleRecentProductClick = (name, price) => { if (activeTab === 'order' && focusedOrderId) { setOrders(prev => prev.map(o => { if (o.id === focusedOrderId) { const existingCode = productNumbers[name] || ''; return { ...o, product: name, price: o.quantity * price, code: existingCode || o.code }; } return o; })); showToast("선택된 주문의 상품이 업데이트되었습니다."); } else { if (converterTab === 'batch') { setBatchProduct(name); setBatchPrice(price); setBatchCode(productNumbers[name]||''); } else { setQuickName(name); setQuickPrice(price); setQuickCode(productNumbers[name]||''); } } };
-            const handleDeleteProductHistory = (productName) => { setProductHistory(prev => { const newHistory = { ...prev }; delete newHistory[productName]; return newHistory; }); };
-            const handleClearProductHistory = () => { setConfirmModal({ open: true, message: "최근 등록 상품 목록을 모두 삭제하시겠습니까?", onConfirm: () => { setProductHistory({}); setConfirmModal({ open: false, message: '', onConfirm: null }); showToast("상품 목록이 초기화되었습니다."); } }); };
+            
+            // [수정] 상품 하나 삭제 시 코드와 카테고리 정보도 함께 삭제하도록 수정
+            const handleDeleteProductHistory = (productName) => { 
+                setProductHistory(prev => { const newHistory = { ...prev }; delete newHistory[productName]; return newHistory; }); 
+                setProductNumbers(prev => { const newNums = { ...prev }; delete newNums[productName]; return newNums; });
+                setProductCategories(prev => { const newCats = { ...prev }; delete newCats[productName]; return newCats; });
+            };
+            
+            // [수정] 전체 초기화 시 코드와 카테고리 정보도 함께 초기화하도록 수정
+            const handleClearProductHistory = () => { 
+                setConfirmModal({ 
+                    open: true, 
+                    message: "최근 등록 상품 목록(코드 포함)을 모두 삭제하시겠습니까?", 
+                    onConfirm: () => { 
+                        setProductHistory({}); 
+                        setProductNumbers({}); // 코드 정보도 초기화
+                        setProductCategories({}); // 카테고리 정보도 초기화
+                        setConfirmModal({ open: false, message: '', onConfirm: null }); 
+                        showToast("상품 목록 및 코드가 초기화되었습니다."); 
+                    } 
+                }); 
+            };
             
             const handleSetBankBalance = () => {
                 setPromptModal({
@@ -1059,11 +1083,48 @@
                     handleUpdateOrder(id, 'customer', trimmedValue);
                 }
             };
+            
+            // [NEW] 전체 주문 재검증 헬퍼 함수: 데이터 무결성 보장 및 완납 상태 동기화
+            const revalidateOrders = (ordersList, quickShippingVal = quickShipping) => {
+                const firstOrderIds = {};
+                ordersList.forEach(o => {
+                    if (o.customer && (!firstOrderIds[o.customer] || o.id < firstOrderIds[o.customer])) {
+                        firstOrderIds[o.customer] = o.id;
+                    }
+                });
+
+                return ordersList.map(o => {
+                    let quantity = parseNum(o.quantity);
+                    let price = parseNum(o.price);
+                    let deposit = parseNum(o.deposit);
+                    let cardAmount = parseNum(o.cardAmount);
+                    let customShippingFee = o.customShippingFee !== undefined && o.customShippingFee !== null ? parseNum(o.customShippingFee) : quickShippingVal;
+
+                    // 완납 여부 재계산
+                    const isFirst = firstOrderIds[o.customer] === o.id;
+                    const shippingCharge = (isFirst && !o.isShippingPaid) ? customShippingFee : 0;
+                    
+                    const totalReq = price + shippingCharge;
+                    const totalPaid = deposit + cardAmount;
+                    
+                    // 오차 범위(epsilon) 고려하여 완납 체크
+                    const isPaid = totalPaid >= (totalReq - 0.1);
+
+                    return {
+                        ...o,
+                        quantity,
+                        price,
+                        deposit,
+                        cardAmount,
+                        isPaid,
+                        customShippingFee
+                    };
+                });
+            };
 
             const handleUpdateOrder = (id, field, value) => { 
                 setOrders(prev => {
-                    // 1. 기본 업데이트 수행
-                    const updatedOrders = prev.map(o => { 
+                    const nextOrders = prev.map(o => { 
                         if (o.id !== id) return o; 
                         let updates = { [field]: value };
                         
@@ -1078,7 +1139,6 @@
                                     checkValue = foundNick;
                                 }
                             }
-                            
                             const dbKey = findCustomerKey(checkValue);
                             if (dbKey) {
                                 if (phoneMatch) updates.customer = dbKey;
@@ -1092,6 +1152,7 @@
                                 updates.isAddressFilled = !!(info.recipientName && info.phone && info.addressText);
                             }
                         }
+
                         const numValue = parseNum(value);
                         if (field === 'quantity') { 
                             const pName = o.product ? o.product.trim() : '';
@@ -1107,16 +1168,9 @@
                         if (field === 'product') { 
                             const val = value.trim().toLowerCase();
                             if (val) {
-                                const matches = Object.keys(productHistory)
-                                    .filter(p => p.toLowerCase().includes(val))
-                                    .sort() 
-                                    .slice(0, 10); 
-                                
-                                if (matches.length > 0) {
-                                    setSuggestions({ id: id, list: matches, activeIndex: 0 });
-                                } else {
-                                    setSuggestions({ id: null, list: [], activeIndex: 0 });
-                                }
+                                const matches = Object.keys(productHistory).filter(p => p.toLowerCase().includes(val)).sort().slice(0, 10); 
+                                if (matches.length > 0) setSuggestions({ id: id, list: matches, activeIndex: 0 });
+                                else setSuggestions({ id: null, list: [], activeIndex: 0 });
                             } else {
                                 setSuggestions({ id: null, list: [], activeIndex: 0 });
                             }
@@ -1129,96 +1183,86 @@
                         return sanitizeOrder({ ...o, ...updates }); 
                     });
 
-                    // 2. [수정] 금액/수량 변경 시 완납 상태 유지 로직 (Auto-Adjustment)
-                    if (field === 'quantity' || field === 'price' || field === 'customShippingFee') {
-                        return updatedOrders.map(order => {
-                            if (order.id !== id) return order;
-                            
-                            const oldOrder = prev.find(po => po.id === id);
-                            if (!oldOrder) return order;
-
-                            const oldPrice = parseNum(oldOrder.price);
-                            const newPrice = parseNum(order.price);
-
-                            // 가격 변동이 없으면 패스
-                            if (oldPrice === newPrice) return order;
-
-                            const oldPaid = oldOrder.deposit + oldOrder.cardAmount;
-                            // 기존에 완납 상태였다면 (입금액 >= 상품금액) -> 차액만큼 자동 반영
-                            if (oldPaid >= oldPrice && oldPaid > 0) {
-                                const diff = newPrice - oldPrice;
-                                let newDeposit = order.deposit;
-                                let newCard = order.cardAmount;
-
-                                if (order.cardAmount > 0 && order.deposit === 0) {
-                                    // 카드 올인 상태였으면 카드 금액 조정
-                                    newCard = Math.max(0, newCard + diff);
-                                } else {
-                                    // 현금 올인 또는 복합 결제면 현금 우선 조정
-                                    newDeposit = Math.max(0, newDeposit + diff);
-                                }
-                                return sanitizeOrder({ ...order, deposit: newDeposit, cardAmount: newCard });
-                            }
-                            return order;
-                        });
-                    }
+                    // [수정] 과도한 자동화 제거 (사용자 요청: 현금은 현금, 배송비는 별개)
+                    // 가격/수량이 변해도 입금액(deposit/cardAmount)을 자동으로 건드리지 않음.
                     
-                    return updatedOrders;
+                    return revalidateOrders(nextOrders, quickShipping);
                 }); 
             };
 
-            const handleDelete = (id) => setOrders(prev => prev.filter(o => o.id !== id));
+            const handleDelete = (id) => setOrders(prev => revalidateOrders(prev.filter(o => o.id !== id), quickShipping));
             
             const handleAutoDepositFull = (id) => {
-                setOrders(prev => prev.map(o => {
-                    if (o.id !== id) return o;
-                    const price = parseNum(o.price);
-                    
-                    // [수정] 현금 버튼도 배송비를 포함한 총액 기준으로 토글되도록 변경
-                    const shipping = o.customShippingFee !== undefined && o.customShippingFee !== null ? o.customShippingFee : quickShipping;
-                    const isFirst = prev.filter(x => x.customer === o.customer)[0].id === o.id;
-                    const totalReq = price + (isFirst && !o.isShippingPaid ? shipping : 0);
+                setOrders(prev => {
+                    const next = prev.map(o => {
+                        if (o.id !== id) return o;
+                        const price = parseNum(o.price);
+                        
+                        const shipping = o.customShippingFee !== undefined && o.customShippingFee !== null ? parseNum(o.customShippingFee) : quickShipping;
+                        const isFirst = prev.filter(x => x.customer === o.customer)[0].id === o.id;
+                        
+                        // [수정] 현재 배송비 토글 상태(isShippingPaid)를 존중하여 계산
+                        // 배송비가 '미결제' 상태일 때만 청구 금액에 포함. 토글 상태 자체는 변경하지 않음.
+                        const needsShippingPay = isFirst && !o.isShippingPaid;
+                        const totalReq = price + (needsShippingPay ? shipping : 0); 
 
-                    const currentDeposit = o.deposit;
-                    // 이미 전액(혹은 그 이상) 현금 결제된 상태인지 확인
-                    const isFullCash = currentDeposit >= totalReq && o.cardAmount === 0;
-                    
-                    const nextDeposit = isFullCash ? 0 : totalReq;
-                    return sanitizeOrder({ ...o, deposit: nextDeposit, cardAmount: isFullCash ? o.cardAmount : 0, isPaid: nextDeposit > 0 ? true : false });
-                }));
+                        // 토글(Toggle) 로직: 이미 완납이면 0, 아니면 완납금액
+                        const currentDeposit = o.deposit;
+                        const isFullCash = currentDeposit >= totalReq && o.cardAmount === 0;
+                        const nextDeposit = isFullCash ? 0 : totalReq;
+                        
+                        return sanitizeOrder({ 
+                            ...o, 
+                            deposit: nextDeposit, 
+                            cardAmount: 0, 
+                            // isShippingPaid: ... (변경하지 않음)
+                        });
+                    });
+                    return revalidateOrders(next, quickShipping);
+                });
             };
 
             const handleAutoCardFull = (id) => {
-                setOrders(prev => prev.map(o => {
-                    if (o.id !== id) return o;
-                    const price = parseNum(o.price);
-                    
-                    // [수정] 카드 버튼 클릭 시 배송비를 포함한 총액으로 설정되도록 개선
-                    const shipping = o.customShippingFee !== undefined && o.customShippingFee !== null ? o.customShippingFee : quickShipping;
-                    const isFirst = prev.filter(x => x.customer === o.customer)[0].id === o.id;
-                    const totalReq = price + (isFirst && !o.isShippingPaid ? shipping : 0);
+                setOrders(prev => {
+                    const next = prev.map(o => {
+                        if (o.id !== id) return o;
+                        const price = parseNum(o.price);
+                        
+                        const shipping = o.customShippingFee !== undefined && o.customShippingFee !== null ? parseNum(o.customShippingFee) : quickShipping;
+                        const isFirst = prev.filter(x => x.customer === o.customer)[0].id === o.id;
 
-                    // 이미 전액(혹은 그 이상) 카드 결제된 상태인지 확인
-                    const isFullCard = o.cardAmount >= totalReq && o.deposit === 0;
-                    
-                    const nextCard = isFullCard ? 0 : totalReq;
-                    
-                    return sanitizeOrder({ 
-                        ...o, 
-                        cardAmount: nextCard, 
-                        deposit: isFullCard ? o.deposit : 0, // 카드 취소 시 기존 현금 내역 유지 여부는 선택사항이나 보통 0으로 초기화하거나 유지함. 여기서는 카드 올인->취소 시 0으로.
-                        isCardPaid: nextCard > 0, 
-                        isPaid: nextCard > 0 // 명시적으로 isPaid 상태 제어
+                        // [수정] 현재 배송비 토글 상태를 존중
+                        const needsShippingPay = isFirst && !o.isShippingPaid;
+                        const totalReq = price + (needsShippingPay ? shipping : 0);
+
+                        const isFullCard = o.cardAmount >= totalReq && o.deposit === 0;
+                        const nextCard = isFullCard ? 0 : totalReq;
+                        
+                        return sanitizeOrder({ 
+                            ...o, 
+                            cardAmount: nextCard, 
+                            deposit: 0, 
+                            isCardPaid: nextCard > 0,
+                            // isShippingPaid: ... (변경하지 않음)
+                        });
                     });
-                }));
+                    return revalidateOrders(next, quickShipping);
+                });
             };
 
-            const handleSetCardAmount = (id, amount) => { setOrders(prev => prev.map(o => { if (o.id !== id) return o; const newAmount = Number(amount) || 0; const price = parseNum(o.price); return sanitizeOrder({ ...o, cardAmount: newAmount, isCardPaid: newAmount > 0, isPaid: (o.deposit + newAmount) >= price }); })); };
-            const handleSetDepositAmount = (id, amount) => { setOrders(prev => prev.map(o => { if (o.id !== id) return o; const newAmount = Number(amount) || 0; const price = parseNum(o.price); return sanitizeOrder({ ...o, deposit: newAmount, isPaid: (newAmount + o.cardAmount) >= price }); })); };
+            const handleSetCardAmount = (id, amount) => { setOrders(prev => revalidateOrders(prev.map(o => { if (o.id !== id) return o; const newAmount = Number(amount) || 0; return sanitizeOrder({ ...o, cardAmount: newAmount, isCardPaid: newAmount > 0 }); }), quickShipping)); };
+            const handleSetDepositAmount = (id, amount) => { setOrders(prev => revalidateOrders(prev.map(o => { if (o.id !== id) return o; const newAmount = Number(amount) || 0; return sanitizeOrder({ ...o, deposit: newAmount }); }), quickShipping)); };
             const handleToggleAmountEdit = (id, source = null) => { setEditingAmountId(id === editingAmountId ? null : id); setEditSource(source); setEditingShippingId(null); };
             const handleToggleShippingEdit = (id) => { setEditingShippingId(id === editingShippingId ? null : id); setEditingAmountId(null); };
             
-            // [수정] 배송비 토글 시 완납 상태 유지 로직 추가
+            // [NEW] 확인(Verified) 토글 핸들러
+            const handleVerificationToggle = (id) => {
+                setOrders(prev => prev.map(o => {
+                    if (o.id === id) return { ...o, isVerified: !o.isVerified };
+                    return o;
+                }));
+            };
+
             const handleShippingToggle = (id) => { 
                 if (window.event && window.event.type === 'contextmenu') { 
                     window.event.preventDefault(); 
@@ -1232,41 +1276,14 @@
                     const customer = targetOrder.customer;
                     const newStatus = !targetOrder.isShippingPaid;
                     
-                    const customerOrders = prev.filter(o => o.customer === customer);
-                    // ID 오름차순 정렬 가정 (생성순)
-                    const firstOrder = customerOrders.reduce((a, b) => a.id < b.id ? a : b, customerOrders[0]);
-
-                    return prev.map(o => {
+                    const nextOrders = prev.map(o => {
                         if (o.customer === customer) {
-                            let updates = { isShippingPaid: newStatus };
-                            
-                            // 첫 번째 주문인 경우에만 금액 보정 시도 (배송비 부과 대상)
-                            if (o.id === firstOrder.id) {
-                                const price = parseNum(o.price);
-                                const shipping = o.customShippingFee !== undefined ? o.customShippingFee : quickShipping;
-                                
-                                // 변경 전 상태 기준 완납 여부 확인
-                                const wasShippingCharged = !o.isShippingPaid; // 기존에 미결제였으면 청구됨
-                                const oldReq = price + (wasShippingCharged ? shipping : 0);
-                                const oldPaid = o.deposit + o.cardAmount;
-                                
-                                // 기존에 완납 상태였다면, 배송비 상태 변경에 따라 입금액 자동 조절
-                                if (oldPaid >= oldReq && oldPaid > 0) {
-                                    const isNowShippingCharged = !newStatus; // 결제완료(true)면 0원, 미결제(false)면 청구
-                                    const newReq = price + (isNowShippingCharged ? shipping : 0);
-                                    const diff = newReq - oldReq;
-                                    
-                                    if (o.cardAmount > 0 && o.deposit === 0) {
-                                        updates.cardAmount = Math.max(0, o.cardAmount + diff);
-                                    } else {
-                                        updates.deposit = Math.max(0, o.deposit + diff);
-                                    }
-                                }
-                            }
-                            return sanitizeOrder({ ...o, ...updates });
+                            return sanitizeOrder({ ...o, isShippingPaid: newStatus });
                         }
                         return o;
                     });
+                    
+                    return revalidateOrders(nextOrders, quickShipping);
                 }); 
             };
             
@@ -2126,6 +2143,9 @@
                                                 const cashButtonClass = order.deposit > 0 ? (isCombinedPayment ? 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200') : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-600';
                                                 const cardButtonClass = order.cardAmount > 0 ? (isCombinedPayment ? 'bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-200' : 'bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-200') : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-600';
                                                 const shipButtonClass = order.isShippingPaid ? 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-600';
+                                                // [NEW] 확인 버튼 클래스
+                                                const verifyButtonClass = order.isVerified ? 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-600';
+                                                
                                                 // [NEW] 유사 닉네임 감지 여부 -> 색상 적용
                                                 const ambiguousColor = ambiguousColorMap[order.customer];
                                                 
@@ -2133,7 +2153,10 @@
                                                     <div key={order.id} onClick={() => setFocusedOrderId(order.id)} className={`grid grid-rows-compact gap-2 px-3 py-0.5 items-center text-xs hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 cursor-pointer ${focusedOrderId === order.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                                                         <div className="flex items-center justify-center"><input type="checkbox" checked={selectedOrderIds.has(order.id)} onChange={() => toggleSelectOrder(order.id)} onClick={(e) => e.stopPropagation()} className="cursor-pointer"/></div>
                                                         <div className="text-[10px] text-slate-400 font-mono tracking-tighter whitespace-nowrap">{formatDateShort(order.id)}</div>
-                                                        <div className="grid grid-cols-3 gap-0.5 w-full">
+                                                        <div className="grid grid-cols-4 gap-0.5 w-full">
+                                                            {/* [NEW] 확인 토글 버튼 추가 (현금 왼쪽) */}
+                                                            <button onClick={(e) => { e.stopPropagation(); handleVerificationToggle(order.id); }} className={`w-full h-4 rounded-[3px] text-[9px] font-bold border transition-all flex items-center justify-center ${verifyButtonClass}`} title="확인 토글">확인</button>
+                                                            
                                                             <button onClick={(e) => { e.stopPropagation(); handleAutoDepositFull(order.id); }} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleAmountEdit(order.id); }} className={`w-full h-4 rounded-[3px] text-[9px] font-bold border transition-all flex items-center justify-center ${cashButtonClass}`} title={`현금 결제 ${order.deposit > 0 ? `(${order.deposit.toLocaleString()}원)` : '(클릭: 전액, 우클릭: 복합/입력)'}`}>현금</button>
                                                             {isFirst ? (<button onClick={(e) => { e.stopPropagation(); handleShippingToggle(order.id); }} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleShippingEdit(order.id); }} className={`w-full h-4 rounded-[3px] text-[9px] font-bold transition-all border flex items-center justify-center ${shipButtonClass}`} title={order.isShippingPaid ? "배송비 결제 완료" : "배송비 미결제"}>배송</button>) : <div></div>} 
                                                             <button onClick={(e) => { e.stopPropagation(); handleAutoCardFull(order.id); }} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleAmountEdit(order.id, 'card'); }} className={`w-full h-4 rounded-[3px] text-[9px] font-bold border transition-all flex items-center justify-center ${cardButtonClass}`} title={`카드 결제 ${order.cardAmount > 0 ? `(${order.cardAmount.toLocaleString()}원)` : '(클릭: 전액, 우클릭: 복합/입력)'}`}>카드</button>
