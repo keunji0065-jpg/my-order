@@ -492,26 +492,36 @@
             const handleUpdateCustomer = (field, value) => { if (!selectedCustomer) return; const cleanKey = selectedCustomer.trim(); const currentInfo = customerDB[cleanKey] || {}; const newInfo = { ...currentInfo, [field]: value }; setCustomerDB(prev => ({ ...prev, [cleanKey]: newInfo })); setOrders(prev => prev.map(o => { if (o.customer && o.customer.trim() === cleanKey) { const isAddressFilled = !!(newInfo.recipientName && newInfo.phone && newInfo.addressText); return sanitizeOrder({ ...o, recipientName: newInfo.recipientName, phone: newInfo.phone, zipCode: newInfo.zipCode, addressText: newInfo.addressText, addressDetail: newInfo.addressDetail, shippingMemo: newInfo.shippingMemo, isAddressFilled: isAddressFilled }); } return o; })); };
             const startRenaming = () => { setTempName(selectedCustomer); setIsRenaming(true); };
             
-            // [수정] 닉네임 변경 시 해당 고객의 저장된 주소 정보를 '기존 닉네임' 주문뿐만 아니라 '변경할 닉네임'으로 이미 등록된 주문에도 모두 적용하도록 개선
+            // [수정] 닉네임 변경 로직 강화: 특수문자/공백/정규화(NFC) 차이로 인한 미매칭 문제 해결
             const saveRename = () => { 
-                const newName = tempName.trim(); 
+                // 1. 입력값과 기존값을 정규화(NFC)하여 비교 기준 통일
+                const newName = tempName.trim().normalize('NFC'); 
+                const currentSelected = selectedCustomer.trim().normalize('NFC');
+
                 if (!newName) { showToast("닉네임을 입력해주세요.", "error"); return; } 
-                if (newName === selectedCustomer) { setIsRenaming(false); return; } 
-                if (customerDB[newName]) { showToast("이미 존재하는 닉네임입니다.", "error"); return; } 
+                if (newName === currentSelected) { setIsRenaming(false); return; } 
+                
+                // 2. DB 키 중복 확인 (정규화된 키 기준)
+                const isDuplicate = Object.keys(customerDB).some(k => k.trim().normalize('NFC') === newName);
+                if (isDuplicate) { showToast("이미 존재하는 닉네임입니다.", "error"); return; } 
                 
                 const info = customerDB[selectedCustomer] || {};
                 const newDB = { ...customerDB }; 
+                
+                // 3. DB 키 교체
                 newDB[newName] = info; 
                 delete newDB[selectedCustomer]; 
                 setCustomerDB(newDB); 
                 
+                // 4. 주문 내역 일괄 업데이트 (정규화된 비교 사용)
                 setOrders(prev => prev.map(o => {
-                    // [수정] 변경 전 닉네임(selectedCustomer) 또는 변경 후 닉네임(newName)을 가진 모든 주문을 대상으로 업데이트
-                    if (o.customer === selectedCustomer || o.customer === newName) {
+                    const orderCustomerNorm = o.customer ? o.customer.trim().normalize('NFC') : '';
+                    
+                    // 기존 닉네임과 같거나, 혹시 이미 새 닉네임으로 일부 변경된 건이 있다면 함께 처리
+                    if (orderCustomerNorm === currentSelected || orderCustomerNorm === newName) {
                         return sanitizeOrder({ 
                              ...o, 
                              customer: newName,
-                             // [수정] 주소 정보 동기화 (DB정보 우선 적용)
                              recipientName: info.recipientName || o.recipientName,
                              phone: info.phone || o.phone,
                              zipCode: info.zipCode || o.zipCode,
