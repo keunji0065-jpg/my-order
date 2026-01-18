@@ -2158,17 +2158,17 @@
                     )}
 
                     {isAddressModalOpen && (
-                        // [수정] 모달 배경 클릭 시 닫기 로직 강화: e.target === e.currentTarget 확인
-                        // 자식 요소(내부 컨텐츠) 클릭 이벤트가 버블링되어 닫히는 현상 방지
-                        <div className="modal-overlay" onClick={(e) => { if(e.target === e.currentTarget) setIsAddressModalOpen(false); }}>
+                        // [수정] 배경 클릭 시 닫힘 방지 (사용자가 실수로 닫는 것 예방)
+                        // onClick 이벤트를 제거하여 오직 'X' 버튼이나 '저장' 버튼으로만 닫히도록 변경
+                        <div className="modal-overlay">
                             <div className="modal-content !w-[600px] !h-[80vh] flex flex-col p-0 overflow-hidden" onClick={e => e.stopPropagation()}>
                                 <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-dark-input/20 flex justify-between items-center">
                                     <span className="font-bold text-sm text-slate-600 dark:text-slate-300 flex items-center gap-2">
                                         <Icon name="map-pin" className="text-brand-500" weight="fill"/> 
                                         {focusedOrder?.customer ? `${focusedOrder.customer} 님의 주소 관리` : '주소 관리'}
                                     </span>
-                                    <button onClick={() => setIsAddressModalOpen(false)} className="text-slate-400 hover:text-rose-500 transition-colors">
-                                        <Icon name="x" size={18} weight="bold"/>
+                                    <button onClick={() => setIsAddressModalOpen(false)} className="text-slate-400 hover:text-rose-500 transition-colors p-1">
+                                        <Icon name="x" size={20} weight="bold"/>
                                     </button>
                                 </div>
                                 <div className="flex-1 overflow-hidden relative">
