@@ -34,6 +34,17 @@
         body.dark { background-color: #0f172a; color: #f1f5f9; }
         ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        
+        /* 숫자 인력창 스핀 화살표 숨기기 */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
         .processed-chat { text-decoration: line-through; background-color: #f1f5f9 !important; color: #94a3b8 !important; opacity: 0.6; }
         .dark .processed-chat { background-color: #1e293b !important; color: #64748b !important; }
         .selected-chat-active { border-left: 3px solid #3b82f6; background-color: #eff6ff; }
@@ -134,7 +145,6 @@
         };
 
         const LiveTab = ({ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory }) => {
-            // 1. State Declarations
             const [chats, setChats] = useState([]);
             const [serverDeposits, setServerDeposits] = useState([]);
             const [manualDeposits, setManualDeposits] = useState([]);
@@ -153,11 +163,9 @@
             const [copyStatus, setCopyStatus] = useState({});
             const [isSaving, setIsSaving] = useState(false);
             const [editingShippingNick, setEditingShippingNick] = useState(null);
-            const [editingQuantityId, setEditingQuantityId] = useState(null);
             const [currentSearchTerm, setCurrentSearchTerm] = useState('');
             const [lastAddedOrderId, setLastAddedOrderId] = useState(null);
 
-            // 2. Helper Functions
             const findAddress = useCallback((nick) => {
                 if (addressMapping[nick]) {
                     const mappedAddr = addresses.find(a => normalizeString(a.nickname) === normalizeString(addressMapping[nick]));
@@ -170,21 +178,13 @@
                 return { data: null, type: 'none' };
             }, [addresses, addressMapping]);
 
-            // 스마트 배송비 계산 헬퍼 함수
             const getCalculatedShipping = useCallback((nick) => {
-                // 1순위: 수동 오버라이드 (사장님이 직접 변경한 금액)
                 if (shippingOverrides[nick] !== undefined) return Number(shippingOverrides[nick]);
-                
-                // 2순위: VIP 확인 (0원)
                 const nickNorm = normalizeString(nick);
                 const specialKey = Object.keys(specialCustomers || {}).find(k => normalizeString(k) === nickNorm);
                 if (specialKey && specialCustomers[specialKey].type === 'vip') return 0;
-                
-                // 3순위: 제주도 주소 확인 (8,000원)
                 const addrRes = findAddress(nick);
                 if (addrRes && addrRes.data && addrRes.data.address && addrRes.data.address.includes('제주')) return 8000;
-                
-                // 4순위: 기본 배송비
                 return Number(quickShipping);
             }, [shippingOverrides, specialCustomers, findAddress, quickShipping]);
 
@@ -228,7 +228,6 @@
                 return content.split(pattern).map((part, i) => keywordsSet.has(part) ? <span key={i} className="text-blue-600 font-bold">{part}</span> : part);
             };
 
-            // 3. Memos & Derived Data
             const allDeposits = useMemo(() => [...manualDeposits, ...serverDeposits], [manualDeposits, serverDeposits]);
             
             const totalDepositAmount = useMemo(() => {
@@ -333,7 +332,6 @@
                 return { totalSales, totalDeposit, totalUnpaid, totalCardExpected };
             }, [orders, cardPayments, getCalculatedShipping]);
 
-            // 4. Effects
             const fetchData = async () => {
                 if (!googleScriptUrl) { setConnectionStatus({ code: 'error_config', msg: '설정필요' }); return; }
                 try {
@@ -439,7 +437,6 @@
                 }
             }, [lastAddedOrderId, orders]);
 
-            // 5. User Interaction Handlers
             const addOrderLogic = (nickname, content, qty = 1, forceNewRow = false, insertAfterId = null) => {
                 const cleanNick = String(nickname || '').replace(/@/g, '').trim();
                 const initialProduct = content || '';
@@ -511,7 +508,16 @@
                     openModal("이 입금 확인을 취소하시겠습니까?", 'confirm', () => {
                         if (selectedNick) {
                             const depositAmount = Number(deposit.amount);
-                            setOrders(prev => prev.map(o => o.customer === selectedNick ? { ...o, deposit: Math.max(0, (o.deposit || 0) - depositAmount) } : o));
+                            setOrders(prev => {
+                                let applied = false;
+                                return prev.map(o => {
+                                    if (o.customer === selectedNick && !applied) {
+                                        applied = true;
+                                        return { ...o, deposit: Math.max(0, (o.deposit || 0) - depositAmount) };
+                                    }
+                                    return o;
+                                });
+                            });
                         }
                         setMatchedDeposits(prev => { const next = new Set(prev); next.delete(depositId); return next; });
                     });
@@ -529,13 +535,31 @@
                 if (matchedCustomer) {
                     if (selectedNick === matchedCustomer) {
                         const depositAmount = Number(deposit.amount);
-                        setOrders(prev => prev.map(o => o.customer === selectedNick ? { ...o, deposit: (o.deposit || 0) + depositAmount } : o));
+                        setOrders(prev => {
+                            let applied = false;
+                            return prev.map(o => {
+                                if (o.customer === selectedNick && !applied) {
+                                    applied = true;
+                                    return { ...o, deposit: (o.deposit || 0) + depositAmount };
+                                }
+                                return o;
+                            });
+                        });
                         setMatchedDeposits(prev => new Set(prev).add(depositId));
                     } else { setSelectedNick(matchedCustomer); setOrderSearch(matchedCustomer); }
                 } else if (selectedNick) {
                     openModal(`'${deposit.name}'님 매칭 대상이 없습니다. 현재 선택된 '${selectedNick}'님께 강제 입력하시겠습니까?`, 'confirm', () => {
                         const depositAmount = Number(deposit.amount);
-                        setOrders(prev => prev.map(o => o.customer === selectedNick ? { ...o, deposit: (o.deposit || 0) + depositAmount } : o));
+                        setOrders(prev => {
+                            let applied = false;
+                            return prev.map(o => {
+                                if (o.customer === selectedNick && !applied) {
+                                    applied = true;
+                                    return { ...o, deposit: (o.deposit || 0) + depositAmount };
+                                }
+                                return o;
+                            });
+                        });
                         setMatchedDeposits(prev => new Set(prev).add(depositId));
                     });
                 }
@@ -573,18 +597,18 @@
 
             const handleQuantityUpdate = (itemId, newQtyVal) => { 
                 const newQty = parseInt(newQtyVal, 10); 
-                if (isNaN(newQty) || newQty < 1) return setEditingQuantityId(null); 
                 setOrders(prev => prev.map(o => { 
                     if (o.id === itemId) { 
                         let unitPrice = 0; 
                         const invItem = Array.isArray(inventory) ? inventory.find(i => i.name === o.product) : null;
                         if (invItem) unitPrice = Number(invItem.price);
                         else unitPrice = productHistory[o.product] || (o.quantity > 0 ? o.price/o.quantity : 0);
-                        return { ...o, quantity: newQty, price: unitPrice * newQty, isUnmodified: false }; 
+                        
+                        const validQty = (isNaN(newQty) || newQty < 0) ? '' : newQty;
+                        return { ...o, quantity: validQty, price: unitPrice * (Number(validQty) || 0), isUnmodified: false }; 
                     } 
                     return o; 
                 })); 
-                setEditingQuantityId(null); 
             };
 
             const handleShippingChange = (nick, val) => setShippingOverrides(prev => ({ ...prev, [nick]: Number(val) }));
@@ -602,7 +626,7 @@
                 const activeItems = items.filter(i => !i.isCancelled);
                 const addrRes = findAddress(nick);
                 const addr = addrRes.data || {};
-                const itemListText = activeItems.map(i => `${i.product}${i.quantity > 1 ? ` ${i.quantity}` : ''} ${Number(i.price).toLocaleString()}원`).join('\n');
+                const itemListText = activeItems.map(i => `${i.product}${i.quantity > 1 ? ` ★${i.quantity}개` : ''} ${Number(i.price).toLocaleString()}원`).join('\n');
                 const currentShipping = getCalculatedShipping(nick);
                 const { emoji, paidMsg, unpaidPrefix, addrNotice, surveyNotice } = templateConfig;
                 let msg = `${emoji} ${nick} 님 ${emoji}\n\n\n${itemListText}\n배송비 ${currentShipping.toLocaleString()}원\n\n총 주문금액 ${grandTotal.toLocaleString()}원\n------------------\n`;
@@ -624,7 +648,6 @@
                 try { document.execCommand('copy'); setCopyStatus(prev => ({ ...prev, [nick]: true })); setTimeout(() => { setCopyStatus(prev => ({ ...prev, [nick]: false })); }, 2000); } catch (err) { openModal('복사 실패', 'alert'); } document.body.removeChild(textArea);
             };
 
-            // 6. Rendering
             return (
                 <div className="flex h-full gap-2 p-2 overflow-hidden bg-gray-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                     <datalist id="product-list">
@@ -835,35 +858,45 @@
                                                         onChange={(e) => handleProductChange(item.id, 'product', e.target.value)} 
                                                         onClick={(e) => e.stopPropagation()} 
                                                         onFocus={(e) => e.target.select()} 
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter') {
-                                                                e.preventDefault();
-                                                                const nextIdx = idx + 1;
-                                                                if (nextIdx < items.length) {
-                                                                    const nextInput = document.getElementById(`prod-input-${items[nextIdx].id}`);
-                                                                    if (nextInput) nextInput.focus();
-                                                                } else {
-                                                                    addOrderLogic(nick, '', 1, true, item.id);
-                                                                }
-                                                            }
-                                                        }}
                                                         className={`w-full outline-none px-1 rounded transition-colors bg-transparent ${item.isCancelled ? 'text-gray-400 dark:text-slate-500 line-through bg-transparent' : (item.isUnmodified ? 'text-blue-600 dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-900/20 focus:bg-white dark:focus:bg-slate-700 focus:ring-1 focus:ring-blue-300' : 'focus:bg-white dark:focus:bg-slate-700 focus:ring-1 focus:ring-indigo-100 dark:text-slate-200')}`} 
                                                         placeholder="상품명" 
                                                         disabled={item.isCancelled} 
                                                     />
                                                     {stockBadge}
                                                 </div>
-                                                <div className="flex items-center gap-1">
-                                                    <span onDoubleClick={(e) => { e.stopPropagation(); if (!item.isCancelled) setEditingQuantityId(item.id); }} className={`cursor-pointer font-bold px-1 rounded ${item.isCancelled ? 'cursor-not-allowed hover:bg-transparent line-through text-gray-400 dark:text-slate-500' : (item.isUnmodified ? 'text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40' : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-slate-600')}`}>
-                                                        {editingQuantityId === item.id ? (<input type="number" defaultValue={item.quantity} autoFocus onFocus={(e) => e.target.select()} className="w-8 text-center text-[10px] font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-800 rounded outline-none" onBlur={(e) => handleQuantityUpdate(item.id, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleQuantityUpdate(item.id, e.currentTarget.value); }} onClick={(e) => e.stopPropagation()} />) : `${item.quantity}개`}
-                                                    </span>
+                                                <div className="flex items-center gap-0.5 relative group">
                                                     <input 
+                                                        id={`qty-input-${item.id}`}
+                                                        type="number" 
+                                                        value={item.quantity === '' ? '' : item.quantity} 
+                                                        onChange={(e) => handleQuantityUpdate(item.id, e.target.value)} 
+                                                        onClick={(e) => e.stopPropagation()} 
+                                                        onFocus={(e) => e.target.select()} 
+                                                        onKeyDown={(e) => { if(e.key==='Enter') { e.preventDefault(); document.getElementById(`price-input-${item.id}`)?.focus(); } }}
+                                                        className={`w-12 text-right pr-3 text-[11px] font-bold bg-transparent outline-none rounded py-0.5 ${item.isCancelled ? 'line-through text-gray-400 dark:text-slate-500 cursor-not-allowed' : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:ring-1 focus:ring-indigo-300'}`}
+                                                        disabled={item.isCancelled} 
+                                                    />
+                                                    <span className="absolute right-1 text-[10px] text-gray-500 dark:text-slate-400 pointer-events-none">개</span>
+                                                    
+                                                    <input 
+                                                        id={`price-input-${item.id}`}
                                                         type="number" 
                                                         value={item.price} 
                                                         onChange={(e) => handleProductChange(item.id, 'price', e.target.value)} 
                                                         onClick={(e) => e.stopPropagation()} 
                                                         onFocus={(e) => e.target.select()} 
-                                                        className={`w-14 text-right font-mono bg-transparent outline-none px-1 rounded ${item.isCancelled ? 'line-through text-gray-400 dark:text-slate-500' : (item.isUnmodified ? 'text-blue-500 dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 dark:text-slate-400 focus:text-indigo-600 dark:focus:text-indigo-300')} ${Number(item.price) === 0 && !item.isCancelled ? 'bg-red-50 dark:bg-red-900/10 border-b border-red-300 dark:border-red-900' : ''}`} 
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                const nextIdx = idx + 1;
+                                                                if (nextIdx < items.length) {
+                                                                    document.getElementById(`prod-input-${items[nextIdx].id}`)?.focus();
+                                                                } else {
+                                                                    addOrderLogic(nick, '', 1, true, item.id);
+                                                                }
+                                                            }
+                                                        }}
+                                                        className={`w-16 text-right font-mono bg-transparent outline-none px-1 rounded ml-1 transition-colors ${item.isCancelled ? 'line-through text-gray-400 dark:text-slate-500 cursor-not-allowed' : (item.isUnmodified ? 'text-blue-500 dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 focus:ring-1 focus:ring-indigo-300 focus:text-indigo-600 dark:focus:text-indigo-300')} ${Number(item.price) === 0 && !item.isCancelled ? 'bg-red-50 dark:bg-red-900/10 border-b border-red-300 dark:border-red-900' : ''}`} 
                                                         disabled={item.isCancelled} 
                                                     />
                                                     <button onClick={(e)=>{e.stopPropagation(); handleOrderCancel(item.id);}} className={`ml-1 ${item.isCancelled ? "text-blue-500 dark:text-blue-400 hover:text-blue-700" : "text-gray-300 dark:text-slate-600 hover:text-red-500"}`} title={item.isCancelled ? "취소 철회" : "주문 취소"}><Icon name={item.isCancelled ? "arrow-u-up-left" : "prohibit"} weight="bold"/></button>
