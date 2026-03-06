@@ -74,6 +74,13 @@
         const Icon = ({ name, className="", weight="regular", size }) => <i className={`ph ph-${name} ${className}`} data-phosphor-icon-weight={weight} style={{fontSize: size}}></i>;
         const normalizeString = (str) => String(str || '').replace(/[\s\(\)\[\]\{\}\-\_\.\,\/]/g, '').toLowerCase();
 
+        // [신규] 닉네임 하이픈 분리 및 정규화 헬퍼 함수
+        const cleanForMatch = (str) => {
+            if (!str) return '';
+            const baseStr = String(str).split('-')[0].trim(); // '-' 기호 앞부분만 추출
+            return baseStr.replace(/[\s\(\)\[\]\{\}\-\_\.\,\/]/g, '').toLowerCase(); // 공백/특수문자 제거 후 소문자화
+        };
+
         const useLocalStorage = (key, initialValue) => {
             const [storedValue, setStoredValue] = useState(() => {
                 try {
@@ -145,6 +152,7 @@
         };
 
         const LiveTab = ({ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory }) => {
+            // 1. State Declarations
             const [chats, setChats] = useState([]);
             const [serverDeposits, setServerDeposits] = useState([]);
             const [manualDeposits, setManualDeposits] = useState([]);
@@ -166,6 +174,7 @@
             const [currentSearchTerm, setCurrentSearchTerm] = useState('');
             const [lastAddedOrderId, setLastAddedOrderId] = useState(null);
 
+            // 2. Helper Functions
             const findAddress = useCallback((nick) => {
                 if (addressMapping[nick]) {
                     const mappedAddr = addresses.find(a => normalizeString(a.nickname) === normalizeString(addressMapping[nick]));
@@ -228,6 +237,7 @@
                 return content.split(pattern).map((part, i) => keywordsSet.has(part) ? <span key={i} className="text-blue-600 font-bold">{part}</span> : part);
             };
 
+            // 3. Memos & Derived Data
             const allDeposits = useMemo(() => [...manualDeposits, ...serverDeposits], [manualDeposits, serverDeposits]);
             
             const totalDepositAmount = useMemo(() => {
@@ -254,26 +264,23 @@
                     if (aUsed && !bUsed) return 1; 
                     if (!aUsed && bUsed) return -1; 
                     if (selectedNick) { 
-                        const targetNick = normalizeString(selectedNick); 
-                        const depositorName = depositorNames[selectedNick] && normalizeString(depositorNames[selectedNick]); 
+                        const targetNick = cleanForMatch(selectedNick); 
+                        const depositorName = depositorNames[selectedNick] && cleanForMatch(depositorNames[selectedNick]); 
                         const targetReal = depositorName || ''; 
                         const addrRes = findAddress(selectedNick);
-                        const addressRealName = addrRes && addrRes.data ? normalizeString(addrRes.data.realname) : '';
+                        const addressRealName = addrRes && addrRes.data ? cleanForMatch(addrRes.data.realname) : '';
 
-                        const nameA = normalizeString(a.name); 
-                        const nameB = normalizeString(b.name); 
+                        const nameA = cleanForMatch(a.name); 
+                        const nameB = cleanForMatch(b.name); 
                         const getScore = (val, target) => { 
                             if (!target || !val) return 10; 
-                            const v = normalizeString(val); 
-                            const t = normalizeString(target); 
-                            if (v === t) return 0; 
-                            if (v.startsWith(t) || t.startsWith(v)) return 1; 
-                            if (v.includes(t) || t.includes(v)) return 2; 
-                            for (let i = 0; i < t.length - 1; i++) { if (v.includes(t.substring(i, i + 2))) return 3; } 
+                            if (val === target) return 0; 
+                            if (val.startsWith(target) || target.startsWith(val)) return 1; 
+                            if (val.includes(target) || target.includes(val)) return 2; 
                             return 10; 
                         }; 
-                        const scoreA = Math.min(getScore(a.name, targetNick), getScore(a.name, targetReal), getScore(a.name, addressRealName)); 
-                        const scoreB = Math.min(getScore(b.name, targetNick), getScore(b.name, targetReal), getScore(b.name, addressRealName)); 
+                        const scoreA = Math.min(getScore(nameA, targetNick), getScore(nameA, targetReal), getScore(nameA, addressRealName)); 
+                        const scoreB = Math.min(getScore(nameB, targetNick), getScore(nameB, targetReal), getScore(nameB, addressRealName)); 
                         if (scoreA !== scoreB) return scoreA - scoreB; 
                     } 
                     return 0; 
@@ -332,6 +339,7 @@
                 return { totalSales, totalDeposit, totalUnpaid, totalCardExpected };
             }, [orders, cardPayments, getCalculatedShipping]);
 
+            // 4. Effects
             const fetchData = async () => {
                 if (!googleScriptUrl) { setConnectionStatus({ code: 'error_config', msg: '설정필요' }); return; }
                 try {
@@ -365,6 +373,7 @@
                 let newMatchedIds = new Set(matchedDeposits);
                 let hasChanges = false;
                 const customerBalances = {};
+                
                 updatedOrders.forEach(o => {
                     if (o.isCancelled) return;
                     if (!customerBalances[o.customer]) {
@@ -380,26 +389,29 @@
                     cb.grandTotal = cb.productTotal + (cb.activeItemsCount > 0 ? cb.shipping : 0);
                     cb.balance = cb.grandTotal - cb.depositTotal;
                 });
+
                 allDeposits.forEach(deposit => {
                     if (newMatchedIds.has(deposit.id) || deletedDepositIds.has(deposit.id)) return;
-                    const depositNameClean = normalizeString(deposit.name);
+                    const depositNameClean = cleanForMatch(deposit.name);
                     if (depositNameClean.length < 2) return; 
+                    
                     let exactMatches = [];
                     Object.keys(customerBalances).forEach(nick => {
-                        const savedRealName = depositorNames[nick] ? normalizeString(depositorNames[nick]) : '';
+                        const savedRealName = depositorNames[nick] ? cleanForMatch(depositorNames[nick]) : '';
                         const addrRes = findAddress(nick);
-                        const addressRealName = addrRes && addrRes.data ? normalizeString(addrRes.data.realname) : '';
-                        const nickClean = normalizeString(nick);
+                        const addressRealName = addrRes && addrRes.data ? cleanForMatch(addrRes.data.realname) : '';
+                        const nickClean = cleanForMatch(nick);
 
+                        // [수정] 포함(includes) 조건을 완전히 제거하고, 정확히 일치할 때만 매칭되도록 엄격화
                         if (
-                            savedRealName === depositNameClean || 
-                            addressRealName === depositNameClean ||
-                            nickClean === depositNameClean || 
-                            (depositNameClean.length >= 2 && nickClean.length >= 2 && (nickClean.includes(depositNameClean) || depositNameClean.includes(nickClean)))
+                            (savedRealName && savedRealName === depositNameClean) || 
+                            (addressRealName && addressRealName === depositNameClean) ||
+                            (nickClean && nickClean === depositNameClean)
                         ) {
                             exactMatches.push(nick);
                         }
                     });
+                    
                     exactMatches = [...new Set(exactMatches)];
                     let matchedCustomer = null;
                     const depositAmount = Number(deposit.amount);
@@ -408,6 +420,7 @@
                         const amountMatches = exactMatches.filter(nick => customerBalances[nick].balance === depositAmount);
                         if (amountMatches.length === 1) matchedCustomer = amountMatches[0];
                     }
+                    
                     if (matchedCustomer) {
                         let applied = false;
                         updatedOrders = updatedOrders.map(o => {
@@ -437,6 +450,7 @@
                 }
             }, [lastAddedOrderId, orders]);
 
+            // 5. User Interaction Handlers
             const addOrderLogic = (nickname, content, qty = 1, forceNewRow = false, insertAfterId = null) => {
                 const cleanNick = String(nickname || '').replace(/@/g, '').trim();
                 const initialProduct = content || '';
@@ -502,17 +516,47 @@
             const handleManualSubmit = (e) => { e.preventDefault(); if (!manualNick.trim()) return openModal("닉네임을 입력해주세요.", 'alert'); addOrderLogic(manualNick, manualProduct, 1); setManualProduct(''); setCurrentSearchTerm(''); };
             const handleAddManualDeposit = (e) => { e.preventDefault(); if (!newDepositName.trim() || !newDepositAmount) return openModal("입금자명/금액 필수", 'alert'); const newDep = { id: `manual_${Date.now()}`, name: newDepositName, amount: newDepositAmount, source: 'manual' }; setManualDeposits(prev => [newDep, ...prev]); setNewDepositName(''); setNewDepositAmount(''); };
             
+            // [수정] 수동 매칭 및 취소 로직 완벽 개선 (정확한 역추적 및 차감, 과입금 방지)
             const handleDepositClick = (deposit) => {
                 const depositId = deposit.id;
+                const depNameClean = cleanForMatch(deposit.name);
+                
+                // 1. 입금 주인을 찾기 위한 역추적 로직 (취소 및 매칭에 모두 사용)
+                let matchedCustomer = null;
+                const exactMatches = [];
+                const uniqueCustomers = [...new Set(orders.map(o => o.customer))];
+                
+                uniqueCustomers.forEach(c => {
+                    const addrRes = findAddress(c);
+                    const addressRealName = addrRes && addrRes.data ? cleanForMatch(addrRes.data.realname) : '';
+                    const savedRealName = depositorNames[c] ? cleanForMatch(depositorNames[c]) : '';
+                    const nickClean = cleanForMatch(c);
+                    
+                    if (savedRealName === depNameClean || addressRealName === depNameClean || nickClean === depNameClean) {
+                        exactMatches.push(c);
+                    }
+                });
+
+                if (exactMatches.length === 1) {
+                    matchedCustomer = exactMatches[0];
+                } else if (exactMatches.length > 1) {
+                    if (selectedNick && exactMatches.includes(selectedNick)) matchedCustomer = selectedNick;
+                    else matchedCustomer = exactMatches[0];
+                }
+
+                // 2. 이미 매칭된 입금인 경우 (해제/취소 로직)
                 if (matchedDeposits.has(depositId)) {
-                    openModal("이 입금 확인을 취소하시겠습니까?", 'confirm', () => {
-                        if (selectedNick) {
+                    // 이 돈이 원래 누구에게 갔는지 확실하게 타겟팅
+                    const targetToDeduct = matchedCustomer || selectedNick; 
+                    
+                    openModal(`이 입금 확인(${deposit.name})을 취소하시겠습니까?`, 'confirm', () => {
+                        if (targetToDeduct) {
                             const depositAmount = Number(deposit.amount);
                             setOrders(prev => {
                                 let applied = false;
                                 return prev.map(o => {
-                                    if (o.customer === selectedNick && !applied) {
-                                        applied = true;
+                                    if (o.customer === targetToDeduct && !applied) {
+                                        applied = true; // 돈 뺄때도 첫번째 주문줄에서만 정확히 차감
                                         return { ...o, deposit: Math.max(0, (o.deposit || 0) - depositAmount) };
                                     }
                                     return o;
@@ -523,22 +567,32 @@
                     });
                     return;
                 }
-                const matchedCustomer = orders.map(o => o.customer).find(c => {
-                    const addrRes = findAddress(c);
-                    const addressRealName = addrRes && addrRes.data ? normalizeString(addrRes.data.realname) : '';
-                    const savedRealName = depositorNames[c] ? normalizeString(depositorNames[c]) : '';
-                    const nickClean = normalizeString(c);
-                    const depName = normalizeString(deposit.name);
-                    return savedRealName === depName || addressRealName === depName || nickClean === depName;
-                });
                 
+                // 3. 신규 수동 매칭 로직
                 if (matchedCustomer) {
-                    if (selectedNick === matchedCustomer) {
+                    if (selectedNick && selectedNick !== matchedCustomer) {
+                        openModal(`'${deposit.name}'님은 '${matchedCustomer}'님과 이름이 일치합니다.\n\n현재 선택된 '${selectedNick}'님께 강제로 입력하시겠습니까?`, 'confirm', () => {
+                            // 강제 매칭
+                            const depositAmount = Number(deposit.amount);
+                            setOrders(prev => {
+                                let applied = false;
+                                return prev.map(o => {
+                                    if (o.customer === selectedNick && !applied) {
+                                        applied = true;
+                                        return { ...o, deposit: (o.deposit || 0) + depositAmount };
+                                    }
+                                    return o;
+                                });
+                            });
+                            setMatchedDeposits(prev => new Set(prev).add(depositId));
+                        });
+                    } else {
+                        // 정상 매칭
                         const depositAmount = Number(deposit.amount);
                         setOrders(prev => {
                             let applied = false;
                             return prev.map(o => {
-                                if (o.customer === selectedNick && !applied) {
+                                if (o.customer === matchedCustomer && !applied) {
                                     applied = true;
                                     return { ...o, deposit: (o.deposit || 0) + depositAmount };
                                 }
@@ -546,9 +600,10 @@
                             });
                         });
                         setMatchedDeposits(prev => new Set(prev).add(depositId));
-                    } else { setSelectedNick(matchedCustomer); setOrderSearch(matchedCustomer); }
+                        if (!selectedNick) setSelectedNick(matchedCustomer);
+                    }
                 } else if (selectedNick) {
-                    openModal(`'${deposit.name}'님 매칭 대상이 없습니다. 현재 선택된 '${selectedNick}'님께 강제 입력하시겠습니까?`, 'confirm', () => {
+                    openModal(`'${deposit.name}'님과 이름이 정확히 일치하는 주문이 없습니다.\n\n현재 선택된 '${selectedNick}'님께 강제로 입력하시겠습니까?`, 'confirm', () => {
                         const depositAmount = Number(deposit.amount);
                         setOrders(prev => {
                             let applied = false;
@@ -562,6 +617,9 @@
                         });
                         setMatchedDeposits(prev => new Set(prev).add(depositId));
                     });
+                } else {
+                    setOrderSearch(deposit.name);
+                    openModal(`'${deposit.name}'님과 정확히 일치하는 주문이 없습니다. (주문자를 먼저 선택해주세요)`, 'alert');
                 }
             };
 
@@ -596,7 +654,6 @@
             };
 
             const handleQuantityUpdate = (itemId, newQtyVal) => { 
-                const newQty = parseInt(newQtyVal, 10); 
                 setOrders(prev => prev.map(o => { 
                     if (o.id === itemId) { 
                         let unitPrice = 0; 
@@ -604,7 +661,7 @@
                         if (invItem) unitPrice = Number(invItem.price);
                         else unitPrice = productHistory[o.product] || (o.quantity > 0 ? o.price/o.quantity : 0);
                         
-                        const validQty = (isNaN(newQty) || newQty < 0) ? '' : newQty;
+                        const validQty = (newQtyVal === '' || isNaN(parseInt(newQtyVal))) ? '' : parseInt(newQtyVal);
                         return { ...o, quantity: validQty, price: unitPrice * (Number(validQty) || 0), isUnmodified: false }; 
                     } 
                     return o; 
@@ -628,7 +685,7 @@
                 const addr = addrRes.data || {};
                 const itemListText = activeItems.map(i => `${i.product}${i.quantity > 1 ? ` ★${i.quantity}개` : ''} ${Number(i.price).toLocaleString()}원`).join('\n');
                 const currentShipping = getCalculatedShipping(nick);
-                const { emoji, paidMsg, unpaidPrefix, addrNotice, surveyNotice } = templateConfig;
+                const { emoji, paidMsg, unpaidPrefix, addrNotice, surveyNotice, alwaysRequestAddress } = templateConfig;
                 let msg = `${emoji} ${nick} 님 ${emoji}\n\n\n${itemListText}\n배송비 ${currentShipping.toLocaleString()}원\n\n총 주문금액 ${grandTotal.toLocaleString()}원\n------------------\n`;
                 if (isCard) { 
                     const cardBase = Math.max(0, balance);
@@ -641,13 +698,20 @@
                     if (isPaid) msg += `${paidMsg}\n------------------\n`; 
                     else msg += `${unpaidPrefix}\n${(balance > 0 ? balance : 0).toLocaleString()}원 \n\n${bankAccount}\n입금 부탁드립니다 🙏\n------------------\n\n`; 
                 }
-                if (addr && addr.address) msg += `\n[배송지 확인]\n\n${addr.realname || nick}\n${addr.phone || ''}\n${addr.address} ${addr.zipcode ? `(${addr.zipcode})` : ''}\n${addr.memo ? addr.memo + '\n' : ''}\n------------------\n${addrNotice}`;
-                else if (!sentAddressRequests.has(nick)) { msg += `\n${surveyNotice}`; setSentAddressRequests(prev => new Set(prev).add(nick)); }
+                
+                if (addr && addr.address && !alwaysRequestAddress) {
+                    msg += `\n[배송지 확인]\n\n${addr.realname || nick}\n${addr.phone || ''}\n${addr.address} ${addr.zipcode ? `(${addr.zipcode})` : ''}\n${addr.memo ? addr.memo + '\n' : ''}\n------------------\n${addrNotice}`;
+                } else if (!sentAddressRequests.has(nick) || alwaysRequestAddress) { 
+                    msg += `\n${surveyNotice}`; 
+                    setSentAddressRequests(prev => new Set(prev).add(nick)); 
+                }
+                
                 const textArea = document.createElement("textarea"); textArea.value = msg; document.body.appendChild(textArea); textArea.select();
                 setCheckedOrders(prev => new Set(prev).add(nick));
                 try { document.execCommand('copy'); setCopyStatus(prev => ({ ...prev, [nick]: true })); setTimeout(() => { setCopyStatus(prev => ({ ...prev, [nick]: false })); }, 2000); } catch (err) { openModal('복사 실패', 'alert'); } document.body.removeChild(textArea);
             };
 
+            // 6. Rendering
             return (
                 <div className="flex h-full gap-2 p-2 overflow-hidden bg-gray-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                     <datalist id="product-list">
@@ -858,26 +922,33 @@
                                                         onChange={(e) => handleProductChange(item.id, 'product', e.target.value)} 
                                                         onClick={(e) => e.stopPropagation()} 
                                                         onFocus={(e) => e.target.select()} 
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                document.getElementById(`qty-input-${item.id}`)?.focus();
+                                                            }
+                                                        }}
                                                         className={`w-full outline-none px-1 rounded transition-colors bg-transparent ${item.isCancelled ? 'text-gray-400 dark:text-slate-500 line-through bg-transparent' : (item.isUnmodified ? 'text-blue-600 dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-900/20 focus:bg-white dark:focus:bg-slate-700 focus:ring-1 focus:ring-blue-300' : 'focus:bg-white dark:focus:bg-slate-700 focus:ring-1 focus:ring-indigo-100 dark:text-slate-200')}`} 
                                                         placeholder="상품명" 
                                                         disabled={item.isCancelled} 
                                                     />
                                                     {stockBadge}
                                                 </div>
-                                                <div className="flex items-center gap-0.5 relative group">
-                                                    <input 
-                                                        id={`qty-input-${item.id}`}
-                                                        type="number" 
-                                                        value={item.quantity === '' ? '' : item.quantity} 
-                                                        onChange={(e) => handleQuantityUpdate(item.id, e.target.value)} 
-                                                        onClick={(e) => e.stopPropagation()} 
-                                                        onFocus={(e) => e.target.select()} 
-                                                        onKeyDown={(e) => { if(e.key==='Enter') { e.preventDefault(); document.getElementById(`price-input-${item.id}`)?.focus(); } }}
-                                                        className={`w-12 text-right pr-3 text-[11px] font-bold bg-transparent outline-none rounded py-0.5 ${item.isCancelled ? 'line-through text-gray-400 dark:text-slate-500 cursor-not-allowed' : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:ring-1 focus:ring-indigo-300'}`}
-                                                        disabled={item.isCancelled} 
-                                                    />
-                                                    <span className="absolute right-1 text-[10px] text-gray-500 dark:text-slate-400 pointer-events-none">개</span>
-                                                    
+                                                <div className="flex items-center gap-1 group">
+                                                    <div className="relative flex items-center">
+                                                        <input 
+                                                            id={`qty-input-${item.id}`}
+                                                            type="number" 
+                                                            value={item.quantity === '' ? '' : item.quantity} 
+                                                            onChange={(e) => handleQuantityUpdate(item.id, e.target.value)} 
+                                                            onClick={(e) => e.stopPropagation()} 
+                                                            onFocus={(e) => e.target.select()} 
+                                                            onKeyDown={(e) => { if(e.key==='Enter') { e.preventDefault(); document.getElementById(`price-input-${item.id}`)?.focus(); } }}
+                                                            className={`w-12 text-right pr-4 text-[11px] font-bold bg-transparent outline-none rounded py-0.5 ${item.isCancelled ? 'line-through text-gray-400 dark:text-slate-500 cursor-not-allowed' : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:ring-1 focus:ring-indigo-300'}`}
+                                                            disabled={item.isCancelled} 
+                                                        />
+                                                        <span className="absolute right-1 text-[10px] text-gray-500 dark:text-slate-400 pointer-events-none">개</span>
+                                                    </div>
                                                     <input 
                                                         id={`price-input-${item.id}`}
                                                         type="number" 
@@ -896,7 +967,7 @@
                                                                 }
                                                             }
                                                         }}
-                                                        className={`w-16 text-right font-mono bg-transparent outline-none px-1 rounded ml-1 transition-colors ${item.isCancelled ? 'line-through text-gray-400 dark:text-slate-500 cursor-not-allowed' : (item.isUnmodified ? 'text-blue-500 dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 focus:ring-1 focus:ring-indigo-300 focus:text-indigo-600 dark:focus:text-indigo-300')} ${Number(item.price) === 0 && !item.isCancelled ? 'bg-red-50 dark:bg-red-900/10 border-b border-red-300 dark:border-red-900' : ''}`} 
+                                                        className={`w-16 text-right font-mono bg-transparent outline-none px-1 rounded transition-colors ${item.isCancelled ? 'line-through text-gray-400 dark:text-slate-500 cursor-not-allowed' : (item.isUnmodified ? 'text-blue-500 dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 focus:ring-1 focus:ring-indigo-300 focus:text-indigo-600 dark:focus:text-indigo-300')} ${Number(item.price) === 0 && !item.isCancelled ? 'bg-red-50 dark:bg-red-900/10 border-b border-red-300 dark:border-red-900' : ''}`} 
                                                         disabled={item.isCancelled} 
                                                     />
                                                     <button onClick={(e)=>{e.stopPropagation(); handleOrderCancel(item.id);}} className={`ml-1 ${item.isCancelled ? "text-blue-500 dark:text-blue-400 hover:text-blue-700" : "text-gray-300 dark:text-slate-600 hover:text-red-500"}`} title={item.isCancelled ? "취소 철회" : "주문 취소"}><Icon name={item.isCancelled ? "arrow-u-up-left" : "prohibit"} weight="bold"/></button>
@@ -1196,6 +1267,14 @@
             const handleCloudSave = async () => { openModal("저장하시겠습니까?", 'confirm', async () => { if (!googleScriptUrl) return; await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify({ action: 'backup_address', data: addresses, sheet_id: customerSheetId }), mode: 'no-cors', headers: {'Content-Type': 'text/plain;charset=utf-8'} }); openModal("전송 완료", 'alert'); }); };
             const handleCloudLoad = async () => { openModal("불러오시겠습니까?", 'confirm', async () => { if (!googleScriptUrl) return; const res = await fetch(`${googleScriptUrl}?action=get_addresses&t=${Date.now()}&sheet_id=${customerSheetId}`); const data = await res.json(); if(data && data.addresses) setAddresses(data.addresses); openModal("로드 완료", 'alert'); }); };
             
+            // [신규] 주소록 초기화 핸들러
+            const handleResetAddresses = () => {
+                openModal("주소록을 모두 초기화하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)", 'confirm', () => {
+                    setAddresses([]);
+                    openModal("주소록이 초기화되었습니다.", 'alert');
+                });
+            };
+            
             const handleExcelUpload = (e) => { 
                 const file = e.target.files[0]; 
                 if (!file) return; 
@@ -1238,6 +1317,7 @@
                          <div className="flex justify-between items-center mb-4 pb-4 border-b dark:border-slate-700">
                             <h2 className="text-xl font-bold flex items-center gap-2 dark:text-slate-100"><Icon name="address-book" weight="fill" className="text-indigo-600 dark:text-indigo-400"/> 배송 주소록 <span className="text-sm font-normal text-gray-500 dark:text-slate-400">({addresses.length}명)</span></h2>
                             <div className="flex gap-2">
+                                <button onClick={handleResetAddresses} className="bg-rose-500 text-white px-2 py-1 rounded text-xs font-bold transition-colors hover:bg-rose-600 flex items-center gap-1"><Icon name="trash" weight="fill"/> 초기화</button>
                                 <button onClick={handleCloudSave} className="bg-orange-500 text-white px-2 py-1 rounded text-xs font-bold transition-colors hover:bg-orange-600">저장</button>
                                 <button onClick={handleCloudLoad} className="bg-blue-500 text-white px-2 py-1 rounded text-xs font-bold transition-colors hover:bg-blue-600">로드</button>
                                 <input type="file" ref={fileInputRef} onChange={handleExcelUpload} className="hidden" />
@@ -1481,7 +1561,7 @@
             const [addressMapping, setAddressMapping] = useLocalStorage('addressMapping', {});
             const [specialCustomers, setSpecialCustomers] = useLocalStorage('specialCustomers', {});
             const [inventory, setInventory] = useLocalStorage('productInventory', []);
-            const [templateConfig, setTemplateConfig] = useLocalStorage('templateConfig', { emoji: '💙', paidMsg: '😍 완납 확인! 감사합니다 😍', unpaidPrefix: '[미입금]\n총 입금하실 금액\n👉', addrNotice: '※ 배송지 변경 시 채팅으로 변경할 주소를 남겨주세요!', surveyNotice: '방송마다 1회\n하단의 주문서(배송지입력) 필수!!\n\n이미 참여한 설문 일 경우\n▫ 답변 수정하기 \n▫ 또는 설문 추가 참여\n\n미입력이 많아 계속 안내합니다. \n양해부탁드립니다.' });
+            const [templateConfig, setTemplateConfig] = useLocalStorage('templateConfig', { emoji: '💙', paidMsg: '😍 완납 확인! 감사합니다 😍', unpaidPrefix: '[미입금]\n총 입금하실 금액\n👉', addrNotice: '※ 배송지 변경 시 채팅으로 변경할 주소를 남겨주세요!', surveyNotice: '방송마다 1회\n하단의 주문서(배송지입력) 필수!!\n\n이미 참여한 설문 일 경우\n▫ 답변 수정하기 \n▫ 또는 설문 추가 참여\n\n미입력이 많아 계속 안내합니다. \n양해부탁드립니다.', alwaysRequestAddress: false });
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [googleScriptUrl, setGoogleScriptUrl] = useLocalStorage('googleScriptUrl', DEFAULT_GOOGLE_SCRIPT_URL);
             const [customerSheetId, setCustomerSheetId] = useLocalStorage('customerSheetId', DEFAULT_CUSTOMER_SHEET_ID);
@@ -1548,6 +1628,10 @@
                                         <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">계좌번호</label><textarea value={bankAccount} onChange={(e)=>setBankAccount(e.target.value)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-12 resize-none bg-transparent dark:text-slate-100" /></div>
                                         <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">주소 있음 안내</label><textarea value={templateConfig.addrNotice} onChange={(e)=>setTemplateConfig({...templateConfig, addrNotice: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-12 resize-none bg-transparent dark:text-slate-100" /></div>
                                         <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">주소 없음 안내</label><textarea value={templateConfig.surveyNotice} onChange={(e)=>setTemplateConfig({...templateConfig, surveyNotice: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-24 resize-none bg-transparent dark:text-slate-100" /></div>
+                                        <div className="flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/20 p-2 rounded border border-indigo-100 dark:border-indigo-800">
+                                            <label className="text-xs font-bold text-indigo-700 dark:text-indigo-300">주소록 무시하고 항상 새로 입력받기 (강제수집)</label>
+                                            <input type="checkbox" checked={templateConfig.alwaysRequestAddress || false} onChange={(e)=>setTemplateConfig({...templateConfig, alwaysRequestAddress: e.target.checked})} className="custom-checkbox" />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
