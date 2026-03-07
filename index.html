@@ -151,7 +151,7 @@
             );
         };
 
-        const LiveTab = ({ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory }) => {
+        const LiveTab = ({ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory }) => {
             // 1. State Declarations
             const [chats, setChats] = useState([]);
             const [serverDeposits, setServerDeposits] = useState([]);
@@ -171,6 +171,7 @@
             const [copyStatus, setCopyStatus] = useState({});
             const [isSaving, setIsSaving] = useState(false);
             const [editingShippingNick, setEditingShippingNick] = useState(null);
+            const [editingQuantityId, setEditingQuantityId] = useState(null);
             const [currentSearchTerm, setCurrentSearchTerm] = useState('');
             const [lastAddedOrderId, setLastAddedOrderId] = useState(null);
 
@@ -402,7 +403,6 @@
                         const addressRealName = addrRes && addrRes.data ? cleanForMatch(addrRes.data.realname) : '';
                         const nickClean = cleanForMatch(nick);
 
-                        // [수정] 포함(includes) 조건을 완전히 제거하고, 정확히 일치할 때만 매칭되도록 엄격화
                         if (
                             (savedRealName && savedRealName === depositNameClean) || 
                             (addressRealName && addressRealName === depositNameClean) ||
@@ -516,12 +516,10 @@
             const handleManualSubmit = (e) => { e.preventDefault(); if (!manualNick.trim()) return openModal("닉네임을 입력해주세요.", 'alert'); addOrderLogic(manualNick, manualProduct, 1); setManualProduct(''); setCurrentSearchTerm(''); };
             const handleAddManualDeposit = (e) => { e.preventDefault(); if (!newDepositName.trim() || !newDepositAmount) return openModal("입금자명/금액 필수", 'alert'); const newDep = { id: `manual_${Date.now()}`, name: newDepositName, amount: newDepositAmount, source: 'manual' }; setManualDeposits(prev => [newDep, ...prev]); setNewDepositName(''); setNewDepositAmount(''); };
             
-            // [수정] 수동 매칭 및 취소 로직 완벽 개선 (정확한 역추적 및 차감, 과입금 방지)
             const handleDepositClick = (deposit) => {
                 const depositId = deposit.id;
                 const depNameClean = cleanForMatch(deposit.name);
                 
-                // 1. 입금 주인을 찾기 위한 역추적 로직 (취소 및 매칭에 모두 사용)
                 let matchedCustomer = null;
                 const exactMatches = [];
                 const uniqueCustomers = [...new Set(orders.map(o => o.customer))];
@@ -544,9 +542,7 @@
                     else matchedCustomer = exactMatches[0];
                 }
 
-                // 2. 이미 매칭된 입금인 경우 (해제/취소 로직)
                 if (matchedDeposits.has(depositId)) {
-                    // 이 돈이 원래 누구에게 갔는지 확실하게 타겟팅
                     const targetToDeduct = matchedCustomer || selectedNick; 
                     
                     openModal(`이 입금 확인(${deposit.name})을 취소하시겠습니까?`, 'confirm', () => {
@@ -556,7 +552,7 @@
                                 let applied = false;
                                 return prev.map(o => {
                                     if (o.customer === targetToDeduct && !applied) {
-                                        applied = true; // 돈 뺄때도 첫번째 주문줄에서만 정확히 차감
+                                        applied = true; 
                                         return { ...o, deposit: Math.max(0, (o.deposit || 0) - depositAmount) };
                                     }
                                     return o;
@@ -568,11 +564,9 @@
                     return;
                 }
                 
-                // 3. 신규 수동 매칭 로직
                 if (matchedCustomer) {
                     if (selectedNick && selectedNick !== matchedCustomer) {
                         openModal(`'${deposit.name}'님은 '${matchedCustomer}'님과 이름이 일치합니다.\n\n현재 선택된 '${selectedNick}'님께 강제로 입력하시겠습니까?`, 'confirm', () => {
-                            // 강제 매칭
                             const depositAmount = Number(deposit.amount);
                             setOrders(prev => {
                                 let applied = false;
@@ -587,7 +581,6 @@
                             setMatchedDeposits(prev => new Set(prev).add(depositId));
                         });
                     } else {
-                        // 정상 매칭
                         const depositAmount = Number(deposit.amount);
                         setOrders(prev => {
                             let applied = false;
@@ -675,7 +668,16 @@
             const handleOrderCheckToggle = (nick) => setCheckedOrders(prev => { const next = new Set(prev); if (next.has(nick)) next.delete(nick); else next.add(nick); return next; });
             const handleAddKeyword = (e) => { e.preventDefault(); if(!keywordInput.trim()) return; setKeywords(prev => new Set(prev).add(keywordInput.trim())); setKeywordInput(''); };
             const handleRemoveKeyword = (keyword) => { setKeywords(prev => { const next = new Set(prev); next.delete(keyword); return next; }); };
-            const handleAddressMapping = (orderNick, addressNick) => { openModal(`'${orderNick}' → '${addressNick}' 주소 연결 하시겠습니까?`, 'confirm', () => setAddressMapping(prev => ({ ...prev, [orderNick]: addressNick }))); };
+            const handleAddressMapping = (orderNick, addressNick) => { 
+                openModal(`주소록에 등록된 '${addressNick}' 님의 닉네임을\n주문서와 동일하게 '${orderNick}' (으)로\n완전히 변경하고 연결하시겠습니까?`, 'confirm', () => {
+                    setAddresses(prev => prev.map(addr => 
+                        normalizeString(addr.nickname) === normalizeString(addressNick) 
+                        ? { ...addr, nickname: orderNick } 
+                        : addr
+                    ));
+                    setAddressMapping(prev => ({ ...prev, [orderNick]: orderNick })); 
+                }); 
+            };
             const handleAddressUnmapping = (orderNick) => { openModal(`주소 연결을 해제하시겠습니까?`, 'confirm', () => setAddressMapping(prev => { const next = { ...prev }; delete next[orderNick]; return next; })); };
             const toggleCardPayment = (nick) => { setCardPayments(prev => ({ ...prev, [nick]: !prev[nick] })); };
 
@@ -715,7 +717,7 @@
             return (
                 <div className="flex h-full gap-2 p-2 overflow-hidden bg-gray-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
                     <datalist id="product-list">
-                        {Array.isArray(inventory) && inventory.map(i => <option key={i.id} value={i.name} label={`${i.price.toLocaleString()}원`} />)}
+                        {Array.isArray(inventory) && inventory.map(i => <option key={i.id} value={i.name} label={`${Number(i.price).toLocaleString()}원`} />)}
                     </datalist>
 
                     <div className="w-[30%] flex flex-col bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg shadow-sm overflow-hidden">
@@ -757,18 +759,18 @@
                     </div>
 
                     <div className="w-[20%] flex flex-col bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg shadow-sm overflow-hidden">
-                        <div className="p-2 bg-yellow-50 dark:bg-slate-700/50 border-b dark:border-slate-700 flex flex-col gap-2"><div className="font-bold text-yellow-700 dark:text-yellow-300 flex items-center justify-between"><span className="flex items-center gap-1"><Icon name="money" weight="fill"/> 입금 내역</span><span className="text-xs text-gray-500 dark:text-slate-400">{filteredDeposits.length}건</span></div><form onSubmit={handleAddManualDeposit} className="flex flex-col gap-1 bg-white dark:bg-slate-800 p-1 rounded border border-yellow-200 dark:border-slate-600"><div className="flex gap-1"><input type="text" value={newDepositName} onChange={(e)=>setNewDepositName(e.target.value)} placeholder="입금자명" className="w-[60%] text-xs border dark:border-slate-600 rounded px-1 py-1 bg-transparent" /><input type="number" value={newDepositAmount} onChange={(e)=>setNewDepositAmount(e.target.value)} placeholder="금액" className="w-[40%] text-xs border dark:border-slate-600 rounded px-1 py-1 bg-transparent" /></div><button type="submit" className="bg-yellow-500 text-white text-xs font-bold py-1 rounded hover:bg-yellow-600">수동 입금 추가</button></form><div className="relative"><Icon name="magnifying-glass" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400"/><input type="text" placeholder="입금자/금액 검색" value={depositSearch} onChange={e => setDepositSearch(e.target.value)} className="w-full text-xs pl-7 pr-2 py-1.5 border dark:border-slate-600 rounded focus:ring-1 focus:ring-yellow-500 outline-none bg-transparent" />{depositSearch && <button onClick={()=>setDepositSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><Icon name="x-circle" weight="fill" size={12}/></button>}</div>{selectedNick && <div className="text-[11px] text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 p-1 rounded text-center animate-pulse">👇 '{selectedNick}'님 매칭</div>}</div>
+                        <div className="p-2 bg-yellow-50 dark:bg-slate-700/50 border-b dark:border-slate-700 flex flex-col gap-2"><div className="font-bold text-yellow-700 dark:text-yellow-300 flex items-center justify-between"><span className="flex items-center gap-1"><Icon name="money" weight="fill"/> 입금 내역</span><span className="text-xs text-gray-500 dark:text-slate-400">{filteredDeposits.length}건</span></div><form onSubmit={handleAddManualDeposit} className="flex flex-col gap-1 bg-white dark:bg-slate-800 p-1 rounded border border-yellow-200 dark:border-slate-600"><div className="flex gap-1"><input type="text" value={newDepositName} onChange={(e)=>setNewDepositName(e.target.value)} placeholder="입금자명" className="w-[60%] text-xs border dark:border-slate-600 rounded px-1 py-1 bg-transparent" /><input type="text" value={newDepositAmount ? Number(newDepositAmount).toLocaleString() : ''} onChange={(e)=>{ const val = e.target.value.replace(/,/g, ''); if(!isNaN(val)) setNewDepositAmount(val); }} placeholder="금액" className="w-[40%] text-xs border dark:border-slate-600 rounded px-1 py-1 bg-transparent text-right font-bold" /></div><button type="submit" className="bg-yellow-500 text-white text-xs font-bold py-1 rounded hover:bg-yellow-600">수동 입금 추가</button></form><div className="relative"><Icon name="magnifying-glass" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400"/><input type="text" placeholder="입금자/금액 검색" value={depositSearch} onChange={e => setDepositSearch(e.target.value)} className="w-full text-xs pl-7 pr-2 py-1.5 border dark:border-slate-600 rounded focus:ring-1 focus:ring-yellow-500 outline-none bg-transparent" />{depositSearch && <button onClick={()=>setDepositSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><Icon name="x-circle" weight="fill" size={12}/></button>}</div>{selectedNick && <div className="text-[11px] text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 p-1 rounded text-center animate-pulse">👇 '{selectedNick}'님 매칭</div>}</div>
                         <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-gray-100 dark:bg-slate-900">
                             {filteredDeposits.map(d => {
                                 const isUsed = matchedDeposits?.has(d.id);
                                 return (
                                     <div key={d.id} onClick={() => handleDepositClick(d)} className={`relative flex justify-between p-2 border rounded cursor-pointer transition-all group ${isUsed ? 'opacity-50 bg-gray-200 dark:bg-slate-800 line-through border-transparent' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                                         <div className="flex flex-col gap-1">
-                                            <span className={`text-sm ${isUsed ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100'}`}>{d.name} {d.source === 'manual' && <span className="text-[9px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1 rounded">수동</span>}</span>
+                                            <span className={`text-sm ${isUsed ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100 font-bold'}`}>{d.name} {d.source === 'manual' && <span className="text-[9px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1 rounded font-normal">수동</span>}</span>
                                             <span className="text-[10px] text-gray-500 dark:text-slate-400 font-medium">{formatTimeOnly(d.time || d.date)}</span>
                                         </div>
                                         <div className="flex flex-col items-end justify-center">
-                                            <span className={`font-mono font-bold text-sm ${isUsed ? 'text-gray-500 dark:text-slate-400' : 'text-blue-600 dark:text-blue-400'}`}>+{Number(d.amount).toLocaleString()}</span>
+                                            <span className={`font-bold text-sm ${isUsed ? 'text-gray-500 dark:text-slate-400' : 'text-blue-600 dark:text-blue-400'}`}>+{Number(d.amount).toLocaleString()}</span>
                                             {isUsed && <span className="text-[9px] font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded mt-0.5">매칭완료</span>}
                                         </div>
                                         <button onClick={(e)=>{e.stopPropagation(); handleDeleteDepositItem(d.id);}} className="absolute -right-1 -top-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash" size={10} weight="bold"/></button>
@@ -791,7 +793,7 @@
                              <div className="flex gap-2 items-center">
                                  <div className="flex-1 flex gap-1 items-center bg-indigo-50 dark:bg-slate-700/50 p-1 rounded border border-indigo-100 dark:border-slate-600"><span className="text-xs font-bold text-indigo-600 dark:text-indigo-300 whitespace-nowrap pl-1">🖐️</span>
                                  <form onSubmit={handleManualSubmit} className="flex gap-1 w-full">
-                                    <input type="text" placeholder="닉네임" value={manualNick} onChange={e => setManualNick(e.target.value)} className="w-20 border dark:border-slate-600 rounded px-2 py-1 text-xs outline-none bg-transparent dark:text-slate-100" />
+                                    <input type="text" placeholder="닉네임" value={manualNick} onChange={e => setManualNick(e.target.value)} className="w-20 border dark:border-slate-600 rounded px-2 py-1 text-xs outline-none bg-transparent dark:text-slate-100 font-bold" />
                                     <input type="text" list="product-list" placeholder="상품명" value={manualProduct} onChange={e => { setManualProduct(e.target.value); setCurrentSearchTerm(e.target.value); }} className="flex-1 border dark:border-slate-600 rounded px-2 py-1 text-xs outline-none bg-transparent dark:text-slate-100" />
                                     <button type="submit" className="bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold hover:bg-indigo-700">＋</button>
                                 </form>
@@ -839,7 +841,7 @@
                                             <button onClick={(e) => { e.stopPropagation(); toggleCardPayment(nick); }} className={`ml-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${isCard ? 'bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 font-bold' : 'bg-white dark:bg-slate-700 text-gray-400 dark:text-slate-400 border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'}`}>카드</button>
                                             <div onClick={(e) => e.stopPropagation()} className="ml-1">
                                                 {isEditingShipping ? (
-                                                    <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-800 rounded px-1 py-0.5 shadow-sm"><Icon name="truck" className="text-indigo-600 dark:text-indigo-400 text-[10px]"/><input type="number" value={currentShipping} onChange={(e) => handleShippingChange(nick, e.target.value)} onBlur={() => setEditingShippingNick(null)} onKeyDown={(e) => { if(e.key === 'Enter') setEditingShippingNick(null); }} autoFocus onFocus={(e) => e.target.select()} className="w-12 text-[10px] outline-none font-mono text-right text-indigo-600 dark:text-indigo-300 font-bold bg-transparent"/></div>
+                                                    <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-800 rounded px-1 py-0.5 shadow-sm"><Icon name="truck" className="text-indigo-600 dark:text-indigo-400 text-[10px]"/><input type="number" value={currentShipping} onChange={(e) => handleShippingChange(nick, e.target.value)} onBlur={() => setEditingShippingNick(null)} onKeyDown={(e) => { if(e.key === 'Enter') setEditingShippingNick(null); }} autoFocus onFocus={(e) => e.target.select()} className="w-12 text-[10px] outline-none font-bold text-right text-indigo-600 dark:text-indigo-300 bg-transparent"/></div>
                                                 ) : (
                                                     <div onClick={() => setEditingShippingNick(nick)} className="cursor-pointer flex items-center gap-1 text-[10px] text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 hover:bg-indigo-50 dark:hover:bg-slate-600 hover:text-indigo-600 transition-colors" title="클릭하여 배송비 수정 (기본, VIP무료, 제주도선료 자동적용됨)">
                                                         <Icon name="truck" weight="fill"/> <span>{currentShipping.toLocaleString()}</span>
@@ -883,7 +885,7 @@
                                          </div>
                                      </div>
                                      <div className="flex flex-col gap-1 items-end text-right">
-                                        <div className={`font-bold text-sm font-mono ${isPaidState && balance === 0 ? 'text-green-600 dark:text-green-400' : (balance < 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-800 dark:text-slate-100')}`}>{grandTotal.toLocaleString()}원</div>
+                                        <div className={`font-bold text-sm ${isPaidState && balance === 0 ? 'text-green-600 dark:text-green-400' : (balance < 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-800 dark:text-slate-100')}`}>{grandTotal.toLocaleString()}원</div>
                                         {isCard ? (
                                             <div className="flex flex-col items-end">
                                                 <div className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">
@@ -928,7 +930,7 @@
                                                                 document.getElementById(`qty-input-${item.id}`)?.focus();
                                                             }
                                                         }}
-                                                        className={`w-full outline-none px-1 rounded transition-colors bg-transparent ${item.isCancelled ? 'text-gray-400 dark:text-slate-500 line-through bg-transparent' : (item.isUnmodified ? 'text-blue-600 dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-900/20 focus:bg-white dark:focus:bg-slate-700 focus:ring-1 focus:ring-blue-300' : 'focus:bg-white dark:focus:bg-slate-700 focus:ring-1 focus:ring-indigo-100 dark:text-slate-200')}`} 
+                                                        className={`w-full outline-none px-1 rounded transition-colors bg-transparent font-bold ${item.isCancelled ? 'text-gray-400 dark:text-slate-500 line-through bg-transparent' : (item.isUnmodified ? 'text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 focus:bg-white dark:focus:bg-slate-700 focus:ring-1 focus:ring-blue-300' : 'focus:bg-white dark:focus:bg-slate-700 focus:ring-1 focus:ring-indigo-100 dark:text-slate-200')}`} 
                                                         placeholder="상품명" 
                                                         disabled={item.isCancelled} 
                                                     />
@@ -951,9 +953,12 @@
                                                     </div>
                                                     <input 
                                                         id={`price-input-${item.id}`}
-                                                        type="number" 
-                                                        value={item.price} 
-                                                        onChange={(e) => handleProductChange(item.id, 'price', e.target.value)} 
+                                                        type="text" 
+                                                        value={item.price === '' || item.price === 0 ? '' : Number(item.price).toLocaleString()} 
+                                                        onChange={(e) => {
+                                                            const val = e.target.value.replace(/,/g, '');
+                                                            if (!isNaN(val)) handleProductChange(item.id, 'price', val);
+                                                        }}
                                                         onClick={(e) => e.stopPropagation()} 
                                                         onFocus={(e) => e.target.select()} 
                                                         onKeyDown={(e) => {
@@ -967,7 +972,7 @@
                                                                 }
                                                             }
                                                         }}
-                                                        className={`w-16 text-right font-mono bg-transparent outline-none px-1 rounded transition-colors ${item.isCancelled ? 'line-through text-gray-400 dark:text-slate-500 cursor-not-allowed' : (item.isUnmodified ? 'text-blue-500 dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 focus:ring-1 focus:ring-indigo-300 focus:text-indigo-600 dark:focus:text-indigo-300')} ${Number(item.price) === 0 && !item.isCancelled ? 'bg-red-50 dark:bg-red-900/10 border-b border-red-300 dark:border-red-900' : ''}`} 
+                                                        className={`w-16 text-right bg-transparent outline-none px-1 rounded transition-colors font-bold ${item.isCancelled ? 'line-through text-gray-400 dark:text-slate-500 cursor-not-allowed' : (item.isUnmodified ? 'text-blue-500 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 focus:ring-1 focus:ring-indigo-300 focus:text-indigo-600 dark:focus:text-indigo-300')} ${Number(item.price) === 0 && !item.isCancelled ? 'bg-red-50 dark:bg-red-900/10 border-b border-red-300 dark:border-red-900' : ''}`} 
                                                         disabled={item.isCancelled} 
                                                     />
                                                     <button onClick={(e)=>{e.stopPropagation(); handleOrderCancel(item.id);}} className={`ml-1 ${item.isCancelled ? "text-blue-500 dark:text-blue-400 hover:text-blue-700" : "text-gray-300 dark:text-slate-600 hover:text-red-500"}`} title={item.isCancelled ? "취소 철회" : "주문 취소"}><Icon name={item.isCancelled ? "arrow-u-up-left" : "prohibit"} weight="bold"/></button>
@@ -1001,7 +1006,8 @@
                 setInventory(prev => prev.map(item => {
                     if (item.id === id) {
                         const next = { ...item, [field]: val };
-                        if (field === 'price' && val > 0) setProductHistory(h => ({ ...h, [item.name]: val }));
+                        // 단가 입력창을 비워도 에러 나지 않도록 처리
+                        if (field === 'price' && val !== '') setProductHistory(h => ({ ...h, [item.name]: Number(val) }));
                         return next;
                     }
                     return item;
@@ -1010,7 +1016,7 @@
 
             const addInventoryRow = (afterId = null) => {
                 const newId = `inv_${Date.now()}`;
-                const newItem = { id: newId, name: '', stock: 100, price: 0 };
+                const newItem = { id: newId, name: '', stock: 100, price: '' };
                 setInventory(prev => {
                     if (!afterId) return [newItem, ...prev];
                     const idx = prev.findIndex(item => item.id === afterId);
@@ -1057,7 +1063,7 @@
                             id: `inv_${Date.now()}_${Math.random()}`,
                             name: item.name,
                             stock: item.stock,
-                            price: item.price
+                            price: item.price === 0 ? '' : item.price // 0 대신 빈 문자열로 초기화
                         }));
                         return [...added, ...prev]; // 최상단에 추가
                     });
@@ -1078,7 +1084,8 @@
                 const data = Array.isArray(inventory) ? inventory : [];
                 return data.map(info => {
                     const totalOrdered = orders.filter(o => o.product === info.name && !o.isCancelled && info.name !== '').reduce((sum, o) => sum + o.quantity, 0);
-                    return { ...info, totalOrdered, remaining: (info.stock || 0) - totalOrdered };
+                    const currentStock = info.stock === '' || isNaN(info.stock) ? 0 : Number(info.stock);
+                    return { ...info, totalOrdered, remaining: currentStock - totalOrdered };
                 }).filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()));
             }, [orders, inventory, searchTerm]);
 
@@ -1171,16 +1178,19 @@
                                         <td className="p-1 text-right">
                                             <input 
                                                 id={`inv-price-${p.id}`}
-                                                type="number" 
-                                                value={p.price} 
-                                                onChange={(e) => updateInventory(p.id, 'price', Number(e.target.value))}
+                                                type="text" 
+                                                value={p.price === '' || p.price === 0 ? '' : Number(p.price).toLocaleString()} 
+                                                onChange={(e) => {
+                                                    const val = e.target.value.replace(/,/g, '');
+                                                    if (!isNaN(val)) updateInventory(p.id, 'price', val);
+                                                }}
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') {
                                                         e.preventDefault();
                                                         document.getElementById(`inv-stock-${p.id}`).focus();
                                                     }
                                                 }}
-                                                className="w-full bg-transparent text-right py-1 outline-none font-mono focus:bg-white dark:focus:bg-slate-900 focus:ring-1 ring-indigo-200 dark:ring-indigo-800 rounded dark:text-slate-300"
+                                                className="w-full bg-transparent text-right py-1 outline-none font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-1 ring-indigo-200 dark:ring-indigo-800 rounded text-gray-700 dark:text-slate-200"
                                             />
                                         </td>
                                         <td className="p-1 text-center text-indigo-600 dark:text-indigo-400 font-bold bg-gray-50/50 dark:bg-slate-900/30">{p.totalOrdered}</td>
@@ -1188,8 +1198,8 @@
                                             <input 
                                                 id={`inv-stock-${p.id}`}
                                                 type="number" 
-                                                value={p.stock} 
-                                                onChange={(e) => updateInventory(p.id, 'stock', Number(e.target.value))}
+                                                value={p.stock === 0 ? '' : p.stock} 
+                                                onChange={(e) => updateInventory(p.id, 'stock', e.target.value)}
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') {
                                                         e.preventDefault();
@@ -1200,7 +1210,7 @@
                                                         }
                                                     }
                                                 }}
-                                                className="w-full bg-transparent text-center py-1 outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-1 ring-indigo-200 dark:ring-indigo-800 rounded dark:text-slate-300"
+                                                className="w-full bg-transparent text-center py-1 outline-none font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-1 ring-indigo-200 dark:ring-indigo-800 rounded text-gray-700 dark:text-slate-200"
                                             />
                                         </td>
                                         <td className={`p-1 text-center font-bold ${p.remaining <= 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400'} bg-gray-50/50 dark:bg-slate-900/30`}>{p.remaining}</td>
@@ -1267,7 +1277,6 @@
             const handleCloudSave = async () => { openModal("저장하시겠습니까?", 'confirm', async () => { if (!googleScriptUrl) return; await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify({ action: 'backup_address', data: addresses, sheet_id: customerSheetId }), mode: 'no-cors', headers: {'Content-Type': 'text/plain;charset=utf-8'} }); openModal("전송 완료", 'alert'); }); };
             const handleCloudLoad = async () => { openModal("불러오시겠습니까?", 'confirm', async () => { if (!googleScriptUrl) return; const res = await fetch(`${googleScriptUrl}?action=get_addresses&t=${Date.now()}&sheet_id=${customerSheetId}`); const data = await res.json(); if(data && data.addresses) setAddresses(data.addresses); openModal("로드 완료", 'alert'); }); };
             
-            // [신규] 주소록 초기화 핸들러
             const handleResetAddresses = () => {
                 openModal("주소록을 모두 초기화하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)", 'confirm', () => {
                     setAddresses([]);
@@ -1480,16 +1489,32 @@
                     const activeItems = items.filter(i => !i.isCancelled); const isCard = cardPayments[nick]; 
                     const currentShipping = getCalculatedShipping(nick);
                     const productTotal = activeItems.reduce((sum, i) => sum + Number(i.price), 0); const depositTotal = items.reduce((sum, i) => sum + (i.deposit || 0), 0); 
-                    const grandTotal = productTotal + currentShipping; const isPaid = (depositTotal >= grandTotal) || isCard;
-                    return { nick, items: activeItems, isPaid, depositTotal, grandTotal };
+                    const grandTotal = productTotal + currentShipping; 
+                    const isPaid = (depositTotal >= grandTotal) || isCard;
+                    return { nick, items: activeItems, isPaid, isCard, depositTotal, grandTotal };
                 });
-                entries.sort((a, b) => { if (a.isPaid === b.isPaid) return a.nick.localeCompare(b.nick); return a.isPaid ? -1 : 1; });
-                let excelRows = []; entries.forEach(({ nick, items, isPaid }) => { 
+
+                // [수정] 정렬 우선순위: 1. 완납, 2. 카드결제, 3. 미입금
+                const getStatusPriority = (entry) => {
+                    if (entry.isPaid && !entry.isCard) return 1; // 완납
+                    if (entry.isCard) return 2; // 카드결제
+                    return 3; // 미입금
+                };
+
+                entries.sort((a, b) => { 
+                    const pA = getStatusPriority(a);
+                    const pB = getStatusPriority(b);
+                    if (pA !== pB) return pA - pB;
+                    return a.nick.localeCompare(b.nick); 
+                });
+
+                let excelRows = []; entries.forEach(({ nick, items, isPaid, isCard }) => { 
                     if(items.length === 0) return; const addrInfo = addresses.find(a => normalizeString(a.nickname) === normalizeString(nick)) || {}; 
                     const fullAddress = addrInfo.zipcode ? `(${addrInfo.zipcode}) ${addrInfo.address || ''}` : (addrInfo.address || ''); 
-                    const statusColumn = isPaid ? "" : "미입금";
+                    // [수정] 엑셀의 입금상태 열 표기 기준 변경
+                    const statusColumn = isCard ? "카드결제" : (isPaid ? "" : "미입금");
                     const createRow = (productValue) => ({ '날짜시간': new Date().toLocaleString(), '공란1': '', '입금상태': statusColumn, '닉네임': nick, '주문제품(수량)': productValue, '이름': addrInfo.realname || '', '핸드폰번호': addrInfo.phone || '', '주소': fullAddress, '배송메모': addrInfo.memo || '' }); 
-                    excelRows.push(createRow(`[ ${nick} ]`)); items.forEach(item => { const qtyPart = item.quantity > 1 ? ` ★ ${item.quantity}개` : ''; excelRows.push(createRow(`${item.product}${qtyPart}`)); }); 
+                    excelRows.push(createRow(`[ ${nick} ]`)); items.forEach(item => { const qtyPart = item.quantity > 1 ? ` ★${item.quantity}개` : ''; excelRows.push(createRow(`${item.product}${qtyPart}`)); }); 
                 }); 
                 downloadExcel(excelRows, '고객별_정산_배송리스트'); 
             };
@@ -1526,7 +1551,7 @@
                         </div>
                         <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg border dark:border-slate-700 text-center">
                             <h2 className="text-lg font-bold mb-2 dark:text-slate-100">배송용 고객 리스트 (전체)</h2>
-                            <p className="text-gray-500 dark:text-slate-400 mb-2 text-xs">입금완료 상단 / 노쇼 하단 정렬</p>
+                            <p className="text-gray-500 dark:text-slate-400 mb-2 text-xs">완납 상단 / 카드 중간 / 노쇼 하단 정렬</p>
                             <button onClick={handleExportCustomers} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg transition-colors hover:bg-blue-700">엑셀 다운로드</button>
                         </div>
                         <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg border dark:border-slate-700 text-center ring-2 ring-red-100 dark:ring-red-900/30">
@@ -1629,7 +1654,7 @@
                                         <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">주소 있음 안내</label><textarea value={templateConfig.addrNotice} onChange={(e)=>setTemplateConfig({...templateConfig, addrNotice: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-12 resize-none bg-transparent dark:text-slate-100" /></div>
                                         <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">주소 없음 안내</label><textarea value={templateConfig.surveyNotice} onChange={(e)=>setTemplateConfig({...templateConfig, surveyNotice: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-24 resize-none bg-transparent dark:text-slate-100" /></div>
                                         <div className="flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/20 p-2 rounded border border-indigo-100 dark:border-indigo-800">
-                                            <label className="text-xs font-bold text-indigo-700 dark:text-indigo-300">주소록 무시하고 항상 새로 입력받기 (강제수집)</label>
+                                            <label className="text-xs font-bold text-indigo-700 dark:text-indigo-300 cursor-pointer" onClick={() => setTemplateConfig({...templateConfig, alwaysRequestAddress: !templateConfig.alwaysRequestAddress})}>주소록 무시하고 항상 새로 입력받기 (강제수집)</label>
                                             <input type="checkbox" checked={templateConfig.alwaysRequestAddress || false} onChange={(e)=>setTemplateConfig({...templateConfig, alwaysRequestAddress: e.target.checked})} className="custom-checkbox" />
                                         </div>
                                     </div>
@@ -1639,7 +1664,7 @@
                         </div>
                     )}
                      <main className="flex-1 overflow-hidden bg-gray-200 dark:bg-slate-950 p-2 relative">
-                        {activeTab === 'live' && <LiveTab {...{ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory }} />}
+                        {activeTab === 'live' && <LiveTab {...{ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory }} />}
                         {activeTab === 'status' && <OrderStatusTab {...{ orders, setOrders, setProductHistory, productHistory, inventory, setInventory }} />}
                         {activeTab === 'customer' && <CustomerTab {...{ addresses, setAddresses, googleScriptUrl, customerSheetId, openModal, specialCustomers, setSpecialCustomers }} />}
                         {activeTab === 'cs' && <CSTab {...{ csData, setCsData, openModal }} />}
