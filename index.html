@@ -169,6 +169,7 @@
             const [showKeywordOnly, setShowKeywordOnly] = useState(false);
             const [connectionStatus, setConnectionStatus] = useState({ code: 'loading', msg: '연결 중...' });
             const [copyStatus, setCopyStatus] = useState({});
+            const [depositCopyStatus, setDepositCopyStatus] = useState({}); // 신규: 입금자명 복사 상태
             const [isSaving, setIsSaving] = useState(false);
             const [editingShippingNick, setEditingShippingNick] = useState(null);
             const [editingQuantityId, setEditingQuantityId] = useState(null);
@@ -619,6 +620,20 @@
             const handleDeleteDepositItem = (id) => { openModal("숨기시겠습니까?", 'confirm', () => { setManualDeposits(prev => prev.filter(d => d.id !== id)); setDeletedDepositIds(prev => new Set(prev).add(id)); setMatchedDeposits(prev => { const next = new Set(prev); next.delete(id); return next; }); }); };
             const handleFullDepositToggle = (nick, grandTotal, currentDeposit) => { const isPaid = currentDeposit >= grandTotal; if (isPaid) { openModal("입금 취소 처리하시겠습니까?", 'confirm', () => { setOrders(prev => prev.map(o => o.customer === nick ? { ...o, deposit: 0 } : o)); }); } else { setOrders(prev => { let processed = false; return prev.map(o => { if (o.customer === nick) { if (!processed) { processed = true; return { ...o, deposit: grandTotal }; } else { return { ...o, deposit: 0 }; } } return o; }); }); } };
             
+            const handleCopyDepositName = (e, name, id) => {
+                e.stopPropagation(); // 행 클릭 이벤트 방지
+                const textArea = document.createElement("textarea"); 
+                textArea.value = name; 
+                document.body.appendChild(textArea); 
+                textArea.select();
+                try { 
+                    document.execCommand('copy'); 
+                    setDepositCopyStatus(prev => ({ ...prev, [id]: true })); 
+                    setTimeout(() => { setDepositCopyStatus(prev => ({ ...prev, [id]: false })); }, 2000); 
+                } catch (err) { openModal('복사 실패', 'alert'); } 
+                document.body.removeChild(textArea);
+            };
+
             const handleProductChange = (id, field, value) => { 
                 if (field === 'product') setCurrentSearchTerm(value);
                 setOrders(prev => prev.map(o => { 
@@ -766,7 +781,13 @@
                                 return (
                                     <div key={d.id} onClick={() => handleDepositClick(d)} className={`relative flex justify-between p-2 border rounded cursor-pointer transition-all group ${isUsed ? 'opacity-50 bg-gray-200 dark:bg-slate-800 line-through border-transparent' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>
                                         <div className="flex flex-col gap-1">
-                                            <span className={`text-sm ${isUsed ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100 font-bold'}`}>{d.name} {d.source === 'manual' && <span className="text-[9px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1 rounded font-normal">수동</span>}</span>
+                                            <div className="flex items-center gap-1">
+                                                <span className={`text-sm ${isUsed ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100 font-bold'}`}>{d.name}</span>
+                                                <button onClick={(e) => handleCopyDepositName(e, d.name, d.id)} className={`transition-colors ${depositCopyStatus[d.id] ? 'text-green-500' : 'text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400'}`} title="이름 복사">
+                                                    <Icon name={depositCopyStatus[d.id] ? "check" : "copy"} weight="bold" size={14}/>
+                                                </button>
+                                                {d.source === 'manual' && <span className="text-[9px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1 rounded font-normal">수동</span>}
+                                            </div>
                                             <span className="text-[10px] text-gray-500 dark:text-slate-400 font-medium">{formatTimeOnly(d.time || d.date)}</span>
                                         </div>
                                         <div className="flex flex-col items-end justify-center">
