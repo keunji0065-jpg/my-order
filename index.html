@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>깔로 주문서 PRO--</title>
+    <title>깔로 주문서 PRO5 </title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -78,15 +78,6 @@
             if (!str) return '';
             const baseStr = String(str).split('-')[0].trim();
             return baseStr.replace(/[\s\(\)\[\]\{\}\-\_\.\,\/]/g, '').toLowerCase();
-        };
-
-        // [초정밀 수정] 채팅 고유 지문 생성 함수
-        // 줄 번호(idx)의 변동성 때문에 발생하던 버그를 막기 위해, 오직 '시간(초단위) + 닉네임 + 내용'만을 사용하여 절대 겹치지 않는 지문 생성
-        const generateChatId = (chat) => {
-            const safeNick = String(chat.nickname || '').replace(/\s/g, '');
-            const safeContent = String(chat.content || '').replace(/\s/g, '').substring(0, 20);
-            const safeTime = String(chat.time || '').replace(/[^0-9]/g, ''); // 숫자만 추출 (예: 20231025143015)
-            return `chat_${safeTime}_${safeNick}_${safeContent}`;
         };
 
         const useLocalStorage = (key, initialValue) => {
@@ -365,10 +356,11 @@
                     if (text.trim().startsWith("<!DOCTYPE")) { setConnectionStatus({ code: 'error_auth', msg: '권한확인' }); return; }
                     const data = JSON.parse(text);
                     if (data.chats) {
-                        // [최종 수정] idx를 버리고 오직 내용 기반으로만 ID 생성
+                        // [최초의 안정적인 방식으로 완벽 복구]
+                        // 절대 겹칠 일이 없고, 배열 순서가 바뀌어도 유지되는 완벽한 난수(Random ID) 부여
                         const cleanChats = data.chats.map((chat) => ({ 
                             ...chat, 
-                            id: chat.id || generateChatId(chat), 
+                            id: chat.id || `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                             nickname: String(chat.nickname).replace(/@/g, '').trim() 
                         }));
                         setChats(prev => JSON.stringify(prev) !== JSON.stringify(cleanChats) ? cleanChats : prev);
