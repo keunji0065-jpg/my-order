@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>깔로 주문서 PRO</title>
+    <title>깔로 주문서 PRO (정식 버전)</title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -78,6 +78,11 @@
             if (!str) return '';
             const baseStr = String(str).split('-')[0].trim();
             return baseStr.replace(/[\s\(\)\[\]\{\}\-\_\.\,\/]/g, '').toLowerCase();
+        };
+
+        // [신규] 채팅 고유 지문 생성 함수 (동일한 내용이라도 작성자/시간/내용을 섞어 절대 부활하지 않는 고유 ID 생성)
+        const generateChatId = (chat) => {
+            return `chat_${chat.nickname}_${chat.time}_${chat.content}`.replace(/\s/g, '');
         };
 
         const useLocalStorage = (key, initialValue) => {
@@ -356,10 +361,10 @@
                     if (text.trim().startsWith("<!DOCTYPE")) { setConnectionStatus({ code: 'error_auth', msg: '권한확인' }); return; }
                     const data = JSON.parse(text);
                     if (data.chats) {
-                        // [수정] 무조건 랜덤 ID를 부여하여 중복 아이디 문제를 완벽 차단
+                        // [수정] 무작위 ID 대신 내용 기반의 고유 해시 ID(지문)를 생성하여 부활 방지
                         const cleanChats = data.chats.map(chat => ({ 
                             ...chat, 
-                            id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                            id: chat.id || generateChatId(chat), // 기존 id가 없으면 생성된 지문 사용
                             nickname: String(chat.nickname).replace(/@/g, '').trim() 
                         }));
                         setChats(prev => JSON.stringify(prev) !== JSON.stringify(cleanChats) ? cleanChats : prev);
