@@ -80,9 +80,12 @@
             return baseStr.replace(/[\s\(\)\[\]\{\}\-\_\.\,\/]/g, '').toLowerCase();
         };
 
-        // [신규] 채팅 고유 지문 생성 함수 (동일한 내용이라도 작성자/시간/내용을 섞어 절대 부활하지 않는 고유 ID 생성)
-        const generateChatId = (chat) => {
-            return `chat_${chat.nickname}_${chat.time}_${chat.content}`.replace(/\s/g, '');
+        // [완벽수정] 채팅 고유 지문 생성 함수
+        // 같은 사람이 똑같은 내용의 댓글을 써도, 줄 번호(idx)를 포함시켜 절대 중복ID가 발생하지 않음!
+        const generateChatId = (chat, idx) => {
+            const safeNick = String(chat.nickname || '').replace(/\s/g, '');
+            const safeContent = String(chat.content || '').replace(/\s/g, '').substring(0, 15);
+            return `chat_${idx}_${safeNick}_${safeContent}`;
         };
 
         const useLocalStorage = (key, initialValue) => {
@@ -361,10 +364,10 @@
                     if (text.trim().startsWith("<!DOCTYPE")) { setConnectionStatus({ code: 'error_auth', msg: '권한확인' }); return; }
                     const data = JSON.parse(text);
                     if (data.chats) {
-                        // [수정] 무작위 ID 대신 내용 기반의 고유 해시 ID(지문)를 생성하여 부활 방지
-                        const cleanChats = data.chats.map(chat => ({ 
+                        // [완벽수정] 배열의 순서(idx)를 함께 사용하여 절대 중복되지 않는 완벽한 고유 ID 생성
+                        const cleanChats = data.chats.map((chat, idx) => ({ 
                             ...chat, 
-                            id: chat.id || generateChatId(chat), // 기존 id가 없으면 생성된 지문 사용
+                            id: chat.id || generateChatId(chat, idx), 
                             nickname: String(chat.nickname).replace(/@/g, '').trim() 
                         }));
                         setChats(prev => JSON.stringify(prev) !== JSON.stringify(cleanChats) ? cleanChats : prev);
