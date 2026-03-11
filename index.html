@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>깔로 주문서 PRO (정식 버전)</title>
+    <title>깔로 주문서 PRO</title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -80,7 +80,6 @@
             return baseStr.replace(/[\s\(\)\[\]\{\}\-\_\.\,\/]/g, '').toLowerCase();
         };
 
-        // [최적화 1] 로컬 스토리지 저장 시 병목 방지 (디바운스 적용)
         const useLocalStorage = (key, initialValue) => {
             const [storedValue, setStoredValue] = useState(() => {
                 try {
@@ -100,7 +99,6 @@
             });
 
             useEffect(() => {
-                // 상태가 바뀔 때마다 즉시 저장하지 않고 0.3초 대기 후 한 번만 저장 (렉 해결의 핵심)
                 const timer = setTimeout(() => {
                     try {
                         window.localStorage.setItem(key, JSON.stringify(storedValue));
@@ -358,7 +356,12 @@
                     if (text.trim().startsWith("<!DOCTYPE")) { setConnectionStatus({ code: 'error_auth', msg: '권한확인' }); return; }
                     const data = JSON.parse(text);
                     if (data.chats) {
-                        const cleanChats = data.chats.map(chat => ({ ...chat, nickname: String(chat.nickname).replace(/@/g, '').trim() }));
+                        // [수정] 무조건 랜덤 ID를 부여하여 중복 아이디 문제를 완벽 차단
+                        const cleanChats = data.chats.map(chat => ({ 
+                            ...chat, 
+                            id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                            nickname: String(chat.nickname).replace(/@/g, '').trim() 
+                        }));
                         setChats(prev => JSON.stringify(prev) !== JSON.stringify(cleanChats) ? cleanChats : prev);
                         setConnectionStatus({ code: 'success', msg: '🟢 연결됨' });
                     }
@@ -375,7 +378,6 @@
                 return () => clearInterval(interval); 
             }, [googleScriptUrl]);
 
-            // [최적화 2] 무거운 자동 매칭 로직도 0.5초 디바운싱 적용 (타자 칠 때 렉 없앰)
             useEffect(() => {
                 const timer = setTimeout(() => {
                     if (allDeposits.length === 0 || orders.length === 0) return;
@@ -446,7 +448,7 @@
                         }
                     });
                     if (hasChanges) { setOrders(updatedOrders); setMatchedDeposits(newMatchedIds); }
-                }, 500); // 0.5초 타자 쉬면 계산
+                }, 500); 
                 return () => clearTimeout(timer);
             }, [allDeposits, orders, matchedDeposits, depositorNames, deletedDepositIds, getCalculatedShipping, findAddress]);
 
