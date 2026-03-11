@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>깔로 주문서 PRO5 </title>
+    <title>깔로 주문서 PRO (정식 버전)</title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -356,13 +356,21 @@
                     if (text.trim().startsWith("<!DOCTYPE")) { setConnectionStatus({ code: 'error_auth', msg: '권한확인' }); return; }
                     const data = JSON.parse(text);
                     if (data.chats) {
-                        // [최초의 안정적인 방식으로 완벽 복구]
-                        // 절대 겹칠 일이 없고, 배열 순서가 바뀌어도 유지되는 완벽한 난수(Random ID) 부여
-                        const cleanChats = data.chats.map((chat) => ({ 
-                            ...chat, 
-                            id: chat.id || `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                            nickname: String(chat.nickname).replace(/@/g, '').trim() 
-                        }));
+                        // [최종 해결] 구글 시트에서 삭제 시 '줄 번호(id)'가 당겨지는 문제 원천 차단
+                        // 서버에서 보내는 id를 완전히 무시하고, 내용+시간 기반의 고유 지문으로 강제 덮어쓰기
+                        const counts = {};
+                        const cleanChats = data.chats.map((chat) => {
+                            const safeNick = String(chat.nickname || '').replace(/\s/g, '');
+                            const safeContent = String(chat.content || '').replace(/\s/g, '').substring(0, 20);
+                            const safeTime = String(chat.time || '').replace(/[^0-9]/g, '');
+                            const baseKey = `c_${safeTime}_${safeNick}_${safeContent}`;
+                            counts[baseKey] = (counts[baseKey] || 0) + 1;
+                            return { 
+                                ...chat, 
+                                id: `${baseKey}_${counts[baseKey]}`, // 서버 id 무시하고 무조건 고유값으로 설정
+                                nickname: String(chat.nickname).replace(/@/g, '').trim() 
+                            };
+                        });
                         setChats(prev => JSON.stringify(prev) !== JSON.stringify(cleanChats) ? cleanChats : prev);
                         setConnectionStatus({ code: 'success', msg: '🟢 연결됨' });
                     }
