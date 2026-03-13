@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>깔로PRO </title>
+    <title>깔로 주문서 PRO (정식 버전)</title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -481,9 +481,26 @@
                 return <span className={`${bgColor} px-1 rounded text-[10px] flex items-center gap-0.5 ml-1 cursor-help shrink-0`} title={info.memo}><Icon name={icon} weight="fill" /><span className="max-w-[60px] truncate">{text}</span></span>;
             }, [getSpecialCustomer]);
 
+            // 🚀 [수정] 무조건 시:분(HH:mm) 형태만 강제로 추출하는 강력한 필터 함수로 변경!
             const formatTimeOnly = (val) => { 
-                if (!val) return ''; const dt = new Date(val); 
-                return !isNaN(dt) ? dt.toLocaleTimeString('ko-KR', {hour12: false, hour:'2-digit', minute:'2-digit'}) : val; 
+                if (!val) return ''; 
+                const strVal = String(val);
+                // 글자 안에서 '숫자:숫자' 형태만 쏙 뽑아냅니다
+                const timeMatch = strVal.match(/(\d{1,2}):(\d{2})/);
+                if (timeMatch) {
+                    let hour = parseInt(timeMatch[1], 10);
+                    // 혹시 오후/PM 표기가 있다면 24시간제로 변환
+                    if ((strVal.includes('오후') || strVal.toUpperCase().includes('PM')) && hour < 12) {
+                        hour += 12;
+                    } else if ((strVal.includes('오전') || strVal.toUpperCase().includes('AM')) && hour === 12) {
+                        hour = 0;
+                    }
+                    return `${String(hour).padStart(2, '0')}:${timeMatch[2]}`;
+                }
+                
+                // 정규식으로도 못찾으면 최후의 수단으로 Date 객체 시도
+                const dt = new Date(strVal); 
+                return !isNaN(dt) ? dt.toLocaleTimeString('en-US', {hour12: false, hour:'2-digit', minute:'2-digit'}) : strVal; 
             };
             
             const renderChatContent = (content, keywordsSet) => {
@@ -1065,18 +1082,18 @@
                             </div>
                              <div className="relative mt-2"><Icon name="magnifying-glass" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400 text-xs"/><input type="text" placeholder="닉네임/내용 검색" value={chatSearch} onChange={e => setChatSearch(e.target.value)} className="w-full text-xs pl-7 pr-2 py-1.5 border dark:border-slate-600 rounded focus:ring-1 focus:ring-indigo-500 outline-none bg-transparent" /></div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-gray-100 dark:bg-slate-900">
+                        <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5 bg-gray-100 dark:bg-slate-900">
                             {filteredChats.map(chat => {
                                 const isMatched = Array.from(keywords).some(k => chat.content.includes(k));
                                 const isProcessed = clickedChats?.has(chat.id);
                                 const chatClasses = isProcessed ? 'opacity-80 bg-gray-100 dark:bg-slate-800/80 border-transparent' : (isMatched ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 ring-1 ring-blue-300 dark:ring-blue-700 shadow-sm' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700');
                                 return (
-                                    <div key={chat.id} onClick={() => handleChatClick(chat)} className={`p-2 border rounded cursor-pointer transition-all flex flex-col gap-1 ${chatClasses}`}>
-                                        <div className="flex justify-between text-xs mb-1">
+                                    <div key={chat.id} onClick={() => handleChatClick(chat)} className={`py-1 px-1.5 border rounded cursor-pointer transition-all flex flex-col gap-0.5 ${chatClasses}`}>
+                                        <div className="flex justify-between text-xs">
                                             <span className={`font-bold ${isProcessed ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100'}`}>{chat.nickname} {renderSpecialBadge(chat.nickname)}</span>
-                                            <span className="text-gray-400 dark:text-slate-500">{formatTimeOnly(chat.time)}</span>
+                                            <span className="text-[10px] text-gray-400 dark:text-slate-500">{formatTimeOnly(chat.time)}</span>
                                         </div>
-                                        <div className={`text-sm ${isProcessed ? 'text-gray-500 dark:text-slate-400' : 'dark:text-slate-300'}`}>{renderChatContent(chat.content, keywords)}</div>
+                                        <div className={`text-sm leading-tight ${isProcessed ? 'text-gray-500 dark:text-slate-400' : 'dark:text-slate-300'}`}>{renderChatContent(chat.content, keywords)}</div>
                                     </div>
                                 );
                             })}
@@ -1097,9 +1114,12 @@
                                             </button>
                                             {d.source === 'manual' && <span className="text-[9px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1 rounded font-normal">수동</span>}
                                         </div>
-                                        <div className="flex flex-col items-end justify-center">
-                                            <span className={`font-bold text-sm ${isUsed ? 'text-gray-500 dark:text-slate-400' : 'text-blue-600 dark:text-blue-400'}`}>+{Number(d.amount).toLocaleString()}</span>
-                                            {isUsed && <span className="text-[9px] font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded mt-0.5">매칭완료</span>}
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-gray-500 dark:text-slate-400 font-bold">{formatTimeOnly(d.time || d.date)}</span>
+                                            <div className="flex flex-col items-end justify-center">
+                                                <span className={`font-bold text-sm ${isUsed ? 'text-gray-500 dark:text-slate-400' : 'text-blue-600 dark:text-blue-400'}`}>+{Number(d.amount).toLocaleString()}</span>
+                                                {isUsed && <span className="text-[9px] font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded mt-0.5">매칭완료</span>}
+                                            </div>
                                         </div>
                                         <button onClick={(e)=>{e.stopPropagation(); handleDeleteDepositItem(d.id);}} className="absolute -right-1 -top-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash" size={10} weight="bold"/></button>
                                     </div>
