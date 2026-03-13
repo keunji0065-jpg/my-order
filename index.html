@@ -35,7 +35,6 @@
         ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .dark ::-webkit-scrollbar-thumb { background: #475569; }
         
-        /* 숫자 인력창 스핀 화살표 숨기기 */
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button {
             -webkit-appearance: none;
@@ -74,18 +73,26 @@
         const Icon = ({ name, className="", weight="regular", size }) => <i className={`ph ph-${name} ${className}`} data-phosphor-icon-weight={weight} style={{fontSize: size}}></i>;
         const normalizeString = (str) => String(str || '').replace(/[\s\(\)\[\]\{\}\-\_\.\,\/]/g, '').toLowerCase();
 
-        // 🚀 [초강력 스마트 매칭 로직]
+        // 🚀 한글 초성 추출기 (검색 마법사)
+        const getChosung = (str) => {
+            if (!str) return '';
+            const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅇ","ㅆ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+            let result = "";
+            for (let i = 0; i < str.length; i++) {
+                const code = str.charCodeAt(i) - 44032;
+                if (code > -1 && code < 11172) result += cho[Math.floor(code / 588)];
+                else result += str.charAt(i);
+            }
+            return result;
+        };
+
         const cleanForMatch = (str) => {
             if (!str) return '';
             let s = String(str).toLowerCase().replace(/\s/g, '');
             s = s.replace(/[—–−_]/g, '-');
-            if (s.includes('-')) {
-                s = s.split('-')[0];
-            }
+            if (s.includes('-')) s = s.split('-')[0];
             s = s.replace(/[\(\)\[\]\{\}\.\,\/]/g, '');
-            if (/[가-힣]/.test(s)) {
-                s = s.replace(/[a-z0-9]+$/, '');
-            }
+            if (/[가-힣]/.test(s)) s = s.replace(/[a-z0-9]+$/, '');
             return s;
         };
 
@@ -116,17 +123,13 @@
 
             useEffect(() => {
                 const timer = setTimeout(() => {
-                    try {
-                        window.localStorage.setItem(key, JSON.stringify(storedValue));
-                    } catch(e) {}
+                    try { window.localStorage.setItem(key, JSON.stringify(storedValue)); } catch(e) {}
                 }, 300);
                 return () => clearTimeout(timer);
             }, [key, storedValue]);
 
             const setValue = useCallback((value) => {
-                try {
-                    setStoredValue(prev => value instanceof Function ? value(prev) : value);
-                } catch (error) { console.log(error); }
+                try { setStoredValue(prev => value instanceof Function ? value(prev) : value); } catch (error) {}
             }, []);
 
             return [storedValue, setValue];
@@ -409,7 +412,7 @@
             );
         });
 
-        const LiveTab = ({ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory }) => {
+        const LiveTab = ({ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory, quickMessages }) => {
             const [chats, setChats] = useState([]);
             const [serverDeposits, setServerDeposits] = useState([]);
             const [manualDeposits, setManualDeposits] = useState([]);
@@ -431,6 +434,9 @@
             const [editingShippingNick, setEditingShippingNick] = useState(null);
             const [currentSearchTerm, setCurrentSearchTerm] = useState('');
             const [lastAddedOrderId, setLastAddedOrderId] = useState(null);
+            
+            // 🚀 수동 입력 닉네임 자동완성 상태
+            const [showNickSuggestions, setShowNickSuggestions] = useState(false);
 
             const findAddress = useCallback((nick) => {
                 if (addressMapping[nick]) {
@@ -487,14 +493,10 @@
                 const timeMatch = strVal.match(/(\d{1,2}):(\d{2})/);
                 if (timeMatch) {
                     let hour = parseInt(timeMatch[1], 10);
-                    if ((strVal.includes('오후') || strVal.toUpperCase().includes('PM')) && hour < 12) {
-                        hour += 12;
-                    } else if ((strVal.includes('오전') || strVal.toUpperCase().includes('AM')) && hour === 12) {
-                        hour = 0;
-                    }
+                    if ((strVal.includes('오후') || strVal.toUpperCase().includes('PM')) && hour < 12) hour += 12;
+                    else if ((strVal.includes('오전') || strVal.toUpperCase().includes('AM')) && hour === 12) hour = 0;
                     return `${String(hour).padStart(2, '0')}:${timeMatch[2]}`;
                 }
-                
                 const dt = new Date(strVal); 
                 return !isNaN(dt) ? dt.toLocaleTimeString('en-US', {hour12: false, hour:'2-digit', minute:'2-digit'}) : strVal; 
             };
@@ -569,9 +571,32 @@
                     const shipping = getCalculatedShipping(nick);
                     const depositTotal = items.reduce((sum, i) => sum + (i.deposit || 0), 0);
                     const isPaid = (productTotal + (activeItems.length > 0 ? shipping : 0) - depositTotal) <= 0 && activeItems.length > 0;
+                    
+                    // 🚀 [추가] 5번 기능: 주소 미입력자 필터
+                    if (filterStatus === 'no-address') {
+                        const addrRes = findAddress(nick);
+                        if (addrRes && addrRes.data && addrRes.data.address) return false;
+                        return true;
+                    }
+                    
+                    // 🚀 [초강력 검색] 5번 기능: 초성, 닉네임, 실명, 연락처 통합 스마트 검색
                     if (orderSearch) {
                         const term = orderSearch.toLowerCase();
-                        if (!nick.toLowerCase().includes(term) && !items.some(i => i.product && i.product.toLowerCase().includes(term))) return false;
+                        const termCho = getChosung(term);
+                        
+                        const addrInfo = findAddress(nick)?.data;
+                        const realName = addrInfo ? addrInfo.realname : (depositorNames[nick] || '');
+                        const phone = addrInfo ? addrInfo.phone : '';
+                        
+                        const nickCho = getChosung(nick);
+                        const realNameCho = getChosung(realName || '');
+                        
+                        const matchNick = nick.toLowerCase().includes(term) || nickCho.includes(termCho);
+                        const matchRealName = realName && (realName.toLowerCase().includes(term) || realNameCho.includes(termCho));
+                        const matchPhone = phone && phone.replace(/-/g, '').includes(term.replace(/-/g, ''));
+                        const matchProduct = items.some(i => i.product && (i.product.toLowerCase().includes(term) || getChosung(i.product).includes(termCho)));
+                        
+                        if (!matchNick && !matchRealName && !matchPhone && !matchProduct) return false;
                     }
                     if (filterStatus === 'card') return isCard;
                     if (filterStatus === 'unpaid') return !isCard && !isPaid;
@@ -579,17 +604,21 @@
                     return true;
                 });
                 return entries.sort((a, b) => Math.max(...b[1].map(o=>o.id)) - Math.max(...a[1].map(o=>o.id)));
-            }, [orders, orderSearch, filterStatus, cardPayments, getCalculatedShipping]);
+            }, [orders, orderSearch, filterStatus, cardPayments, getCalculatedShipping, findAddress, depositorNames]);
 
             const totalItemsCount = useMemo(() => { let count = 0; filteredGroupedOrders.forEach(([_, items]) => { count += items.filter(i => !i.isCancelled).length; }); return count; }, [filteredGroupedOrders]);
             
             const dashboardStats = useMemo(() => {
-                let totalSales = 0, totalDeposit = 0, totalUnpaid = 0, totalCardExpected = 0;
+                let totalSales = 0, totalDeposit = 0, totalUnpaid = 0, totalCardExpected = 0, missingAddressCount = 0;
                 const groups = {};
                 orders.forEach(o => { if (!groups[o.customer]) groups[o.customer] = []; groups[o.customer].push(o); });
                 Object.entries(groups).forEach(([nick, items]) => {
                     const activeItems = items.filter(i => !i.isCancelled);
                     if (activeItems.length === 0) return;
+                    
+                    const addr = findAddress(nick);
+                    if (!addr || !addr.data || !addr.data.address) missingAddressCount++;
+                    
                     const isCard = cardPayments[nick];
                     const shipping = getCalculatedShipping(nick);
                     const productTotal = activeItems.reduce((sum, i) => sum + Number(i.price), 0);
@@ -599,8 +628,8 @@
                     totalSales += grandTotal; totalDeposit += depositTotal;
                     if (balance > 0) { if (isCard) totalCardExpected += balance; else totalUnpaid += balance; }
                 });
-                return { totalSales, totalDeposit, totalUnpaid, totalCardExpected };
-            }, [orders, cardPayments, getCalculatedShipping]);
+                return { totalSales, totalDeposit, totalUnpaid, totalCardExpected, missingAddressCount };
+            }, [orders, cardPayments, getCalculatedShipping, findAddress]);
 
             const stockLookup = useMemo(() => {
                 const lookup = {};
@@ -612,6 +641,33 @@
                 });
                 return lookup;
             }, [inventory, orders]);
+            
+            // 🚀 수동 입력 닉네임 자동완성 리스트 (초성 및 실명 포함)
+            const nicknameSuggestions = useMemo(() => {
+                if (!manualNick.trim()) return [];
+                const term = manualNick.toLowerCase();
+                const termCho = getChosung(term);
+                
+                const allNicks = new Set();
+                orders.forEach(o => allNicks.add(o.customer));
+                addresses.forEach(a => allNicks.add(a.nickname));
+                
+                const results = [];
+                for (const n of allNicks) {
+                    const addr = findAddress(n)?.data;
+                    const realName = addr ? addr.realname : (depositorNames[n] || '');
+                    
+                    const nCho = getChosung(n);
+                    const rCho = getChosung(realName || '');
+                    
+                    if (n.toLowerCase().includes(term) || nCho.includes(termCho) || 
+                       (realName && (realName.toLowerCase().includes(term) || rCho.includes(termCho)))) {
+                        results.push({ nick: n, realName });
+                        if (results.length >= 5) break; // 최대 5개까지만 노출
+                    }
+                }
+                return results;
+            }, [manualNick, orders, addresses, depositorNames, findAddress]);
 
             const fetchData = async () => {
                 if (!googleScriptUrl) { setConnectionStatus({ code: 'error_config', msg: '설정필요' }); return; }
@@ -909,7 +965,6 @@
 
             const handleDeleteDepositItem = (id) => { openModal("숨기시겠습니까?", 'confirm', () => { setManualDeposits(prev => prev.filter(d => d.id !== id)); setDeletedDepositIds(prev => new Set(prev).add(id)); setMatchedDeposits(prev => { const next = new Set(prev); next.delete(id); return next; }); }); };
             
-            // 🚀 [추가/수정] 완납 취소 시, 매칭되었던 입금 내역도 함께 해제하여 다시 활성화시킴!
             const handleFullDepositToggle = useCallback((nick, grandTotal, currentDeposit) => { 
                 const isPaid = currentDeposit >= grandTotal; 
                 if (isPaid) { 
@@ -927,7 +982,7 @@
                                 if (prevMatched.has(d.id)) {
                                     const depNameClean = cleanForMatch(d.name);
                                     if (depNameClean === targetNickClean || (savedRealName && depNameClean === savedRealName) || (addressRealName && depNameClean === addressRealName)) {
-                                        newMatched.delete(d.id); // 매칭 해제!
+                                        newMatched.delete(d.id);
                                     }
                                 }
                             });
@@ -939,6 +994,35 @@
                 } 
             }, [openModal, setOrders, setMatchedDeposits, depositorNames, findAddress]);
             
+            // 🚀 [추가] 주소 미입력자 클릭 시 유튜브 댓글용 텍스트 자동 복사 기능
+            const handleNoAddressClick = useCallback(() => {
+                setFilterStatus('no-address');
+                
+                const missingNicks = new Set();
+                orders.forEach(o => {
+                    if (!o.isCancelled) {
+                        const addrRes = findAddress(o.customer);
+                        if (!addrRes || !addrRes.data || !addrRes.data.address) {
+                            missingNicks.add(o.customer);
+                        }
+                    }
+                });
+                
+                const nicksArray = Array.from(missingNicks);
+                if (nicksArray.length > 0) {
+                    const textToCopy = "⚠️ 채널톡 안주신분 ⚠️\n" + nicksArray.join('\n') + "\n\n👉 카톡채널 연락주세요!";
+                    const textArea = document.createElement("textarea"); 
+                    textArea.value = textToCopy; 
+                    document.body.appendChild(textArea); 
+                    textArea.select();
+                    try { 
+                        document.execCommand('copy'); 
+                        openModal(`주소 미입력자 ${nicksArray.length}명의 명단이 복사되었습니다!\n\n(유튜브 채팅창에 바로 붙여넣기 하세요)`, 'alert');
+                    } catch (err) {} 
+                    document.body.removeChild(textArea);
+                }
+            }, [orders, findAddress, openModal]);
+
             const handleCopyDepositName = (e, name, id) => {
                 e.stopPropagation(); 
                 const textArea = document.createElement("textarea"); 
@@ -950,6 +1034,22 @@
                     setDepositCopyStatus(prev => ({ ...prev, [id]: true })); 
                     setTimeout(() => { setDepositCopyStatus(prev => ({ ...prev, [id]: false })); }, 2000); 
                 } catch (err) { openModal('복사 실패', 'alert'); } 
+                document.body.removeChild(textArea);
+            };
+
+            // 🚀 [추가] 빠른 댓글(퀵 메시지) 복사 기능
+            const handleCopyQuickMessage = (msg) => {
+                if (!msg || !msg.trim()) return;
+                const textArea = document.createElement("textarea");
+                textArea.value = msg;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    openModal('✅ 빠른 댓글이 복사되었습니다!\n\n(유튜브 채팅창에 붙여넣기 하세요)', 'alert');
+                } catch (err) {
+                    openModal('복사 실패', 'alert');
+                }
                 document.body.removeChild(textArea);
             };
 
@@ -1055,6 +1155,20 @@
                     </datalist>
 
                     <div className="w-[30%] flex flex-col bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg shadow-sm overflow-hidden">
+                        {/* 🚀 빠른 댓글 대시보드 (4칸) */}
+                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 border-b dark:border-slate-700 grid grid-cols-2 gap-1.5">
+                            {quickMessages && quickMessages.map((msg, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => handleCopyQuickMessage(msg)}
+                                    className="text-[10px] bg-white dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded py-1 px-1.5 truncate text-left shadow-sm transition-colors flex items-center gap-1"
+                                    title={msg}
+                                >
+                                    <span className="shrink-0">💬</span>
+                                    <span className="truncate">{msg || "빈 메시지 (설정에서 추가)"}</span>
+                                </button>
+                            ))}
+                        </div>
                         <div className="p-2 bg-indigo-50 dark:bg-slate-700/50 border-b dark:border-slate-700 flex flex-col gap-2">
                              <div className="font-bold text-indigo-700 dark:text-indigo-300 flex items-center justify-between"><div className="flex items-center gap-2"><span className="flex items-center gap-1"><Icon name="youtube-logo" weight="fill" className="text-red-600"/> 라이브 댓글</span><button onClick={() => setShowKeywordOnly(!showKeywordOnly)} className={`flex items-center justify-center w-6 h-6 rounded-full transition-all ${showKeywordOnly ? 'bg-blue-600 text-white shadow-sm' : 'bg-white dark:bg-slate-600 text-gray-400 dark:text-slate-300 border border-gray-200 dark:border-slate-500 hover:text-blue-500'}`}><Icon name="target" weight={showKeywordOnly ? "fill" : "bold"} size={14} /></button></div><span className="text-xs text-gray-500 dark:text-slate-400">{filteredChats.length}건</span></div>
                              <div className="flex flex-col gap-1 bg-white dark:bg-slate-800 p-1 rounded border border-indigo-100 dark:border-slate-600 mt-1">
@@ -1125,68 +1239,88 @@
                     </div>
                     
                     <div className="w-[50%] bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg flex flex-col overflow-hidden shadow-sm">
-                        <div className="grid grid-cols-4 gap-2 p-2 bg-indigo-50 dark:bg-slate-700/50 border-b dark:border-slate-700 text-center text-xs">
-                            <div onClick={()=>setFilterStatus('all')} className={`bg-white dark:bg-slate-800 p-1 rounded shadow-sm cursor-pointer border-2 transition-all ${filterStatus==='all' ? 'border-indigo-500' : 'border-transparent hover:border-indigo-200 dark:hover:border-indigo-800'}`}><div className="text-gray-400 dark:text-slate-500">총 매출</div><div className="font-bold text-indigo-700 dark:text-indigo-300">{dashboardStats.totalSales.toLocaleString()}</div></div>
-                            <div onClick={()=>setFilterStatus('paid')} className={`bg-white dark:bg-slate-800 p-1 rounded shadow-sm cursor-pointer border-2 transition-all ${filterStatus==='paid' ? 'border-green-500' : 'border-transparent hover:border-green-200 dark:hover:border-green-800'}`}><div className="text-gray-400 dark:text-slate-500">입금액</div><div className="font-bold text-green-600 dark:text-green-400">{dashboardStats.totalDeposit.toLocaleString()}</div></div>
-                            <div onClick={()=>setFilterStatus('unpaid')} className={`bg-white dark:bg-slate-800 p-1 rounded shadow-sm cursor-pointer border-2 transition-all ${filterStatus==='unpaid' ? 'border-red-500' : 'border-transparent hover:border-red-200 dark:hover:border-red-800'}`}><div className="text-gray-400 dark:text-slate-500">미수금</div><div className="font-bold text-red-500 dark:text-red-400">{dashboardStats.totalUnpaid.toLocaleString()}</div></div>
-                            <div onClick={()=>setFilterStatus('card')} className={`bg-white dark:bg-slate-800 p-1 rounded shadow-sm cursor-pointer border-2 transition-all ${filterStatus==='card' ? 'border-purple-500' : 'border-transparent hover:border-purple-200 dark:hover:border-purple-800'}`}><div className="text-gray-400 dark:text-slate-500">카드예정</div><div className="font-bold text-purple-600 dark:text-purple-400">{dashboardStats.totalCardExpected.toLocaleString()}</div></div>
+                        <div className="grid grid-cols-5 gap-2 p-2 bg-indigo-50 dark:bg-slate-700/50 border-b dark:border-slate-700 text-center text-xs">
+                            <div onClick={()=>setFilterStatus('all')} className={`bg-white dark:bg-slate-800 p-1 rounded shadow-sm cursor-pointer border-2 transition-all flex flex-col justify-center ${filterStatus==='all' ? 'border-indigo-500' : 'border-transparent hover:border-indigo-200 dark:hover:border-indigo-800'}`}><div className="text-[10px] text-gray-400 dark:text-slate-500">총 매출</div><div className="font-bold text-indigo-700 dark:text-indigo-300 text-sm">{dashboardStats.totalSales.toLocaleString()}</div></div>
+                            <div onClick={()=>setFilterStatus('paid')} className={`bg-white dark:bg-slate-800 p-1 rounded shadow-sm cursor-pointer border-2 transition-all flex flex-col justify-center ${filterStatus==='paid' ? 'border-green-500' : 'border-transparent hover:border-green-200 dark:hover:border-green-800'}`}><div className="text-[10px] text-gray-400 dark:text-slate-500">입금액</div><div className="font-bold text-green-600 dark:text-green-400 text-sm">{dashboardStats.totalDeposit.toLocaleString()}</div></div>
+                            <div onClick={()=>setFilterStatus('unpaid')} className={`bg-white dark:bg-slate-800 p-1 rounded shadow-sm cursor-pointer border-2 transition-all flex flex-col justify-center ${filterStatus==='unpaid' ? 'border-red-500' : 'border-transparent hover:border-red-200 dark:hover:border-red-800'}`}><div className="text-[10px] text-gray-400 dark:text-slate-500">미수금</div><div className="font-bold text-red-500 dark:text-red-400 text-sm">{dashboardStats.totalUnpaid.toLocaleString()}</div></div>
+                            <div onClick={()=>setFilterStatus('card')} className={`bg-white dark:bg-slate-800 p-1 rounded shadow-sm cursor-pointer border-2 transition-all flex flex-col justify-center ${filterStatus==='card' ? 'border-purple-500' : 'border-transparent hover:border-purple-200 dark:hover:border-purple-800'}`}><div className="text-[10px] text-gray-400 dark:text-slate-500">카드예정</div><div className="font-bold text-purple-600 dark:text-purple-400 text-sm">{dashboardStats.totalCardExpected.toLocaleString()}</div></div>
+                            <div onClick={handleNoAddressClick} className={`bg-white dark:bg-slate-800 p-1 rounded shadow-sm cursor-pointer border-2 transition-all flex flex-col justify-center ${filterStatus==='no-address' ? 'border-orange-500' : 'border-transparent hover:border-orange-200 dark:hover:border-orange-800'}`}><div className="text-[10px] text-gray-400 dark:text-slate-500 flex items-center justify-center gap-0.5"><Icon name="warning-circle" weight="fill" className="text-orange-400"/>주소미입력</div><div className="font-bold text-orange-500 dark:text-orange-400 text-sm">{dashboardStats.missingAddressCount}명</div></div>
                         </div>
-                        <div className="p-2 bg-white dark:bg-slate-800 border-b dark:border-slate-700 font-bold text-indigo-700 dark:text-indigo-300 shadow-sm flex flex-col gap-2">
+                        <div className="p-2 bg-white dark:bg-slate-800 border-b dark:border-slate-700 font-bold text-indigo-700 dark:text-indigo-300 shadow-sm flex flex-col gap-2 relative z-20">
                              <div className="flex justify-between items-center"><span className="text-sm">📦 주문서 ({filteredGroupedOrders.length}명) ({totalItemsCount}건)</span><div className="flex items-center gap-2"><button onClick={handleLoadOrders} className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold flex items-center gap-1 shadow-sm"><Icon name="cloud-arrow-down" weight="fill"/> 불러오기</button><button onClick={resetAllStatus} className="bg-rose-500 text-white px-2 py-1 rounded text-xs font-bold hover:bg-rose-600 flex items-center gap-1" title="초기화"><Icon name="trash" weight="fill"/> 초기화</button><div className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 ${isSaving ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'}`}>{isSaving ? <Icon name="spinner" className="animate-spin" /> : <Icon name="cloud-check" weight="fill" />} {isSaving ? "저장중" : "자동저장"}</div></div></div>
                              <div className="flex gap-2 items-center">
                                  <div className="flex-1 flex gap-1 items-center bg-indigo-50 dark:bg-slate-700/50 p-1 rounded border border-indigo-100 dark:border-slate-600"><span className="text-xs font-bold text-indigo-600 dark:text-indigo-300 whitespace-nowrap pl-1">🖐️</span>
-                                 <form onSubmit={handleManualSubmit} className="flex gap-1 w-full">
-                                    <input type="text" placeholder="닉네임" value={manualNick} onChange={e => setManualNick(e.target.value)} className="w-20 border dark:border-slate-600 rounded px-2 py-1 text-xs outline-none bg-transparent dark:text-slate-100 font-bold" />
-                                    <input type="text" list="product-list" placeholder="상품명" value={manualProduct} onChange={e => { setManualProduct(e.target.value); setCurrentSearchTerm(e.target.value); }} className="flex-1 border dark:border-slate-600 rounded px-2 py-1 text-xs outline-none bg-transparent dark:text-slate-100" />
+                                 <form onSubmit={handleManualSubmit} className="flex gap-1 w-full relative">
+                                    <div className="relative w-24 flex-shrink-0">
+                                        <input 
+                                            type="text" 
+                                            placeholder="닉네임" 
+                                            value={manualNick} 
+                                            onChange={e => { setManualNick(e.target.value); setShowNickSuggestions(true); }} 
+                                            onFocus={() => setShowNickSuggestions(true)}
+                                            onBlur={() => setTimeout(() => setShowNickSuggestions(false), 200)}
+                                            className="w-full border dark:border-slate-600 rounded px-2 py-1 text-xs outline-none bg-white dark:bg-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-indigo-400" 
+                                        />
+                                        {showNickSuggestions && nicknameSuggestions.length > 0 && (
+                                            <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded shadow-xl z-50 overflow-hidden">
+                                                {nicknameSuggestions.map((s, i) => (
+                                                    <div 
+                                                        key={i} 
+                                                        onClick={() => { setManualNick(s.nick); setShowNickSuggestions(false); document.getElementById('manual-prod-input')?.focus(); }}
+                                                        className="px-2 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-slate-700 cursor-pointer flex flex-col border-b border-gray-50 dark:border-slate-700/50 last:border-0"
+                                                    >
+                                                        <span className="font-bold text-slate-800 dark:text-slate-100">{s.nick}</span>
+                                                        {s.realName && <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">👤 {s.realName}</span>}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <input id="manual-prod-input" type="text" list="product-list" placeholder="상품명" value={manualProduct} onChange={e => { setManualProduct(e.target.value); setCurrentSearchTerm(e.target.value); }} className="flex-1 border dark:border-slate-600 rounded px-2 py-1 text-xs outline-none bg-white dark:bg-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-400" />
                                     <button type="submit" className="bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold hover:bg-indigo-700">＋</button>
                                 </form>
-                                </div><div className="w-32 relative"><Icon name="magnifying-glass" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 text-xs"/><input type="text" placeholder="검색..." value={orderSearch} onChange={(e) => setOrderSearch(e.target.value)} className="w-full pl-6 pr-2 py-1 border dark:border-slate-600 rounded text-xs outline-none bg-transparent dark:text-slate-100" />{orderSearch && <button onClick={()=>setOrderSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600"><Icon name="x-circle" weight="fill" size={10}/></button>}</div></div>
+                                </div>
+                                <div className="w-40 relative">
+                                    <Icon name="magnifying-glass" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 text-xs"/>
+                                    <input type="text" placeholder="초성/이름/번호 검색" value={orderSearch} onChange={(e) => setOrderSearch(e.target.value)} className="w-full pl-6 pr-6 py-1 border border-indigo-200 dark:border-slate-600 rounded text-xs outline-none bg-white dark:bg-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-400 placeholder-gray-400" />
+                                    {orderSearch && <button onClick={()=>setOrderSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600"><Icon name="x-circle" weight="fill" size={14}/></button>}
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5 bg-gray-100 dark:bg-slate-900">
-                             {filteredGroupedOrders.map(([nick, items]) => (
-                                 <CustomerBlock
-                                     key={nick}
-                                     nick={nick}
-                                     items={items}
-                                     isSelected={selectedNick === nick}
-                                     currentShipping={getCalculatedShipping(nick)}
-                                     isCard={cardPayments[nick]}
-                                     isPaidState={(items.reduce((sum, i) => sum + Number(i.price), 0) + (items.length > 0 ? getCalculatedShipping(nick) : 0)) - items.reduce((sum, i) => sum + (i.deposit || 0), 0) <= 0 && items.length > 0}
-                                     grandTotal={items.reduce((sum, i) => sum + Number(i.price), 0) + (items.length > 0 ? getCalculatedShipping(nick) : 0)}
-                                     depositTotal={items.reduce((sum, i) => sum + (i.deposit || 0), 0)}
-                                     balance={(items.reduce((sum, i) => sum + Number(i.price), 0) + (items.length > 0 ? getCalculatedShipping(nick) : 0)) - items.reduce((sum, i) => sum + (i.deposit || 0), 0)}
-                                     addr={findAddress(nick)?.data}
-                                     addrType={findAddress(nick)?.type}
-                                     addressMapping={addressMapping}
-                                     suggestions={findAddressSuggestions(nick)}
-                                     autoDepositorName={findAddress(nick)?.data ? findAddress(nick).data.realname : ''}
-                                     displayDepositorName={depositorNames[nick] || (findAddress(nick)?.data ? findAddress(nick).data.realname : '') || '입금자'}
-                                     isAutoDepositor={!depositorNames[nick] && (findAddress(nick)?.data ? findAddress(nick).data.realname : '')}
-                                     depositorNames={depositorNames}
-                                     copyStatus={copyStatus}
-                                     isOrderConfirmed={checkedOrders?.has(nick) || false}
-                                     isEditingShipping={editingShippingNick === nick}
-                                     stockLookup={stockLookup}
-                                     setSelectedNick={setSelectedNick}
-                                     addOrderLogic={addOrderLogic}
-                                     handleNicknameEdit={handleNicknameEdit}
-                                     toggleCardPayment={toggleCardPayment}
-                                     handleShippingChange={handleShippingChange}
-                                     setEditingShippingNick={setEditingShippingNick}
-                                     openModal={openModal}
-                                     setDepositorNames={setDepositorNames}
-                                     handleFullDepositToggle={handleFullDepositToggle}
-                                     copyOrderSheet={copyOrderSheet}
-                                     handleOrderCheckToggle={handleOrderCheckToggle}
-                                     handleAddressUnmapping={handleAddressUnmapping}
-                                     handleAddressMapping={handleAddressMapping}
-                                     handleProductChange={handleProductChange}
-                                     handleQuantityUpdate={handleQuantityUpdate}
-                                     handleOrderCancel={handleOrderCancel}
-                                     handleOrderDelete={handleOrderDelete}
-                                     renderSpecialBadge={renderSpecialBadge}
-                                 />
-                             ))}
+                        <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5 bg-gray-100 dark:bg-slate-900 relative z-0">
+                             {filteredGroupedOrders.map(([nick, items]) => {
+                                 const shipping = getCalculatedShipping(nick);
+                                 const prodTotal = items.reduce((sum, i) => sum + Number(i.price), 0);
+                                 const depTotal = items.reduce((sum, i) => sum + (i.deposit || 0), 0);
+                                 const grandTot = prodTotal + (items.length > 0 ? shipping : 0);
+                                 const bal = grandTot - depTotal;
+                                 const isPaid = bal <= 0 && items.length > 0;
+                                 const addrRes = findAddress(nick);
+                                 const addrData = addrRes?.data;
+                                 const addrRealName = addrData ? addrData.realname : '';
+                                 
+                                 return (
+                                     <CustomerBlock
+                                         key={nick} nick={nick} items={items} isSelected={selectedNick === nick}
+                                         currentShipping={shipping} isCard={cardPayments[nick]} isPaidState={isPaid}
+                                         grandTotal={grandTot} depositTotal={depTotal} balance={bal}
+                                         addr={addrData} addrType={addrRes?.type} addressMapping={addressMapping}
+                                         suggestions={findAddressSuggestions(nick)} autoDepositorName={addrRealName}
+                                         displayDepositorName={depositorNames[nick] || addrRealName || '입금자'}
+                                         isAutoDepositor={!depositorNames[nick] && addrRealName} depositorNames={depositorNames}
+                                         copyStatus={copyStatus} isOrderConfirmed={checkedOrders?.has(nick) || false}
+                                         isEditingShipping={editingShippingNick === nick} stockLookup={stockLookup}
+                                         setSelectedNick={setSelectedNick} addOrderLogic={addOrderLogic} handleNicknameEdit={handleNicknameEdit}
+                                         toggleCardPayment={toggleCardPayment} handleShippingChange={handleShippingChange}
+                                         setEditingShippingNick={setEditingShippingNick} openModal={openModal} setDepositorNames={setDepositorNames}
+                                         handleFullDepositToggle={handleFullDepositToggle} copyOrderSheet={copyOrderSheet}
+                                         handleOrderCheckToggle={handleOrderCheckToggle} handleAddressUnmapping={handleAddressUnmapping}
+                                         handleAddressMapping={handleAddressMapping} handleProductChange={handleProductChange}
+                                         handleQuantityUpdate={handleQuantityUpdate} handleOrderCancel={handleOrderCancel}
+                                         handleOrderDelete={handleOrderDelete} renderSpecialBadge={renderSpecialBadge}
+                                     />
+                                 );
+                             })}
                         </div>
                     </div>
                 </div>
@@ -1356,6 +1490,22 @@
 
             }, [selectedProduct, orders, cardPayments, getCalculatedShipping]);
 
+            const handleCopyBuyers = () => {
+                if (!selectedProductDetails || selectedProductDetails.length === 0) return;
+                // 🚀 [수정] 맨 위에 상품명을 달고 그 아래에 닉네임이 오도록 양식 변경
+                const textToCopy = `[ ${selectedProduct} ]\n` + selectedProductDetails.map(d => d.nick).join('\n');
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    openModal(`'${selectedProduct}' 구매자 ${selectedProductDetails.length}명의 명단이 복사되었습니다.`, 'alert');
+                } catch (err) {
+                    openModal('복사 실패', 'alert');
+                }
+                document.body.removeChild(textArea);
+            };
 
             return (
                 <div className="flex flex-col h-full bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 overflow-hidden relative">
@@ -1502,7 +1652,12 @@
                                 <h3 className="font-bold text-sm text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
                                     <Icon name="users" weight="fill" /> '{selectedProduct}' 주문 고객 목록 <span className="text-xs text-gray-500 font-normal">({selectedProductDetails.length}명)</span>
                                 </h3>
-                                <button onClick={() => setSelectedProduct(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><Icon name="x" weight="bold" /></button>
+                                <div className="flex items-center gap-3">
+                                    <button onClick={handleCopyBuyers} className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded text-xs font-bold transition-colors border border-indigo-200 dark:border-indigo-800 shadow-sm">
+                                        <Icon name="copy" weight="bold" /> 닉네임만 복사
+                                    </button>
+                                    <button onClick={() => setSelectedProduct(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><Icon name="x" weight="bold" /></button>
+                                </div>
                             </div>
                             <div className="flex-1 overflow-y-auto p-2">
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -1882,6 +2037,15 @@
             const [specialCustomers, setSpecialCustomers] = useLocalStorage('specialCustomers', {});
             const [inventory, setInventory] = useLocalStorage('productInventory', []);
             const [templateConfig, setTemplateConfig] = useLocalStorage('templateConfig', { emoji: '💙', paidMsg: '😍 완납 확인! 감사합니다 😍', unpaidPrefix: '[미입금]\n총 입금하실 금액\n👉', addrNotice: '※ 배송지 변경 시 채팅으로 변경할 주소를 남겨주세요!', surveyNotice: '방송마다 1회\n하단의 주문서(배송지입력) 필수!!\n\n이미 참여한 설문 일 경우\n▫ 답변 수정하기 \n▫ 또는 설문 추가 참여\n\n미입력이 많아 계속 안내합니다. \n양해부탁드립니다.', alwaysRequestAddress: false });
+            
+            // 🚀 [추가] 빠른 댓글 4종 설정 스토리지
+            const [quickMessages, setQuickMessages] = useLocalStorage('quickMessages', [
+                "안녕하세요! 주문은 화면 하단 링크를 클릭해주세요💙",
+                "⚠️ 주소 미입력시 배송이 보류됩니다! 꼭 남겨주세요",
+                "사이즈나 상품 문의는 카톡 채널로 남겨주세요🙏",
+                "순차적으로 확인 중입니다. 잠시만 기다려주세요🥰"
+            ]);
+
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [googleScriptUrl, setGoogleScriptUrl] = useLocalStorage('googleScriptUrl', DEFAULT_GOOGLE_SCRIPT_URL);
             const [customerSheetId, setCustomerSheetId] = useLocalStorage('customerSheetId', DEFAULT_CUSTOMER_SHEET_ID);
@@ -1891,7 +2055,6 @@
                 setModalConfig({ isOpen: true, type, message, onConfirm: (val) => { if (onConfirm) onConfirm(val); setModalConfig(prev => ({ ...prev, isOpen: false })); }, onCancel: () => { if (onCancel) onCancel(); setModalConfig(prev => ({ ...prev, isOpen: false })); }, initialValue }); 
             }, []);
 
-            // 🚀 [추가] 초기 로드 시 클라우드 동기화 안내 (실수 삭제 완벽 방지)
             const hasPrompted = useRef(false);
             useEffect(() => {
                 if (hasPrompted.current) return;
@@ -1926,7 +2089,7 @@
                         });
                     }, 1500);
                 }
-            }, []); // eslint-disable-line react-hooks/exhaustive-deps
+            }, []); 
             
             const EMOJI_LIST = ["💙", "💖", "💛", "💚", "💜", "🤍", "❤️", "⭐", "🌟", "✨", "🌸", "🌼", "🍀", "🌹", "🌻", "✅", "🎁", "📢", "🌈", "🔥", "💎", "👑", "🎀", "🍎", "🍓", "🍒", "🍑", "🍋", "🐶", "🐱", "🐰", "🐻", "🐼", "🐾", "🎈", "🎉", "🛍️", "🛒", "💰", "💸", "💳", "🧾"];
 
@@ -1993,12 +2156,32 @@
                                         </div>
                                     </div>
                                 </div>
+                                {/* 🚀 빠른 댓글 설정란 추가 */}
+                                <div className="border-t dark:border-slate-700 pt-4">
+                                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-1"><Icon name="lightning" weight="fill" className="text-yellow-500"/> 빠른 댓글 복사 (대시보드용)</h4>
+                                    <div className="space-y-2">
+                                        {quickMessages.map((msg, idx) => (
+                                            <input 
+                                                key={idx}
+                                                type="text" 
+                                                value={msg} 
+                                                onChange={(e) => {
+                                                    const newMsgs = [...quickMessages];
+                                                    newMsgs[idx] = e.target.value;
+                                                    setQuickMessages(newMsgs);
+                                                }}
+                                                placeholder={`빠른 댓글 ${idx + 1}`}
+                                                className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs bg-transparent dark:text-slate-100" 
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                             <button onClick={()=>setIsSettingsOpen(false)} className="w-full bg-indigo-600 text-white rounded py-2 text-sm font-bold hover:bg-indigo-700 transition-colors">저장 및 닫기</button>
                         </div>
                     )}
                      <main className="flex-1 overflow-hidden bg-gray-200 dark:bg-slate-950 p-2 relative">
-                        {activeTab === 'live' && <LiveTab {...{ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory }} />}
+                        {activeTab === 'live' && <LiveTab {...{ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory, quickMessages }} />}
                         {activeTab === 'status' && <OrderStatusTab {...{ orders, setOrders, setProductHistory, productHistory, inventory, setInventory, openModal, shippingOverrides, quickShipping, addresses, addressMapping, cardPayments, specialCustomers }} />}
                         {activeTab === 'customer' && <CustomerTab {...{ addresses, setAddresses, googleScriptUrl, customerSheetId, openModal, specialCustomers, setSpecialCustomers }} />}
                         {activeTab === 'cs' && <CSTab {...{ csData, setCsData, openModal }} />}
