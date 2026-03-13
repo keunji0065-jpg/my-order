@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>깔로 주문서 PRO (정식 버전)</title>
+    <title>깔로PRO </title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -495,6 +495,9 @@
             };
 
             const allDeposits = useMemo(() => [...manualDeposits, ...serverDeposits], [manualDeposits, serverDeposits]);
+            // 🚀 [추가] 매칭 해제 로직에서 최신 allDeposits를 참조하기 위한 Ref
+            const allDepositsRef = useRef(allDeposits);
+            useEffect(() => { allDepositsRef.current = allDeposits; }, [allDeposits]);
             
             const totalDepositAmount = useMemo(() => {
                 const filtered = allDeposits.filter(d => !deletedDepositIds.has(d.id));
@@ -893,7 +896,36 @@
             };
 
             const handleDeleteDepositItem = (id) => { openModal("숨기시겠습니까?", 'confirm', () => { setManualDeposits(prev => prev.filter(d => d.id !== id)); setDeletedDepositIds(prev => new Set(prev).add(id)); setMatchedDeposits(prev => { const next = new Set(prev); next.delete(id); return next; }); }); };
-            const handleFullDepositToggle = useCallback((nick, grandTotal, currentDeposit) => { const isPaid = currentDeposit >= grandTotal; if (isPaid) { openModal("입금 취소 처리하시겠습니까?", 'confirm', () => { setOrders(prev => prev.map(o => o.customer === nick ? { ...o, deposit: 0 } : o)); }); } else { setOrders(prev => { let processed = false; return prev.map(o => { if (o.customer === nick) { if (!processed) { processed = true; return { ...o, deposit: grandTotal }; } else { return { ...o, deposit: 0 }; } } return o; }); }); } }, [openModal, setOrders]);
+            
+            // 🚀 [추가/수정] 완납 취소 시, 매칭되었던 입금 내역도 함께 해제하여 다시 활성화시킴!
+            const handleFullDepositToggle = useCallback((nick, grandTotal, currentDeposit) => { 
+                const isPaid = currentDeposit >= grandTotal; 
+                if (isPaid) { 
+                    openModal("완납 상태를 취소하시겠습니까?\n(해당 고객과 이름으로 매칭되었던 입금 내역도 다시 활성화됩니다)", 'confirm', () => { 
+                        setOrders(prev => prev.map(o => o.customer === nick ? { ...o, deposit: 0 } : o)); 
+                        
+                        setMatchedDeposits(prevMatched => {
+                            const newMatched = new Set(prevMatched);
+                            const targetNickClean = cleanForMatch(nick);
+                            const savedRealName = depositorNames[nick] ? cleanForMatch(depositorNames[nick]) : '';
+                            const addrRes = findAddress(nick);
+                            const addressRealName = addrRes && addrRes.data ? cleanForMatch(addrRes.data.realname) : '';
+                            
+                            allDepositsRef.current.forEach(d => {
+                                if (prevMatched.has(d.id)) {
+                                    const depNameClean = cleanForMatch(d.name);
+                                    if (depNameClean === targetNickClean || (savedRealName && depNameClean === savedRealName) || (addressRealName && depNameClean === addressRealName)) {
+                                        newMatched.delete(d.id); // 매칭 해제!
+                                    }
+                                }
+                            });
+                            return newMatched;
+                        });
+                    }); 
+                } else { 
+                    setOrders(prev => { let processed = false; return prev.map(o => { if (o.customer === nick) { if (!processed) { processed = true; return { ...o, deposit: grandTotal }; } else { return { ...o, deposit: 0 }; } } return o; }); }); 
+                } 
+            }, [openModal, setOrders, setMatchedDeposits, depositorNames, findAddress]);
             
             const handleCopyDepositName = (e, name, id) => {
                 e.stopPropagation(); 
