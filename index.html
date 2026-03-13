@@ -317,14 +317,14 @@
             return (
                 <div onClick={() => setSelectedNick(prev => prev === nick ? null : nick)} className={`bg-white dark:bg-slate-800 rounded shadow-sm transition-all overflow-hidden cursor-pointer ${borderClass} border`}>
                     <div className={`px-2 py-1 flex justify-between items-center border-b dark:border-slate-700 ${headerBgClass}`}>
-                        <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-2">
-                                <span className={`font-bold text-sm text-gray-900 dark:text-slate-100`}>{nick}</span>
+                        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                            <div className="flex items-center gap-1 flex-wrap">
+                                <span className={`font-bold text-sm text-gray-900 dark:text-slate-100 truncate`}>{nick}</span>
                                 {renderSpecialBadge(nick)}
-                                <button onClick={(e) => { e.stopPropagation(); addOrderLogic(nick, '', 1); }} className="bg-indigo-100 dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold hover:bg-indigo-200 dark:hover:bg-slate-600" title="빈 상품줄 추가">+</button>
-                                <button onClick={(e)=>{e.stopPropagation(); handleNicknameEdit(nick);}} className="text-gray-300 dark:text-slate-500 hover:text-indigo-600" title="닉네임 수정"><Icon name="pencil-simple" weight="bold" size={12}/></button>
-                                <button onClick={(e) => { e.stopPropagation(); toggleCardPayment(nick); }} className={`ml-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${isCard ? 'bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 font-bold' : 'bg-white dark:bg-slate-700 text-gray-400 dark:text-slate-400 border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'}`}>카드</button>
-                                <div onClick={(e) => e.stopPropagation()} className="ml-1">
+                                <button onClick={(e) => { e.stopPropagation(); addOrderLogic(nick, '', 1); }} className="bg-indigo-100 dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold hover:bg-indigo-200 dark:hover:bg-slate-600 shrink-0" title="빈 상품줄 추가">+</button>
+                                <button onClick={(e)=>{e.stopPropagation(); handleNicknameEdit(nick);}} className="text-gray-300 dark:text-slate-500 hover:text-indigo-600 shrink-0" title="닉네임 수정"><Icon name="pencil-simple" weight="bold" size={12}/></button>
+                                <button onClick={(e) => { e.stopPropagation(); toggleCardPayment(nick); }} className={`ml-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors shrink-0 ${isCard ? 'bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 font-bold' : 'bg-white dark:bg-slate-700 text-gray-400 dark:text-slate-400 border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-600'}`}>카드</button>
+                                <div onClick={(e) => e.stopPropagation()} className="ml-1 shrink-0">
                                     {isEditingShipping ? (
                                         <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-800 rounded px-1 py-0.5 shadow-sm"><Icon name="truck" className="text-indigo-600 dark:text-indigo-400 text-[10px]"/><input type="number" value={currentShipping} onChange={(e) => handleShippingChange(nick, e.target.value)} onBlur={() => setEditingShippingNick(null)} onKeyDown={(e) => { if(e.key === 'Enter') setEditingShippingNick(null); }} autoFocus onFocus={(e) => e.target.select()} className="w-12 text-[10px] outline-none font-bold text-right text-indigo-600 dark:text-indigo-300 bg-transparent"/></div>
                                     ) : (
@@ -333,18 +333,18 @@
                                         </div>
                                     )}
                                 </div>
-                                <div onClick={(e) => { e.stopPropagation(); openModal(`'${nick}'님의 입금자명(실명)을 입력하세요.`, 'prompt', (newName) => { if(newName !== null) setDepositorNames(prev => ({...prev, [nick]: newName})); }, null, depositorNames[nick] || ''); }} className={`cursor-pointer flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border hover:bg-indigo-50 dark:hover:bg-slate-600 transition-colors ml-1 ${depositorNames[nick] ? 'bg-indigo-50 dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' : (isAutoDepositor ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800' : 'bg-white dark:bg-slate-700 text-gray-400 dark:text-slate-400 border-gray-200 dark:border-slate-600')}`} title={isAutoDepositor ? "주소록 실명 연동됨 (클릭하여 수정)" : "실명 입금자 등록"}>
+                                <div onClick={(e) => { e.stopPropagation(); openModal(`'${nick}'님의 입금자명(실명)을 입력하세요.`, 'prompt', (newName) => { if(newName !== null) setDepositorNames(prev => ({...prev, [nick]: newName})); }, null, depositorNames[nick] || ''); }} className={`cursor-pointer flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border hover:bg-indigo-50 dark:hover:bg-slate-600 transition-colors ml-1 shrink-0 ${depositorNames[nick] ? 'bg-indigo-50 dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' : (isAutoDepositor ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800' : 'bg-white dark:bg-slate-700 text-gray-400 dark:text-slate-400 border-gray-200 dark:border-slate-600')}`} title={isAutoDepositor ? "주소록 실명 연동됨 (클릭하여 수정)" : "실명 입금자 등록"}>
                                     <Icon name="user" weight={depositorNames[nick] || isAutoDepositor ? "fill" : "regular"}/> <span>{displayDepositorName}</span>
                                 </div>
-                                <div onClick={(e) => { e.stopPropagation(); handleFullDepositToggle(nick, grandTotal, depositTotal); }} className={`cursor-pointer ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors ${isPaidState ? 'bg-green-500 border-green-600 text-white shadow-inner' : 'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-400 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-600'}`} title={isPaidState ? "입금 완료됨 (클릭시 취소)" : "클릭시 전액 입금 처리"}>
+                                <div onClick={(e) => { e.stopPropagation(); handleFullDepositToggle(nick, grandTotal, depositTotal); }} className={`cursor-pointer ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors shrink-0 ${isPaidState ? 'bg-green-500 border-green-600 text-white shadow-inner' : 'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-400 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-600'}`} title={isPaidState ? "입금 완료됨 (클릭시 취소)" : "클릭시 전액 입금 처리"}>
                                     <Icon name={isPaidState ? "toggle-right" : "toggle-left"} weight="fill" size={16} />
                                     <span className="text-[10px] font-bold">{isPaidState ? "완납" : "미납"}</span>
                                 </div>
-                                <button onClick={(e) => { e.stopPropagation(); copyOrderSheet(nick, items, grandTotal, depositTotal, balance, isCard); }} className={`ml-1 flex items-center gap-1 px-2 py-0.5 rounded border transition-colors ${copyStatus[nick] ? 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-800 text-green-700 dark:text-green-300' : 'bg-yellow-300 dark:bg-yellow-600 border-yellow-400 dark:border-yellow-700 text-yellow-900 dark:text-yellow-50 hover:bg-yellow-400'}`} title="주문서 카톡 복사">
+                                <button onClick={(e) => { e.stopPropagation(); copyOrderSheet(nick, items, grandTotal, depositTotal, balance, isCard); }} className={`ml-1 flex items-center gap-1 px-2 py-0.5 rounded border transition-colors shrink-0 ${copyStatus[nick] ? 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-800 text-green-700 dark:text-green-300' : 'bg-yellow-300 dark:bg-yellow-600 border-yellow-400 dark:border-yellow-700 text-yellow-900 dark:text-yellow-50 hover:bg-yellow-400'}`} title="주문서 카톡 복사">
                                     <Icon name={copyStatus[nick] ? "check" : "chat-circle-dots"} weight="fill" size={16}/>
                                     <span className="text-[10px] font-bold">카톡</span>
                                 </button>
-                                <div onClick={(e) => { e.stopPropagation(); handleOrderCheckToggle(nick); }} className="ml-1 cursor-pointer flex items-center" title="주문 확인 체크">
+                                <div onClick={(e) => { e.stopPropagation(); handleOrderCheckToggle(nick); }} className="ml-1 cursor-pointer flex items-center shrink-0" title="주문 확인 체크">
                                     <input type="checkbox" checked={isOrderConfirmed} readOnly className="custom-checkbox" />
                                 </div>
                             </div>
@@ -357,21 +357,21 @@
                                         {addressMapping[nick] && <button onClick={(e) => {e.stopPropagation(); handleAddressUnmapping(nick);}} className="text-gray-400 dark:text-slate-500 hover:text-red-500 ml-1 shrink-0" title="주소 연결 해제"><Icon name="link-break" weight="bold"/></button>}
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1 flex-wrap">
                                         {addrType === 'multiple' ? (
-                                            <span className="text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-1.5 py-0.5 rounded border border-orange-200 dark:border-orange-800 text-[10px] flex items-center gap-1 font-bold animate-pulse">
+                                            <span className="text-orange-500 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-1.5 py-0.5 rounded border border-orange-200 dark:border-orange-800 text-[10px] flex items-center gap-1 font-bold animate-pulse shrink-0">
                                                 <Icon name="warning-diamond" weight="fill"/> ⚠️ 중복(수동매칭)
                                             </span>
                                         ) : (
-                                            <span className="text-red-300 dark:text-red-900/60 text-[10px] flex items-center gap-1"><Icon name="warning-circle" weight="fill"/> 주소없음</span>
+                                            <span className="text-red-300 dark:text-red-900/60 text-[10px] flex items-center gap-1 shrink-0"><Icon name="warning-circle" weight="fill"/> 주소없음</span>
                                         )}
-                                        <button onClick={(e) => { e.stopPropagation(); openModal("연결할 주소록의 닉네임을 입력하세요.", "prompt", (targetNick) => { if(targetNick) handleAddressMapping(nick, targetNick); }); }} className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 px-1.5 py-0.5 rounded border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center gap-1"><Icon name="link" weight="bold" /> 연결</button>
-                                        {suggestions.length > 0 && (<div className="flex flex-wrap gap-1 items-center bg-orange-50 dark:bg-orange-900/10 px-1 py-0.5 rounded"><span className="text-[9px] text-orange-600 dark:text-orange-400 font-bold">유사:</span>{suggestions.map(s => (<button key={s} onClick={(e) => {e.stopPropagation(); handleAddressMapping(nick, s);}} className="bg-white dark:bg-slate-700 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded text-[9px] hover:bg-orange-100 dark:hover:bg-orange-900 transition-colors shadow-sm">{s}</button>))}</div>)}
+                                        <button onClick={(e) => { e.stopPropagation(); openModal("연결할 주소록의 닉네임을 입력하세요.", "prompt", (targetNick) => { if(targetNick) handleAddressMapping(nick, targetNick); }); }} className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 px-1.5 py-0.5 rounded border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center gap-1 shrink-0"><Icon name="link" weight="bold" /> 연결</button>
+                                        {suggestions.length > 0 && (<div className="flex flex-wrap gap-1 items-center bg-orange-50 dark:bg-orange-900/10 px-1 py-0.5 rounded"><span className="text-[9px] text-orange-600 dark:text-orange-400 font-bold shrink-0">유사:</span>{suggestions.map(s => (<button key={s} onClick={(e) => {e.stopPropagation(); handleAddressMapping(nick, s);}} className="bg-white dark:bg-slate-700 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded text-[9px] hover:bg-orange-100 dark:hover:bg-orange-900 transition-colors shadow-sm shrink-0">{s}</button>))}</div>)}
                                     </div>
                                 )}
                             </div>
                         </div>
-                        <div className="flex flex-col gap-1 items-end text-right">
+                        <div className="flex flex-col gap-1 items-end text-right shrink-0 ml-2">
                             <div className={`font-bold text-sm ${isPaidState && balance === 0 ? 'text-green-600 dark:text-green-400' : (balance < 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-800 dark:text-slate-100')}`}>{grandTotal.toLocaleString()}원</div>
                             {isCard ? (
                                 <div className="flex flex-col items-end">
@@ -481,15 +481,12 @@
                 return <span className={`${bgColor} px-1 rounded text-[10px] flex items-center gap-0.5 ml-1 cursor-help shrink-0`} title={info.memo}><Icon name={icon} weight="fill" /><span className="max-w-[60px] truncate">{text}</span></span>;
             }, [getSpecialCustomer]);
 
-            // 🚀 [수정] 무조건 시:분(HH:mm) 형태만 강제로 추출하는 강력한 필터 함수로 변경!
             const formatTimeOnly = (val) => { 
                 if (!val) return ''; 
                 const strVal = String(val);
-                // 글자 안에서 '숫자:숫자' 형태만 쏙 뽑아냅니다
                 const timeMatch = strVal.match(/(\d{1,2}):(\d{2})/);
                 if (timeMatch) {
                     let hour = parseInt(timeMatch[1], 10);
-                    // 혹시 오후/PM 표기가 있다면 24시간제로 변환
                     if ((strVal.includes('오후') || strVal.toUpperCase().includes('PM')) && hour < 12) {
                         hour += 12;
                     } else if ((strVal.includes('오전') || strVal.toUpperCase().includes('AM')) && hour === 12) {
@@ -498,7 +495,6 @@
                     return `${String(hour).padStart(2, '0')}:${timeMatch[2]}`;
                 }
                 
-                // 정규식으로도 못찾으면 최후의 수단으로 Date 객체 시도
                 const dt = new Date(strVal); 
                 return !isNaN(dt) ? dt.toLocaleTimeString('en-US', {hour12: false, hour:'2-digit', minute:'2-digit'}) : strVal; 
             };
@@ -512,7 +508,6 @@
             };
 
             const allDeposits = useMemo(() => [...manualDeposits, ...serverDeposits], [manualDeposits, serverDeposits]);
-            // 🚀 [추가] 매칭 해제 로직에서 최신 allDeposits를 참조하기 위한 Ref
             const allDepositsRef = useRef(allDeposits);
             useEffect(() => { allDepositsRef.current = allDeposits; }, [allDeposits]);
             
@@ -1090,7 +1085,7 @@
                                 return (
                                     <div key={chat.id} onClick={() => handleChatClick(chat)} className={`py-1 px-1.5 border rounded cursor-pointer transition-all flex flex-col gap-0.5 ${chatClasses}`}>
                                         <div className="flex justify-between text-xs">
-                                            <span className={`font-bold ${isProcessed ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100'}`}>{chat.nickname} {renderSpecialBadge(chat.nickname)}</span>
+                                            <span className={`font-bold flex items-center ${isProcessed ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100'}`}>{chat.nickname} {renderSpecialBadge(chat.nickname)}</span>
                                             <span className="text-[10px] text-gray-400 dark:text-slate-500">{formatTimeOnly(chat.time)}</span>
                                         </div>
                                         <div className={`text-sm leading-tight ${isProcessed ? 'text-gray-500 dark:text-slate-400' : 'dark:text-slate-300'}`}>{renderChatContent(chat.content, keywords)}</div>
