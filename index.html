@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>깔로 주문서 PRO 완료</title>
+    <title>깔로 주문서 PRO (정식 버전)</title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -191,10 +191,11 @@
 
         // 🚀 [신규 기능] 라이브 중 즉석 배송지 입력 팝업창 컴포넌트
         const QuickAddressModal = ({ isOpen, nick, onClose, onSubmit }) => {
-            const [formData, setFormData] = useState({ realname: '', phone: '', zipcode: '', address: '', memo: '' });
+            const [formData, setFormData] = useState({ realname: '', phone: '', zipcode: '', address: '', detailAddress: '', memo: '' });
+            const detailRef = useRef(null);
 
             useEffect(() => {
-                if (isOpen) setFormData({ realname: '', phone: '', zipcode: '', address: '', memo: '' });
+                if (isOpen) setFormData({ realname: '', phone: '', zipcode: '', address: '', detailAddress: '', memo: '' });
             }, [isOpen]);
 
             const handleSearch = () => {
@@ -207,6 +208,8 @@
                                 if(data.buildingName !== '') fullAddr += ', ' + data.buildingName;
                             }
                             setFormData(prev => ({ ...prev, zipcode: data.zonecode, address: fullAddr }));
+                            // 🚀 주소 검색 완료 시 자동으로 상세 주소 입력칸으로 포커스 이동!
+                            setTimeout(() => detailRef.current?.focus(), 100);
                         }
                     }).open();
                 } catch (e) {
@@ -224,7 +227,10 @@
 
                 if (!formData.address.trim()) return alert("배송 주소를 검색해서 입력해주세요.");
 
-                onSubmit({ ...formData, phone: cleanPhone, nickname: nick });
+                // 🚀 기본 주소와 상세 주소를 하나로 예쁘게 합칩니다
+                const finalAddress = `${formData.address} ${formData.detailAddress}`.trim();
+
+                onSubmit({ ...formData, address: finalAddress, phone: cleanPhone, nickname: nick });
             };
 
             if (!isOpen) return null;
@@ -256,7 +262,8 @@
                                     <input type="text" value={formData.zipcode} readOnly placeholder="우편번호" className="w-24 border dark:border-slate-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-slate-700 dark:text-slate-400 outline-none cursor-not-allowed" />
                                     <button type="button" onClick={handleSearch} className="bg-slate-500 hover:bg-slate-600 text-white px-3 py-2 rounded text-sm font-bold shadow-sm transition-colors">주소 검색</button>
                                 </div>
-                                <input type="text" value={formData.address} readOnly placeholder="검색 버튼을 눌러 주소를 찾아주세요" className="w-full border dark:border-slate-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-slate-700 dark:text-slate-400 outline-none cursor-not-allowed" />
+                                <input type="text" value={formData.address} readOnly placeholder="검색 버튼을 눌러 기본 주소를 찾아주세요" className="w-full border dark:border-slate-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-slate-700 dark:text-slate-400 outline-none cursor-not-allowed mb-2" />
+                                <input ref={detailRef} type="text" value={formData.detailAddress} onChange={e=>setFormData({...formData, detailAddress: e.target.value})} placeholder="상세 주소 (동, 호수 등)" className="w-full border dark:border-slate-600 rounded px-3 py-2 text-sm bg-transparent dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none" />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">배송 메모 (선택)</label>
