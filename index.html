@@ -59,6 +59,8 @@
         .custom-checkbox::before { content: ""; width: 0.8em; height: 0.8em; transform: scale(0); transition: 120ms transform ease-in-out; box-shadow: inset 1em 1em white; background-color: white; transform-origin: center; clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); }
         .custom-checkbox:checked { background-color: #3b82f6; border-color: #3b82f6; }
         .custom-checkbox:checked::before { transform: scale(1); }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="transition-colors duration-300">
@@ -66,7 +68,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, useCallback, memo } = React;
 
-        const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwk2Wzwaay4Y9siiafvbwlV3jwcayU8AU9yezhR3M1MKq0HyNQUEZL7tf1ICpWOcVE6RA/exec";
+        const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyJVJLaaoesU3ls0OLBf3C8-wjUS4Y1V1fQWtW3v1zhhRsRzp4kOskWHthRNd9vmQPiIA/exec";
         const FIXED_BANK_ACCOUNT = "카카오뱅크 김선정\n7942 18 01611";
         const DEFAULT_CUSTOMER_SHEET_ID = "1zlL6R8iCy-6ZRMqj6dbefhkwSyRzHibDYBNJLmE35bM";
         
@@ -122,9 +124,10 @@
             });
 
             useEffect(() => {
+                // 🚀 [렉 해결 최적화] 로컬스토리지 저장 주기를 300ms에서 1000ms로 늘려 타이핑 병목을 해소했습니다.
                 const timer = setTimeout(() => {
                     try { window.localStorage.setItem(key, JSON.stringify(storedValue)); } catch(e) {}
-                }, 300);
+                }, 1000);
                 return () => clearTimeout(timer);
             }, [key, storedValue]);
 
@@ -262,6 +265,7 @@
             );
         }
 
+        // 🚀 [렉 해결 최적화] 아이템 렌더링 방어 (이전 값과 동일하면 절대 다시 그리지 않음)
         const OrderItem = memo(({ item, nick, nextItemId, isLast, stockLookup, handleProductChange, handleQuantityUpdate, handleOrderCancel, handleOrderDelete, addOrderLogic }) => {
             const [localProduct, setLocalProduct] = useState(item.product);
             const [localQty, setLocalQty] = useState(item.quantity === '' ? '' : item.quantity);
@@ -381,8 +385,19 @@
                     </div>
                 </div>
             );
+        }, (prev, next) => {
+            // 🚀 [렉 해결 최적화] 변경점이 없으면 화면 리렌더링 완벽 차단
+            return prev.item.product === next.item.product &&
+                   prev.item.quantity === next.item.quantity &&
+                   prev.item.price === next.item.price &&
+                   prev.item.isCancelled === next.item.isCancelled &&
+                   prev.item.deposit === next.item.deposit &&
+                   prev.nick === next.nick &&
+                   prev.isLast === next.isLast &&
+                   prev.stockLookup[prev.item.product] === next.stockLookup[next.item.product];
         });
 
+        // 🚀 [렉 해결 최적화] 고객 블록 전체 렌더링 방어막 생성
         const CustomerBlock = memo(({
             nick, items, isSelected, currentShipping, isCard, isPaidState, grandTotal, depositTotal, balance,
             addr, addrType, addressMapping, suggestions, autoDepositorName, displayDepositorName, isAutoDepositor,
@@ -501,9 +516,47 @@
                     </div>
                 </div>
             );
+        }, (prev, next) => {
+            // 🚀 [렉 해결 최적화] 다른 고객의 정보가 바뀌거나, 수동입력창에 글자를 칠 때 불필요하게 200번씩 새로고침되는 것을 완벽히 막아줍니다.
+            if (prev.nick !== next.nick) return false;
+            if (prev.isSelected !== next.isSelected) return false;
+            if (prev.currentShipping !== next.currentShipping) return false;
+            if (prev.isCard !== next.isCard) return false;
+            if (prev.isPaidState !== next.isPaidState) return false;
+            if (prev.grandTotal !== next.grandTotal) return false;
+            if (prev.depositTotal !== next.depositTotal) return false;
+            if (prev.balance !== next.balance) return false;
+            if (prev.isOrderConfirmed !== next.isOrderConfirmed) return false;
+            if (prev.isEditingShipping !== next.isEditingShipping) return false;
+            if (prev.displayDepositorName !== next.displayDepositorName) return false;
+            
+            // 주소 변경 여부 확인
+            if (prev.addr?.address !== next.addr?.address) return false;
+            if (prev.addr?.realname !== next.addr?.realname) return false;
+            if (prev.addr?.phone !== next.addr?.phone) return false;
+            if (JSON.stringify(prev.suggestions) !== JSON.stringify(next.suggestions)) return false;
+            
+            // 카톡 복사 상태 확인
+            if (prev.copyStatus[prev.nick] !== next.copyStatus[next.nick]) return false;
+            
+            // 상품 개수 및 세부 변동 확인
+            if (prev.items.length !== next.items.length) return false;
+            for (let i = 0; i < prev.items.length; i++) {
+                const pItem = prev.items[i];
+                const nItem = next.items[i];
+                if (pItem.product !== nItem.product || 
+                    pItem.quantity !== nItem.quantity || 
+                    pItem.price !== nItem.price || 
+                    pItem.isCancelled !== nItem.isCancelled ||
+                    pItem.deposit !== nItem.deposit) return false;
+                
+                // 해당 아이템의 '재고'가 변동되었는지 확인 (다른 상품의 재고가 바뀌었다고 멀쩡한 이 칸이 새로고침되는 현상 방지)
+                if (prev.stockLookup[pItem.product] !== next.stockLookup[nItem.product]) return false;
+            }
+            return true;
         });
 
-        const LiveTab = ({ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory, quickMessages }) => {
+        const LiveTab = ({ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory, quickMessages, customerSheetId }) => {
             const [chats, setChats] = useState([]);
             const [serverDeposits, setServerDeposits] = useState([]);
             const [manualDeposits, setManualDeposits] = useState([]);
@@ -533,18 +586,13 @@
             const [quickAddrModal, setQuickAddrModal] = useState({ isOpen: false, nick: '' });
 
             const handleQuickAddressSubmit = (addrData) => {
-                // 1. 주소록 탭(DB)에 추가 (이미 동일 번호, 닉네임이 있다면 제외)
                 setAddresses(prev => {
                     const newAddrs = [...prev];
                     const isDup = newAddrs.some(a => a.nickname === addrData.nickname && a.phone === addrData.phone);
                     if (!isDup) newAddrs.push(addrData);
                     return newAddrs;
                 });
-                
-                // 2. 현재 주문서에 즉시 1:1 매칭 적용
                 setAddressMapping(prev => ({ ...prev, [addrData.nickname]: addrData.nickname }));
-                
-                // 3. 모달 닫기
                 setQuickAddrModal({ isOpen: false, nick: '' });
             };
 
@@ -780,14 +828,14 @@
             const fetchData = async () => {
                 if (!googleScriptUrl) { setConnectionStatus({ code: 'error_config', msg: '설정필요' }); return; }
                 try {
-                    const fetchUrl = `${googleScriptUrl}?t=${Date.now()}`;
+                    // 🚀 [수정] sheet_id를 URL에 포함하여 사장님 시트에서 정확히 불러오게 처리
+                    const fetchUrl = `${googleScriptUrl}?t=${Date.now()}&sheet_id=${customerSheetId}`;
                     const res = await fetch(fetchUrl); 
                     if (!res.ok) throw new Error();
                     const text = await res.text();
                     if (text.trim().startsWith("<!DOCTYPE")) { setConnectionStatus({ code: 'error_auth', msg: '권한확인' }); return; }
                     const data = JSON.parse(text);
                     if (data.chats) {
-                        // 🚀 [수정] 500개 멈춤 해결 & 최신순 정렬 (절대 고장 안 남)
                         const rawChats = data.chats.length > 500 ? data.chats.slice(-500) : data.chats;
                         const counts = {};
                         const incoming = rawChats.map((chat) => {
@@ -809,9 +857,8 @@
                             all.forEach(c => { if (!uniqueMap.has(c.id)) uniqueMap.set(c.id, c); });
                             const uniqueArr = Array.from(uniqueMap.values());
                             
-                            // id 기준 역순 정렬 (c_날짜시간 형식이므로 완벽하게 최신이 위로 감)
                             uniqueArr.sort((a, b) => String(b.id).localeCompare(String(a.id)));
-                            return uniqueArr.slice(0, 500); // 500개 유지
+                            return uniqueArr.slice(0, 500); 
                         });
                         setConnectionStatus({ code: 'success', msg: '🟢 연결됨' });
                     }
@@ -826,7 +873,7 @@
                 fetchData(); 
                 const interval = setInterval(fetchData, 2000); 
                 return () => clearInterval(interval); 
-            }, [googleScriptUrl]);
+            }, [googleScriptUrl, customerSheetId]);
 
             useEffect(() => {
                 const timer = setTimeout(() => {
@@ -902,12 +949,29 @@
                 return () => clearTimeout(timer);
             }, [allDeposits, orders, matchedDeposits, depositorNames, deletedDepositIds, getCalculatedShipping, findAddress]);
 
-            const autoSaveToGoogleSheet = async () => { if (!googleScriptUrl || Object.keys(orders).length === 0) return; setIsSaving(true); const saveList = orders.filter(o=>!o.isCancelled).map(o => { let addrRes = findAddress(o.customer); let addr = addrRes.data || {}; const currentShipping = getCalculatedShipping(o.customer); return { nickname: o.customer, product: o.product, qty: o.quantity, price: o.price, deposit: o.deposit, shipping: currentShipping, grandTotal: 0, address: addr.address || '', zipcode: addr.zipcode || '', phone: addr.phone || '', realname: addr.realname || '', memo: addr.memo || '' }; }); try { await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify(saveList), mode: 'no-cors' }); } catch(e) { } finally { setIsSaving(false); } };
+            const autoSaveToGoogleSheet = async () => { 
+                if (!googleScriptUrl || Object.keys(orders).length === 0) return; 
+                setIsSaving(true); 
+                const saveList = orders.filter(o=>!o.isCancelled).map(o => { 
+                    let addrRes = findAddress(o.customer); 
+                    let addr = addrRes.data || {}; 
+                    const currentShipping = getCalculatedShipping(o.customer); 
+                    return { nickname: o.customer, product: o.product, qty: o.quantity, price: o.price, deposit: o.deposit, shipping: currentShipping, grandTotal: 0, address: addr.address || '', zipcode: addr.zipcode || '', phone: addr.phone || '', realname: addr.realname || '', memo: addr.memo || '' }; 
+                }); 
+                try { 
+                    // 🚀 [수정] 배열이 아니라 action과 sheet_id를 포함한 객체 형태로 전송하도록 수정
+                    await fetch(googleScriptUrl, { 
+                        method: 'POST', 
+                        body: JSON.stringify({ action: 'save_orders', sheet_id: customerSheetId, data: saveList }), 
+                        mode: 'no-cors' 
+                    }); 
+                } catch(e) { } finally { setIsSaving(false); } 
+            };
             
             useEffect(() => { 
                 const saveInterval = setInterval(autoSaveToGoogleSheet, 60000); 
                 return () => clearInterval(saveInterval); 
-            }, [orders, getCalculatedShipping, googleScriptUrl, findAddress]); 
+            }, [orders, getCalculatedShipping, googleScriptUrl, findAddress, customerSheetId]); 
 
             useEffect(() => {
                 if (lastAddedOrderId) {
@@ -1062,7 +1126,8 @@
                 openModal("불러오시겠습니까?", 'confirm', async () => {
                     if (!googleScriptUrl) return;
                     try {
-                        const res = await fetch(`${googleScriptUrl}?action=get_orders&t=${Date.now()}`);
+                        // 🚀 [수정] sheet_id를 URL에 포함하여 사장님 시트에서 정확히 불러오게 처리
+                        const res = await fetch(`${googleScriptUrl}?action=get_orders&t=${Date.now()}&sheet_id=${customerSheetId}`);
                         const data = await res.json();
                         if (data && data.orders) {
                             const parseNum = (val) => {
@@ -1138,6 +1203,19 @@
 
             const handleChatClick = (chat) => { setClickedChats(prev => new Set(prev).add(chat.id)); addOrderLogic(chat.nickname, chat.content, 1, true); };
             const handleAddManualDeposit = (e) => { e.preventDefault(); if (!newDepositName.trim() || !newDepositAmount) return openModal("입금자명/금액 필수", 'alert'); const newDep = { id: `manual_${Date.now()}`, name: newDepositName, amount: newDepositAmount, source: 'manual' }; setManualDeposits(prev => [newDep, ...prev]); setNewDepositName(''); setNewDepositAmount(''); };
+
+            // 🚀 수동입력 컴포넌트 렌더링
+            const renderManualForm = () => (
+                <form onSubmit={(e)=>{e.preventDefault(); if(!manualNick.trim()) return openModal("닉네임을 입력해주세요.", 'alert'); addOrderLogic(manualNick, manualProduct, 1); setManualNick(''); setManualProduct('');}} className="flex gap-2 flex-[1.5] relative items-center bg-indigo-50 dark:bg-slate-700/50 p-1.5 rounded border border-indigo-100 dark:border-slate-600 shadow-sm">
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap pl-1">🖐️ 수동입력</span>
+                    <div className="relative w-1/3 flex-shrink-0">
+                        <input type="text" placeholder="닉네임" value={manualNick} onChange={e => {setManualNick(e.target.value); setShowNickSuggestions(true);}} onFocus={()=>setShowNickSuggestions(true)} onBlur={()=>setTimeout(()=>setShowNickSuggestions(false), 200)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-400 bg-white dark:bg-slate-800 dark:text-white" />
+                        {showNickSuggestions && nicknameSuggestions.length > 0 && (<div className="absolute top-full left-0 mt-1 w-full min-w-[200px] bg-white dark:bg-slate-800 border dark:border-slate-600 rounded shadow-xl z-50 overflow-hidden">{nicknameSuggestions.map((s, i) => (<div key={i} onClick={()=>{setManualNick(s.nick); setShowNickSuggestions(false); document.getElementById('manual-prod-input')?.focus();}} className="px-2 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-slate-700 cursor-pointer border-b border-gray-50 dark:border-slate-700/50 last:border-0 flex flex-col"><span className="font-bold">{s.nick}</span>{s.realName && <span className="text-[10px] text-gray-500">👤 {s.realName}</span>}</div>))}</div>)}
+                    </div>
+                    <input id="manual-prod-input" type="text" list="product-list" placeholder="상품명" value={manualProduct} onChange={e => {setManualProduct(e.target.value); setCurrentSearchTerm(e.target.value);}} className="flex-1 border dark:border-slate-600 rounded px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white dark:bg-slate-800 dark:text-white" />
+                    <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 transition-colors text-white px-4 py-1.5 rounded text-xs font-bold shadow-sm whitespace-nowrap">＋ 추가</button>
+                </form>
+            );
 
             return (
                 <div className="flex h-full gap-2 p-2 overflow-hidden bg-gray-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
@@ -1244,23 +1322,15 @@
                                 </div>
                             </div>
                             
-                            {/* 두 번째 줄: 검색창 */}
-                            <div className="relative w-full">
-                                <Icon name="magnifying-glass" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"/>
-                                <input type="text" placeholder="초성/이름 검색" value={orderSearch} onChange={e => setOrderSearch(e.target.value)} className="w-full pl-7 py-1.5 border dark:border-slate-600 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-gray-50 dark:bg-slate-700 dark:text-white" />
+                            {/* 두 번째 줄: 수동입력 폼 & 검색창 (한 줄 배치) */}
+                            <div className="flex gap-2 items-center w-full">
+                                {renderManualForm()}
+                                <div className="relative flex-1">
+                                    <Icon name="magnifying-glass" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                    <input type="text" placeholder="초성/이름 검색" value={orderSearch} onChange={e => setOrderSearch(e.target.value)} className="w-full pl-7 py-1.5 border dark:border-slate-600 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-gray-50 dark:bg-slate-700 dark:text-white" />
+                                </div>
                             </div>
                             
-                            {/* 세 번째 줄: 수동입력 폼 */}
-                            <form onSubmit={handleManualSubmit} className="flex gap-2 w-full relative items-center bg-indigo-50 dark:bg-slate-700/50 p-1.5 rounded border border-indigo-100 dark:border-slate-600 shadow-sm">
-                                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap pl-1 pr-1">🖐️ 수동입력</span>
-                                <div className="relative w-[30%] flex-shrink-0">
-                                    <input type="text" placeholder="닉네임" value={manualNick} onChange={e => {setManualNick(e.target.value); setShowNickSuggestions(true);}} onFocus={()=>setShowNickSuggestions(true)} onBlur={()=>setTimeout(()=>setShowNickSuggestions(false), 200)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-400 bg-white dark:bg-slate-800 dark:text-white" />
-                                    {showNickSuggestions && nicknameSuggestions.length > 0 && (<div className="absolute top-full left-0 mt-1 w-full min-w-[200px] bg-white dark:bg-slate-800 border dark:border-slate-600 rounded shadow-xl z-50 overflow-hidden">{nicknameSuggestions.map((s, i) => (<div key={i} onClick={()=>{setManualNick(s.nick); setShowNickSuggestions(false); document.getElementById('manual-prod-input')?.focus();}} className="px-2 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-slate-700 cursor-pointer border-b border-gray-50 dark:border-slate-700/50 last:border-0 flex flex-col"><span className="font-bold">{s.nick}</span>{s.realName && <span className="text-[10px] text-gray-500">👤 {s.realName}</span>}</div>))}</div>)}
-                                </div>
-                                <input id="manual-prod-input" type="text" list="product-list" placeholder="상품명" value={manualProduct} onChange={e => {setManualProduct(e.target.value); setCurrentSearchTerm(e.target.value);}} className="flex-1 border dark:border-slate-600 rounded px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white dark:bg-slate-800 dark:text-white" />
-                                <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 transition-colors text-white px-4 py-1.5 rounded text-xs font-bold shadow-sm whitespace-nowrap">＋ 추가</button>
-                            </form>
-
                         </div>
                         <div className="flex-1 overflow-y-auto p-1.5 bg-gray-100 dark:bg-slate-900 relative z-0">
                             {filteredGroupedOrders.map(([nick, items]) => {
@@ -1423,7 +1493,7 @@
                         else unpaid += q;
                     });
                     return { ...info, totalOrdered: ordered, paidOrdered: paid, unpaidOrdered: unpaid, remaining: Number(info.stock || 0) - ordered };
-                }).filter(p => !searchTerm || p.name.includes(searchTerm));
+                }).filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()));
             }, [orders, inventory, searchTerm, customerPaidStatus]);
 
             const selectedProductDetails = useMemo(() => {
@@ -1473,7 +1543,6 @@
 
             const handleCopyBuyers = () => {
                 if (!selectedProductDetails || selectedProductDetails.length === 0) return;
-                // 🚀 [수정] 유튜브 실시간 채팅창 한 줄 복사용 (줄바꿈 없애고 특수문자로 구분)
                 const textToCopy = `[ ${selectedProduct} ] 📢 ` + selectedProductDetails.map(d => d.qty > 1 ? `${d.nick}(${d.qty})` : d.nick).join(' 🔹 ');
                 
                 const textArea = document.createElement("textarea");
@@ -1665,7 +1734,6 @@
             const handleAddSpecial = () => { if (!scInput.nickname) return openModal("닉네임을 입력해주세요.", 'alert'); setSpecialCustomers(prev => ({ ...prev, [scInput.nickname]: { type: scInput.type, memo: scInput.memo } })); setScInput({ nickname: '', type: 'vip', memo: '' }); };
             const handleDeleteSpecial = (nick) => { openModal(`'${nick}'님의 VIP/진상 설정을 삭제하시겠습니까?`, 'confirm', () => { setSpecialCustomers(prev => { const next = { ...prev }; delete next[nick]; return next; }); }); };
             
-            // 🚀 [핵심 수정] 덮어쓰기가 아니라 '맨 아래 누적 추가(append_address)' 하도록 변경
             const handleCloudSave = async () => { 
                 openModal("현재 화면의 주소를 구글 시트 맨 아래에 '누적 추가' 하시겠습니까?\n(기존 데이터는 절대 지워지지 않고 아래에 안전하게 쌓입니다.)", 'confirm', async () => { 
                     if (!googleScriptUrl) return; 
@@ -1749,7 +1817,7 @@
                         const row = data[i];
                         if(row && row[3]) { 
                             newAddrs.push({ 
-                                nickname: String(row[3]).trim(), 
+                                nickname: String(row[3] || '').trim(), 
                                 realname: String(row[5] || '').trim(), 
                                 phone: String(row[6] || '').trim(), 
                                 zipcode: '', 
@@ -1759,14 +1827,27 @@
                         } 
                     } 
                     setAddresses(prev => {
+                        // 🚀 [수정] 닉네임+이름+연락처+주소 4개가 모두 똑같아야만 중복으로 처리하여 강력하게 걸러냅니다.
+                        const existingSet = new Set(prev.map(c => `${c.nickname}|${c.realname}|${c.phone}|${c.address}`));
                         const combined = [...prev];
+                        let addedCount = 0;
+                        
                         newAddrs.forEach(n => {
-                            const isDuplicate = combined.some(c => c.nickname === n.nickname && c.phone === n.phone);
-                            if (!isDuplicate) combined.push(n);
+                            const key = `${n.nickname}|${n.realname}|${n.phone}|${n.address}`;
+                            if (!existingSet.has(key)) {
+                                existingSet.add(key); // 엑셀 파일 내부에서의 중복도 동시에 방어합니다.
+                                combined.push(n);
+                                addedCount++;
+                            }
                         });
+                        
+                        // 상태 업데이트 후 알림창 띄우기
+                        setTimeout(() => {
+                            openModal(`엑셀 업로드 완료!\n\n총 ${newAddrs.length}건 중 모든 정보가 완전히 동일한 중복 데이터를 쏙 빼고,\n새로운 ${addedCount}건만 추가되었습니다.`, 'alert');
+                        }, 10);
+                        
                         return combined;
                     });
-                    openModal(`${newAddrs.length}건의 정보가 추가/병합되었습니다.`, 'alert'); 
                 }; 
                 reader.readAsBinaryString(file); 
                 e.target.value = ''; 
@@ -1782,7 +1863,6 @@
                                 <button onClick={handleDeleteSelected} disabled={selectedAddresses.size === 0} className={`px-2 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${selectedAddresses.size > 0 ? 'bg-red-500 hover:bg-red-600 text-white shadow-sm' : 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-slate-500 cursor-not-allowed'}`}><Icon name="trash" weight="fill"/> 선택 삭제</button>
                                 <button onClick={handleResetAddresses} className="bg-rose-500 text-white px-2 py-1 rounded text-xs font-bold transition-colors hover:bg-rose-600 flex items-center gap-1 shadow-sm"><Icon name="trash" weight="fill"/> 초기화</button>
                                 
-                                {/* 🚀 [수정] 누적 추가 버튼으로 변경 */}
                                 <button onClick={handleCloudSave} className="bg-orange-500 text-white px-2 py-1 rounded text-xs font-bold transition-colors hover:bg-orange-600 shadow-sm flex items-center gap-1"><Icon name="stack-plus" weight="bold"/> 시트에 누적 추가</button>
                                 
                                 <button onClick={handleCloudLoad} className="bg-blue-500 text-white px-2 py-1 rounded text-xs font-bold transition-colors hover:bg-blue-600 shadow-sm flex items-center gap-1"><Icon name="download-simple" weight="bold"/> 로드</button>
@@ -1889,24 +1969,42 @@
 
         const CSTab = ({ csData, setCsData, openModal }) => { 
             const [lastAddedId, setLastAddedId] = useState(null);
-            const updateCS = (id, field, value) => { setCsData(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item)); }; 
+            
+            const updateCS = (id, field, value) => { 
+                setCsData(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item)); 
+            }; 
+            
             const addCSBelow = (afterId = null) => {
-                const newId = Date.now(); const newItem = { id: newId, date: new Date().toISOString().split('T')[0], nickname: '', content: '', isResolved: false };
-                setCsData(prev => { if (!afterId) return [newItem, ...prev]; const idx = prev.findIndex(item => item.id === afterId); const next = [...prev]; next.splice(idx + 1, 0, newItem); return next; });
+                const newId = Date.now(); 
+                const newItem = { id: newId, date: new Date().toISOString().split('T')[0], nickname: '', content: '', isResolved: false };
+                setCsData(prev => { 
+                    if (!afterId) return [newItem, ...prev]; 
+                    const idx = prev.findIndex(item => item.id === afterId); 
+                    const next = [...prev]; 
+                    next.splice(idx + 1, 0, newItem); 
+                    return next; 
+                });
                 setLastAddedId(newId);
             };
-            useEffect(() => { if (lastAddedId) { const input = document.getElementById(`cs-nick-${lastAddedId}`); if (input) input.focus(); setLastAddedId(null); } }, [lastAddedId, csData]);
+
+            useEffect(() => { 
+                if (lastAddedId) { 
+                    const input = document.getElementById(`cs-nick-${lastAddedId}`); 
+                    if (input) input.focus(); 
+                    setLastAddedId(null); 
+                } 
+            }, [lastAddedId, csData]);
             
-            // 🚀 [추가] CS 내용 복사 기능
             const handleCopyCS = (item) => {
-                const textToCopy = `[CS 문의 내역]\n▪️ 날짜: ${item.date || '-'}\n▪️ 닉네임: ${item.nickname || '-'}\n▪️ 내용: ${item.content || '-'}`;
+                // 🚀 [수정] 불필요한 헤더와 날짜 제거, 딱 "닉네임\n내용" 형태만 복사
+                const textToCopy = `${item.nickname || ''}\n${item.content || ''}`.trim();
                 const textArea = document.createElement("textarea");
                 textArea.value = textToCopy;
                 document.body.appendChild(textArea);
                 textArea.select();
                 try {
                     document.execCommand('copy');
-                    openModal('✅ CS 내역이 복사되었습니다!\n(카카오톡에 바로 붙여넣기 하세요)', 'alert');
+                    openModal('✅ CS 내역이 깔끔하게 복사되었습니다!', 'alert');
                 } catch (err) {
                     openModal('복사 실패', 'alert');
                 }
@@ -1916,13 +2014,22 @@
             return ( 
                 <div className="flex flex-col h-full bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 overflow-hidden"> 
                     <div className="flex justify-between items-center mb-4 pb-4 border-b dark:border-slate-700">
-                        <h2 className="text-xl font-bold dark:text-slate-100 flex items-center gap-2"><Icon name="headset" weight="fill" className="text-indigo-600 dark:text-indigo-400"/> CS 관리 <span className="text-sm font-normal text-gray-500 dark:text-slate-400">({csData.length}건)</span></h2>
+                        <h2 className="text-xl font-bold dark:text-slate-100 flex items-center gap-2">
+                            <Icon name="headset" weight="fill" className="text-indigo-600 dark:text-indigo-400"/> CS 관리 
+                            <span className="text-sm font-normal text-gray-500 dark:text-slate-400">({csData.length}건)</span>
+                        </h2>
                         <button onClick={() => addCSBelow()} className="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm font-bold shadow-sm transition-colors hover:bg-indigo-700">+ 상담 추가</button>
                     </div> 
                     <div className="flex-1 overflow-y-auto border dark:border-slate-700 rounded bg-white dark:bg-slate-900"> 
                         <table className="w-full text-sm text-left border-collapse">
                             <thead className="bg-gray-100 dark:bg-slate-700 dark:text-slate-200 sticky top-0 z-10">
-                                <tr><th className="p-2 border-b dark:border-slate-600 w-28">날짜</th><th className="p-2 border-b dark:border-slate-600 w-32">닉네임</th><th className="p-2 border-b dark:border-slate-600">내용</th><th className="p-2 border-b dark:border-slate-600 w-16 text-center">완료</th><th className="p-2 border-b dark:border-slate-600 w-20 text-center">관리</th></tr>
+                                <tr>
+                                    <th className="p-2 border-b dark:border-slate-600 w-28">날짜</th>
+                                    <th className="p-2 border-b dark:border-slate-600 w-32">닉네임</th>
+                                    <th className="p-2 border-b dark:border-slate-600">내용</th>
+                                    <th className="p-2 border-b dark:border-slate-600 w-16 text-center">완료</th>
+                                    <th className="p-2 border-b dark:border-slate-600 w-20 text-center">관리</th>
+                                </tr>
                             </thead> 
                             <tbody className="divide-y dark:divide-slate-700"> 
                                 {csData.map((item, idx) => ( 
@@ -2130,7 +2237,8 @@
                         openModal("🚨 현재 화면에 주문 내역이 비어있습니다!\n\n혹시 다른 장소(집/사무실)에서 작업하여\n클라우드에 자동 저장된 내역을 불러오시겠습니까?\n\n※ '취소'를 누르고 빈 화면에 새 주문을 추가하시면, 클라우드에 있던 기존 데이터가 삭제될 수 있습니다.", 'confirm', async () => {
                             setTimeout(() => openModal("클라우드에서 데이터를 불러오는 중입니다...", 'alert'), 100);
                             try {
-                                const res = await fetch(`${googleScriptUrl}?action=get_orders&t=${Date.now()}`);
+                                // 🚀 [수정] 불러올 때도 사장님 시트 ID를 전달!
+                                const res = await fetch(`${googleScriptUrl}?action=get_orders&t=${Date.now()}&sheet_id=${customerSheetId}`);
                                 const data = await res.json();
                                 if (data && data.orders && data.orders.length > 0) {
                                     const loadedOrders = data.orders.map((o, idx) => ({
@@ -2221,7 +2329,6 @@
                                         </div>
                                     </div>
                                 </div>
-                                {/* 🚀 빠른 댓글 설정란 추가 */}
                                 <div className="border-t dark:border-slate-700 pt-4">
                                     <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-1"><Icon name="lightning" weight="fill" className="text-yellow-500"/> 빠른 댓글 복사 (대시보드용)</h4>
                                     <div className="space-y-2">
@@ -2246,7 +2353,7 @@
                         </div>
                     )}
                      <main className="flex-1 overflow-hidden bg-gray-200 dark:bg-slate-950 p-2 relative">
-                        {activeTab === 'live' && <LiveTab {...{ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory, quickMessages }} />}
+                        {activeTab === 'live' && <LiveTab {...{ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory, quickMessages, customerSheetId }} />}
                         {activeTab === 'status' && <OrderStatusTab {...{ orders, setOrders, setProductHistory, productHistory, inventory, setInventory, openModal, shippingOverrides, quickShipping, addresses, addressMapping, cardPayments, specialCustomers }} />}
                         {activeTab === 'customer' && <CustomerTab {...{ addresses, setAddresses, googleScriptUrl, customerSheetId, openModal, specialCustomers, setSpecialCustomers, orders, addressMapping }} />}
                         {activeTab === 'cs' && <CSTab {...{ csData, setCsData, openModal }} />}
