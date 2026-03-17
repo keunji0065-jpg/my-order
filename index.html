@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>깔로 주문서 PRO (정식 버전)</title>
+    <title>깔로 주문서 PRO 완료</title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -68,7 +68,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, useCallback, memo } = React;
 
-        const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyJVJLaaoesU3ls0OLBf3C8-wjUS4Y1V1fQWtW3v1zhhRsRzp4kOskWHthRNd9vmQPiIA/exec";
+        const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzWZ-hfeUalSPThiMW5-RWDHTDdiBzBtCUy9-1gOaRN6gTD1lsxKzS6in8N_2w-xnJ3zg/exec";
         const FIXED_BANK_ACCOUNT = "카카오뱅크 김선정\n7942 18 01611";
         const DEFAULT_CUSTOMER_SHEET_ID = "1zlL6R8iCy-6ZRMqj6dbefhkwSyRzHibDYBNJLmE35bM";
         
@@ -96,6 +96,13 @@
             s = s.replace(/[\(\)\[\]\{\}\.\,\/]/g, '');
             if (/[가-힣]/.test(s)) s = s.replace(/[a-z0-9]+$/, '');
             return s;
+        };
+
+        // 🚀 [추가] 시트 ID 칸에 전체 인터넷 주소를 넣어도 알아서 ID만 쏙 뽑아주는 스마트 로직
+        const getCleanSheetId = (idOrUrl) => {
+            if (!idOrUrl) return '';
+            const match = idOrUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            return match ? match[1] : idOrUrl.trim();
         };
 
         const generateChatId = (chat) => {
@@ -828,13 +835,21 @@
             const fetchData = async () => {
                 if (!googleScriptUrl) { setConnectionStatus({ code: 'error_config', msg: '설정필요' }); return; }
                 try {
-                    // 🚀 [수정] sheet_id를 URL에 포함하여 사장님 시트에서 정확히 불러오게 처리
-                    const fetchUrl = `${googleScriptUrl}?t=${Date.now()}&sheet_id=${customerSheetId}`;
+                    // 🚀 [수정] 스마트 ID 추출 적용
+                    const actualSheetId = getCleanSheetId(customerSheetId);
+                    const fetchUrl = `${googleScriptUrl}?t=${Date.now()}&sheet_id=${actualSheetId}`;
                     const res = await fetch(fetchUrl); 
                     if (!res.ok) throw new Error();
                     const text = await res.text();
                     if (text.trim().startsWith("<!DOCTYPE")) { setConnectionStatus({ code: 'error_auth', msg: '권한확인' }); return; }
                     const data = JSON.parse(text);
+                    
+                    // 🚀 [수정] 서버에서 에러를 뱉었을 때 화면에 확실히 알려주기
+                    if (data.error) {
+                        setConnectionStatus({ code: 'error_auth', msg: '시트오류(ID확인)' });
+                        return;
+                    }
+
                     if (data.chats) {
                         const rawChats = data.chats.length > 500 ? data.chats.slice(-500) : data.chats;
                         const counts = {};
@@ -959,10 +974,11 @@
                     return { nickname: o.customer, product: o.product, qty: o.quantity, price: o.price, deposit: o.deposit, shipping: currentShipping, grandTotal: 0, address: addr.address || '', zipcode: addr.zipcode || '', phone: addr.phone || '', realname: addr.realname || '', memo: addr.memo || '' }; 
                 }); 
                 try { 
-                    // 🚀 [수정] 배열이 아니라 action과 sheet_id를 포함한 객체 형태로 전송하도록 수정
+                    // 🚀 [수정] 스마트 ID 추출 적용
+                    const actualSheetId = getCleanSheetId(customerSheetId);
                     await fetch(googleScriptUrl, { 
                         method: 'POST', 
-                        body: JSON.stringify({ action: 'save_orders', sheet_id: customerSheetId, data: saveList }), 
+                        body: JSON.stringify({ action: 'save_orders', sheet_id: actualSheetId, data: saveList }), 
                         mode: 'no-cors' 
                     }); 
                 } catch(e) { } finally { setIsSaving(false); } 
@@ -1126,10 +1142,22 @@
                 openModal("불러오시겠습니까?", 'confirm', async () => {
                     if (!googleScriptUrl) return;
                     try {
-                        // 🚀 [수정] sheet_id를 URL에 포함하여 사장님 시트에서 정확히 불러오게 처리
-                        const res = await fetch(`${googleScriptUrl}?action=get_orders&t=${Date.now()}&sheet_id=${customerSheetId}`);
+                        // 🚀 [수정] 스마트 ID 추출 적용
+                        const actualSheetId = getCleanSheetId(customerSheetId);
+                        const res = await fetch(`${googleScriptUrl}?action=get_orders&t=${Date.now()}&sheet_id=${actualSheetId}`);
                         const data = await res.json();
+                        
+                        // 🚀 [수정] 빈 데이터라고 구라치지 않고 실제 에러메시지 띄우기
+                        if (data.error) {
+                            openModal(`서버 거부: ${data.error}\n환경설정에서 시트 ID를 다시 확인해주세요.`, 'alert');
+                            return;
+                        }
+                        
                         if (data && data.orders) {
+                            if (data.orders.length === 0) {
+                                openModal("클라우드 시트에 저장된 주문 데이터가 없습니다.", 'alert');
+                                return;
+                            }
                             const parseNum = (val) => {
                                 if (!val) return 0;
                                 const n = Number(String(val).replace(/,/g, ''));
@@ -1203,19 +1231,6 @@
 
             const handleChatClick = (chat) => { setClickedChats(prev => new Set(prev).add(chat.id)); addOrderLogic(chat.nickname, chat.content, 1, true); };
             const handleAddManualDeposit = (e) => { e.preventDefault(); if (!newDepositName.trim() || !newDepositAmount) return openModal("입금자명/금액 필수", 'alert'); const newDep = { id: `manual_${Date.now()}`, name: newDepositName, amount: newDepositAmount, source: 'manual' }; setManualDeposits(prev => [newDep, ...prev]); setNewDepositName(''); setNewDepositAmount(''); };
-
-            // 🚀 수동입력 컴포넌트 렌더링
-            const renderManualForm = () => (
-                <form onSubmit={(e)=>{e.preventDefault(); if(!manualNick.trim()) return openModal("닉네임을 입력해주세요.", 'alert'); addOrderLogic(manualNick, manualProduct, 1); setManualNick(''); setManualProduct('');}} className="flex gap-2 flex-[1.5] relative items-center bg-indigo-50 dark:bg-slate-700/50 p-1.5 rounded border border-indigo-100 dark:border-slate-600 shadow-sm">
-                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap pl-1">🖐️ 수동입력</span>
-                    <div className="relative w-1/3 flex-shrink-0">
-                        <input type="text" placeholder="닉네임" value={manualNick} onChange={e => {setManualNick(e.target.value); setShowNickSuggestions(true);}} onFocus={()=>setShowNickSuggestions(true)} onBlur={()=>setTimeout(()=>setShowNickSuggestions(false), 200)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-400 bg-white dark:bg-slate-800 dark:text-white" />
-                        {showNickSuggestions && nicknameSuggestions.length > 0 && (<div className="absolute top-full left-0 mt-1 w-full min-w-[200px] bg-white dark:bg-slate-800 border dark:border-slate-600 rounded shadow-xl z-50 overflow-hidden">{nicknameSuggestions.map((s, i) => (<div key={i} onClick={()=>{setManualNick(s.nick); setShowNickSuggestions(false); document.getElementById('manual-prod-input')?.focus();}} className="px-2 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-slate-700 cursor-pointer border-b border-gray-50 dark:border-slate-700/50 last:border-0 flex flex-col"><span className="font-bold">{s.nick}</span>{s.realName && <span className="text-[10px] text-gray-500">👤 {s.realName}</span>}</div>))}</div>)}
-                    </div>
-                    <input id="manual-prod-input" type="text" list="product-list" placeholder="상품명" value={manualProduct} onChange={e => {setManualProduct(e.target.value); setCurrentSearchTerm(e.target.value);}} className="flex-1 border dark:border-slate-600 rounded px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white dark:bg-slate-800 dark:text-white" />
-                    <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 transition-colors text-white px-4 py-1.5 rounded text-xs font-bold shadow-sm whitespace-nowrap">＋ 추가</button>
-                </form>
-            );
 
             return (
                 <div className="flex h-full gap-2 p-2 overflow-hidden bg-gray-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
@@ -1322,12 +1337,23 @@
                                 </div>
                             </div>
                             
-                            {/* 두 번째 줄: 수동입력 폼 & 검색창 (한 줄 배치) */}
-                            <div className="flex gap-2 items-center w-full">
-                                {renderManualForm()}
-                                <div className="relative flex-1">
-                                    <Icon name="magnifying-glass" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"/>
-                                    <input type="text" placeholder="초성/이름 검색" value={orderSearch} onChange={e => setOrderSearch(e.target.value)} className="w-full pl-7 py-1.5 border dark:border-slate-600 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-gray-50 dark:bg-slate-700 dark:text-white" />
+                            {/* 🚀 두 번째 줄: 수동입력 폼 & 검색창 (비율 70% vs 30% 완벽 고정, 절대 안 찌그러짐) */}
+                            <div className="flex gap-2 items-stretch w-full">
+                                {/* 수동입력 폼 (전체 너비의 70%) */}
+                                <form onSubmit={(e)=>{e.preventDefault(); if(!manualNick.trim()) return openModal("닉네임을 입력해주세요.", 'alert'); addOrderLogic(manualNick, manualProduct, 1); setManualNick(''); setManualProduct('');}} className="w-[70%] flex gap-1.5 items-center bg-indigo-50 dark:bg-slate-700/50 p-1.5 rounded border border-indigo-100 dark:border-slate-600 shadow-sm min-w-[320px]">
+                                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap pl-1 shrink-0">🖐️ 수동입력</span>
+                                    <div className="relative w-20 sm:w-28 shrink-0">
+                                        <input type="text" placeholder="닉네임" value={manualNick} onChange={e => {setManualNick(e.target.value); setShowNickSuggestions(true);}} onFocus={()=>setShowNickSuggestions(true)} onBlur={()=>setTimeout(()=>setShowNickSuggestions(false), 200)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-400 bg-white dark:bg-slate-800 dark:text-white" />
+                                        {showNickSuggestions && nicknameSuggestions.length > 0 && (<div className="absolute top-full left-0 mt-1 w-full min-w-[200px] bg-white dark:bg-slate-800 border dark:border-slate-600 rounded shadow-xl z-50 overflow-hidden">{nicknameSuggestions.map((s, i) => (<div key={i} onClick={()=>{setManualNick(s.nick); setShowNickSuggestions(false); document.getElementById('manual-prod-input')?.focus();}} className="px-2 py-1.5 text-xs hover:bg-indigo-50 dark:hover:bg-slate-700 cursor-pointer border-b border-gray-50 dark:border-slate-700/50 last:border-0 flex flex-col"><span className="font-bold">{s.nick}</span>{s.realName && <span className="text-[10px] text-gray-500">👤 {s.realName}</span>}</div>))}</div>)}
+                                    </div>
+                                    <input id="manual-prod-input" type="text" list="product-list" placeholder="상품명" value={manualProduct} onChange={e => {setManualProduct(e.target.value); setCurrentSearchTerm(e.target.value);}} className="flex-1 min-w-0 border dark:border-slate-600 rounded px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-white dark:bg-slate-800 dark:text-white" />
+                                    <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 transition-colors text-white px-3 py-1.5 rounded text-xs font-bold shadow-sm shrink-0 whitespace-nowrap">＋ 추가</button>
+                                </form>
+                                
+                                {/* 검색창 (전체 너비의 30%) - 🚀 [수정] 돋보기 겹침 현상 제거 */}
+                                <div className="w-[30%] relative h-full flex items-center min-w-[120px]">
+                                    <Icon name="magnifying-glass" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                    <input type="text" placeholder="초성/이름 검색" value={orderSearch} onChange={e => setOrderSearch(e.target.value)} className="w-full h-full pl-8 pr-2 py-1.5 border dark:border-slate-600 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-400 bg-gray-50 dark:bg-slate-800 dark:text-white shadow-sm" />
                                 </div>
                             </div>
                             
@@ -1737,9 +1763,11 @@
             const handleCloudSave = async () => { 
                 openModal("현재 화면의 주소를 구글 시트 맨 아래에 '누적 추가' 하시겠습니까?\n(기존 데이터는 절대 지워지지 않고 아래에 안전하게 쌓입니다.)", 'confirm', async () => { 
                     if (!googleScriptUrl) return; 
+                    // 🚀 [수정] 스마트 ID 추출 적용
+                    const actualSheetId = getCleanSheetId(customerSheetId);
                     await fetch(googleScriptUrl, { 
                         method: 'POST', 
-                        body: JSON.stringify({ action: 'append_address', data: addresses, sheet_id: customerSheetId }), 
+                        body: JSON.stringify({ action: 'append_address', data: addresses, sheet_id: actualSheetId }), 
                         mode: 'no-cors', 
                         headers: {'Content-Type': 'text/plain;charset=utf-8'} 
                     }); 
@@ -1747,7 +1775,7 @@
                 }); 
             };
             
-            const handleCloudLoad = async () => { openModal("클라우드에서 불러오시겠습니까?\n(기존 주소록에 병합됩니다)", 'confirm', async () => { if (!googleScriptUrl) return; const res = await fetch(`${googleScriptUrl}?action=get_addresses&t=${Date.now()}&sheet_id=${customerSheetId}`); const data = await res.json(); if(data && data.addresses) { setAddresses(prev => { const newAddrs = [...prev]; data.addresses.forEach(d => { if(!newAddrs.some(a => a.nickname === d.nickname && a.phone === d.phone)) newAddrs.push(d); }); return newAddrs; }); openModal("로드 완료", 'alert'); } }); };
+            const handleCloudLoad = async () => { openModal("클라우드에서 불러오시겠습니까?\n(기존 주소록에 병합됩니다)", 'confirm', async () => { if (!googleScriptUrl) return; const actualSheetId = getCleanSheetId(customerSheetId); const res = await fetch(`${googleScriptUrl}?action=get_addresses&t=${Date.now()}&sheet_id=${actualSheetId}`); const data = await res.json(); if(data.error) { openModal(`로드 실패: ${data.error}`, 'alert'); return; } if(data && data.addresses) { setAddresses(prev => { const newAddrs = [...prev]; data.addresses.forEach(d => { if(!newAddrs.some(a => a.nickname === d.nickname && a.phone === d.phone)) newAddrs.push(d); }); return newAddrs; }); openModal("로드 완료", 'alert'); } }); };
             
             const handleResetAddresses = () => {
                 openModal("주소록을 모두 초기화하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)", 'confirm', () => {
@@ -2237,9 +2265,17 @@
                         openModal("🚨 현재 화면에 주문 내역이 비어있습니다!\n\n혹시 다른 장소(집/사무실)에서 작업하여\n클라우드에 자동 저장된 내역을 불러오시겠습니까?\n\n※ '취소'를 누르고 빈 화면에 새 주문을 추가하시면, 클라우드에 있던 기존 데이터가 삭제될 수 있습니다.", 'confirm', async () => {
                             setTimeout(() => openModal("클라우드에서 데이터를 불러오는 중입니다...", 'alert'), 100);
                             try {
-                                // 🚀 [수정] 불러올 때도 사장님 시트 ID를 전달!
-                                const res = await fetch(`${googleScriptUrl}?action=get_orders&t=${Date.now()}&sheet_id=${customerSheetId}`);
+                                // 🚀 [수정] 스마트 ID 추출 적용
+                                const actualSheetId = getCleanSheetId(customerSheetId);
+                                const res = await fetch(`${googleScriptUrl}?action=get_orders&t=${Date.now()}&sheet_id=${actualSheetId}`);
                                 const data = await res.json();
+                                
+                                // 🚀 [수정] 서버가 거부했을 때 원인 띄우기
+                                if (data.error) {
+                                    setTimeout(() => openModal(`서버 접속 실패: ${data.error}\n(환경설정에서 시트 ID를 다시 확인해주세요!)`, 'alert'), 500);
+                                    return;
+                                }
+                                
                                 if (data && data.orders && data.orders.length > 0) {
                                     const loadedOrders = data.orders.map((o, idx) => ({
                                         id: Date.now() + idx,
@@ -2254,7 +2290,7 @@
                                     setOrders(loadedOrders);
                                     setTimeout(() => openModal(`${loadedOrders.length}건의 주문을 성공적으로 복구했습니다!`, 'alert'), 500);
                                 } else {
-                                    setTimeout(() => openModal("클라우드에 백업된 주문 내역이 없습니다.", 'alert'), 500);
+                                    setTimeout(() => openModal("클라우드 시트에 저장된 데이터가 없습니다.", 'alert'), 500);
                                 }
                             } catch(e) {
                                 setTimeout(() => openModal("불러오기 실패. 설정의 URL을 확인해주세요.", 'alert'), 500);
