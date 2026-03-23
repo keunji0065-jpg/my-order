@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>깔로 주문서 PRO</title>
+    <title>깔로 주문서 PRO (정식 버전)</title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
@@ -60,26 +60,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, useCallback, memo } = React;
 
-        // --- 1. 에러 바운더리 (화면 멈춤 방어막) ---
-        class ErrorBoundary extends React.Component {
-            constructor(props) { super(props); this.state = { hasError: false, errorInfo: null }; }
-            static getDerivedStateFromError(error) { return { hasError: true }; }
-            componentDidCatch(error, errorInfo) { console.error("UI Error Caught:", error, errorInfo); this.setState({ errorInfo }); }
-            render() {
-                if (this.state.hasError) {
-                    return (
-                        <div className="flex items-center justify-center h-screen bg-gray-50 text-gray-800 flex-col p-6 text-center">
-                            <i className="ph-fill ph-warning-circle text-red-500 text-6xl mb-4"></i>
-                            <h2 className="text-2xl font-bold mb-2">화면을 불러오는 중 오류가 발생했습니다.</h2>
-                            <p className="text-gray-600 mb-6">데이터는 안전하게 저장되어 있습니다. 페이지를 새로고침 해주세요.</p>
-                            <button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-bold shadow-md hover:bg-indigo-700">새로고침 하기</button>
-                        </div>
-                    );
-                }
-                return this.props.children;
-            }
-        }
-
         const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzWZ-hfeUalSPThiMW5-RWDHTDdiBzBtCUy9-1gOaRN6gTD1lsxKzS6in8N_2w-xnJ3zg/exec";
         const FIXED_BANK_ACCOUNT = "카카오뱅크 김선정\n7942 18 01611";
         const DEFAULT_CUSTOMER_SHEET_ID = "1zlL6R8iCy-6ZRMqj6dbefhkwSyRzHibDYBNJLmE35bM";
@@ -115,17 +95,13 @@
             return match ? match[1] : idOrUrl.trim();
         };
 
-        const formatPhoneNumber = (phone) => {
-            if (!phone) return '';
-            let cleaned = String(phone).replace(/['"]/g, '').replace(/[^0-9]/g, '');
-            if (cleaned.length === 10 && cleaned.startsWith('1')) return '0' + cleaned;
-            if (cleaned.length === 9 && cleaned.startsWith('1')) return '0' + cleaned;
-            if (cleaned.length === 8 && cleaned.startsWith('2')) return '0' + cleaned;
-            if (cleaned.length === 9 && cleaned.startsWith('2')) return '0' + cleaned;
-            return cleaned;
+        const generateChatId = (chat) => {
+            const safeNick = String(chat.nickname || '').replace(/\s/g, '');
+            const safeContent = String(chat.content || '').replace(/\s/g, '').substring(0, 20);
+            const safeTime = String(chat.time || '').replace(/[^0-9]/g, ''); 
+            return `chat_${safeTime}_${safeNick}_${safeContent}`;
         };
 
-        // --- 2. 최적화된 로컬 스토리지 훅 (용량 초과 에러 핸들링 추가) ---
         const useLocalStorage = (key, initialValue) => {
             const [storedValue, setStoredValue] = useState(() => {
                 try {
@@ -140,26 +116,13 @@
                             price: info.price || 0
                         }));
                     }
-                    if (key === 'verifiedAddresses' && Array.isArray(parsed)) {
-                        return parsed.map(a => {
-                            if (!a.id) { return { ...a, id: `addr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` }; }
-                            return a;
-                        });
-                    }
                     return parsed;
                 } catch (error) { return initialValue; }
             });
 
             useEffect(() => {
                 const timer = setTimeout(() => {
-                    try { 
-                        window.localStorage.setItem(key, JSON.stringify(storedValue)); 
-                    } catch(e) {
-                        // 용량 초과 경고 (QuotaExceededError)
-                        if (e.name === 'QuotaExceededError' || e.code === 22 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-                            alert(`🚨 [경고] 브라우저 저장 공간이 꽉 찼습니다!\n\n현재 데이터가 저장되지 않고 있습니다. '주문관리' 탭에서 데이터를 백업(엑셀 다운)하신 후, '초기화'를 진행해주세요.`);
-                        }
-                    }
+                    try { window.localStorage.setItem(key, JSON.stringify(storedValue)); } catch(e) {}
                 }, 1000);
                 return () => clearTimeout(timer);
             }, [key, storedValue]);
@@ -223,37 +186,39 @@
                 if (isOpen) setFormData({ realname: '', phone: '', zipcode: '', address: '', detailAddress: '', memo: '' });
             }, [isOpen]);
 
-            // --- 3. 다음 주소 API 에러 핸들링 방어막 ---
             const handleSearch = () => {
-                if (!window.daum || !window.daum.Postcode) {
-                    alert("주소 검색 스크립트를 불러오지 못했습니다. 인터넷 연결을 확인하거나 잠시 후 다시 시도해주세요.");
-                    return;
-                }
                 try {
                     new window.daum.Postcode({
                         oncomplete: function(data) {
                             let fullAddr = data.address;
+                            let extraAddr = '';
                             if(data.addressType === 'R'){
-                                if(data.bname !== '') fullAddr += data.bname;
-                                if(data.buildingName !== '') fullAddr += ', ' + data.buildingName;
+                                if(data.bname !== '') extraAddr += data.bname;
+                                if(data.buildingName !== '') extraAddr += (extraAddr !== '' ? ', ' + data.buildingName : data.buildingName);
+                                if(extraAddr !== '') fullAddr += ' (' + extraAddr + ')';
                             }
                             setFormData(prev => ({ ...prev, zipcode: data.zonecode, address: fullAddr }));
                             setTimeout(() => detailRef.current?.focus(), 100);
                         }
                     }).open();
                 } catch (e) {
-                    alert("주소 검색창을 여는 중 오류가 발생했습니다.");
+                    alert("주소 검색 오류가 발생했습니다.");
                 }
             };
 
             const handleSubmit = (e) => {
                 e.preventDefault();
                 if (!formData.realname.trim()) return alert("수령인 이름을 입력해주세요.");
-                const cleanPhone = formatPhoneNumber(formData.phone);
+                const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
                 if (!cleanPhone) return alert("유효한 연락처(숫자)를 입력해주세요.");
                 if (!formData.address.trim()) return alert("배송 주소를 검색해서 입력해주세요.");
-                const finalAddress = `${formData.address} ${formData.detailAddress}`.trim();
-                onSubmit({ ...formData, address: finalAddress, phone: cleanPhone, nickname: nick });
+                
+                // 🚀 [수정] 우편번호가 있다면 주소의 맨 앞에 괄호를 씌워 완벽하게 하나로 합칩니다.
+                const zipStr = formData.zipcode ? `(${formData.zipcode}) ` : '';
+                const finalAddress = `${zipStr}${formData.address} ${formData.detailAddress}`.trim();
+                
+                // 🚀 합친 후에는 zipcode 필드를 비워 기존 엑셀 시스템의 양식과 100% 동일하게 통일합니다.
+                onSubmit({ ...formData, zipcode: '', address: finalAddress, phone: cleanPhone, nickname: nick });
             };
 
             if (!isOpen) return null;
@@ -311,7 +276,12 @@
 
             useEffect(() => { if (!isProductFocused) setLocalProduct(item.product); }, [item.product, isProductFocused]);
             useEffect(() => { if (!isQtyFocused) setLocalQty(item.quantity === '' ? '' : item.quantity); }, [item.quantity, isQtyFocused]);
-            useEffect(() => { if (!isPriceFocused) setLocalPrice(item.price === '' || item.price === 0 ? '' : Number(item.price).toLocaleString()); }, [item.price, isPriceFocused]);
+            
+            useEffect(() => { 
+                if (!isPriceFocused) {
+                    setLocalPrice(item.price === '' || item.price === 0 ? '' : Number(item.price).toLocaleString()); 
+                }
+            }, [item.price, isPriceFocused]);
 
             useEffect(() => {
                 const timer = setTimeout(() => { if (localProduct !== item.product) handleProductChange(item.id, 'product', localProduct); }, 400);
@@ -361,7 +331,9 @@
                 </div>
             );
         }, (prev, next) => {
-            return prev.item.product === next.item.product && prev.item.quantity === next.item.quantity && prev.item.price === next.item.price && prev.item.isCancelled === next.item.isCancelled && prev.item.deposit === next.item.deposit && prev.item.isUnmodified === next.item.isUnmodified && prev.nick === next.nick && prev.isLast === next.isLast && prev.stockLookup[prev.item.product] === next.stockLookup[next.item.product];
+            if (prev.item.product !== next.item.product || prev.item.quantity !== next.item.quantity || prev.item.price !== next.item.price || prev.item.isCancelled !== next.item.isCancelled || prev.item.deposit !== next.item.deposit || prev.item.isUnmodified !== next.item.isUnmodified) return false;
+            if (prev.nick !== next.nick || prev.isLast !== next.isLast || prev.stockLookup[prev.item.product] !== next.stockLookup[next.item.product]) return false;
+            return true;
         });
 
         const CustomerBlock = memo(({ nick, items, isSelected, currentShipping, isCard, isPaidState, grandTotal, depositTotal, balance, addr, addrType, addressMapping, suggestions, autoDepositorName, displayDepositorName, isAutoDepositor, depositorNames, copyStatus, isOrderConfirmed, isEditingShipping, stockLookup, setSelectedNick, addOrderLogic, handleNicknameEdit, toggleCardPayment, handleShippingChange, setEditingShippingNick, openModal, setDepositorNames, handleFullDepositToggle, copyOrderSheet, handleOrderCheckToggle, handleAddressUnmapping, handleAddressMapping, handleProductChange, handleQuantityUpdate, handleOrderCancel, handleOrderDelete, renderSpecialBadge, onOpenQuickAddress }) => {
@@ -491,15 +463,19 @@
 
             const [quickAddrModal, setQuickAddrModal] = useState({ isOpen: false, nick: '' });
 
+            const inventoryRef = useRef(inventory);
+            const productHistoryRef = useRef(productHistory);
+            useEffect(() => { inventoryRef.current = inventory; }, [inventory]);
+            useEffect(() => { productHistoryRef.current = productHistory; }, [productHistory]);
+
             const handleQuickAddressSubmit = (addrData) => {
-                const newAddr = { ...addrData, id: `addr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` };
                 setAddresses(prev => {
                     const newAddrs = [...prev];
-                    const isDup = newAddrs.some(a => a.nickname === newAddr.nickname && a.phone === newAddr.phone);
-                    if (!isDup) newAddrs.push(newAddr);
+                    const isDup = newAddrs.some(a => a.nickname === addrData.nickname && a.phone === addrData.phone);
+                    if (!isDup) newAddrs.push(addrData);
                     return newAddrs;
                 });
-                setAddressMapping(prev => ({ ...prev, [newAddr.nickname]: newAddr.nickname }));
+                setAddressMapping(prev => ({ ...prev, [addrData.nickname]: addrData.nickname }));
                 setQuickAddrModal({ isOpen: false, nick: '' });
             };
 
@@ -550,18 +526,10 @@
             const formatTimeOnly = useCallback((val) => { 
                 if (!val) return ''; 
                 const strVal = String(val);
-                
-                // 1. 한국 시간(타임존)이 적용되도록 날짜 객체 변환을 최우선으로 실행
-                const isNumeric = !isNaN(strVal) && strVal.trim() !== '';
-                const dt = new Date(isNumeric ? Number(strVal) : strVal);
-                
-                if (!isNaN(dt.getTime())) {
-                    const hours = String(dt.getHours()).padStart(2, '0');
-                    const minutes = String(dt.getMinutes()).padStart(2, '0');
-                    return `${hours}:${minutes}`;
+                const dt = new Date(strVal);
+                if (!isNaN(dt) && strVal.length > 8) {
+                    return dt.toLocaleTimeString('ko-KR', {hour12: false, hour:'2-digit', minute:'2-digit'});
                 }
-
-                // 2. 만약 일반적인 날짜 포맷이 아닐 경우(단순 문자열 등) 기존 정규식 방식으로 추출
                 const timeMatch = strVal.match(/(\d{1,2}):(\d{2})/);
                 if (timeMatch) {
                     let hour = parseInt(timeMatch[1], 10);
@@ -569,7 +537,6 @@
                     else if ((strVal.includes('오전') || strVal.toUpperCase().includes('AM')) && hour === 12) hour = 0;
                     return `${String(hour).padStart(2, '0')}:${timeMatch[2]}`;
                 }
-                
                 return strVal; 
             }, []);
             
@@ -771,11 +738,9 @@
                 return () => clearInterval(interval); 
             }, [googleScriptUrl, customerSheetId]);
 
-            // --- 4. 무한 렌더링을 막기 위해 useCallback과 의존성 배열 최적화 ---
             useEffect(() => {
                 const timer = setTimeout(() => {
                     if (allDeposits.length === 0 || orders.length === 0) return;
-                    
                     let updatedOrders = [...orders];
                     let newMatchedIds = new Set(matchedDeposits);
                     let hasChanges = false;
@@ -837,15 +802,10 @@
                             hasChanges = true;
                         }
                     });
-                    
-                    if (hasChanges) { 
-                        setOrders(updatedOrders); 
-                        setMatchedDeposits(newMatchedIds); 
-                    }
+                    if (hasChanges) { setOrders(updatedOrders); setMatchedDeposits(newMatchedIds); }
                 }, 500); 
                 return () => clearTimeout(timer);
-                // 의존성 배열에서 orders 등 자주 바뀌는 객체를 제거하여 불필요한 연쇄 실행 방지 (수동 매칭 시에만 동작하도록 최적화)
-            }, [allDeposits, matchedDeposits, deletedDepositIds]);
+            }, [allDeposits, orders, matchedDeposits, depositorNames, deletedDepositIds, getCalculatedShipping, findAddress]);
 
             const autoSaveToGoogleSheet = async () => { 
                 if (!googleScriptUrl || Object.keys(orders).length === 0) return; 
@@ -854,7 +814,7 @@
                     let addrRes = findAddress(o.customer); 
                     let addr = addrRes.data || {}; 
                     const currentShipping = getCalculatedShipping(o.customer); 
-                    return { nickname: o.customer, product: o.product, qty: o.quantity, price: o.price, deposit: o.deposit, shipping: currentShipping, grandTotal: 0, address: addr.address || '', zipcode: addr.zipcode || '', phone: addr.phone ? `'${addr.phone}` : '', realname: addr.realname || '', memo: addr.memo || '' }; 
+                    return { nickname: o.customer, product: o.product, qty: o.quantity, price: o.price, deposit: o.deposit, shipping: currentShipping, grandTotal: 0, address: addr.address || '', zipcode: addr.zipcode || '', phone: addr.phone || '', realname: addr.realname || '', memo: addr.memo || '' }; 
                 }); 
                 try { 
                     const actualSheetId = getCleanSheetId(customerSheetId);
@@ -875,14 +835,18 @@
                 }
             }, [lastAddedOrderId, orders]);
 
-            const handleNicknameEdit = useCallback((old) => openModal(`${old} 닉네임 변경`, 'prompt', val => {
-                if (val) {
-                    const newN = val.replace(/@/g, '').trim();
-                    setOrders(prev => prev.map(o => o.customer === old ? { ...o, customer: newN } : o));
-                    if (shippingOverrides[old]) { setShippingOverrides(prev => { const n = {...prev, [newN]: prev[old]}; delete n[old]; return n; }); }
-                    if (selectedNick === old) setSelectedNick(newN);
-                }
-            }, null, old), [openModal, setOrders, shippingOverrides, setShippingOverrides, selectedNick, setSelectedNick]);
+            const handleNicknameEdit = useCallback((old) => {
+                openModal(`${old} 닉네임 변경`, 'prompt', (val) => {
+                    if (val) {
+                        const newN = val.replace(/@/g, '').trim();
+                        setOrders(prev => prev.map(o => o.customer === old ? { ...o, customer: newN } : o));
+                        if (shippingOverrides[old]) { 
+                            setShippingOverrides(prev => { const n = {...prev, [newN]: prev[old]}; delete n[old]; return n; }); 
+                        }
+                        if (selectedNick === old) setSelectedNick(newN);
+                    }
+                }, null, old);
+            }, [openModal, setOrders, shippingOverrides, setShippingOverrides, selectedNick, setSelectedNick]);
 
             const toggleCardPayment = useCallback((nick) => setCardPayments(prev => ({ ...prev, [nick]: !prev[nick] })), [setCardPayments]);
             
@@ -907,19 +871,25 @@
                     if (o.id === id) { 
                         const newOrder = { ...o, [field]: value, isUnmodified: false }; 
                         if(field === 'product') { 
-                            const invItem = Array.isArray(inventory) ? inventory.find(i => i.name === value) : null;
-                            const uPrice = invItem ? Number(invItem.price) : (productHistory[value] || 0);
-                            newOrder.price = newOrder.quantity * uPrice; 
+                            const cleanVal = String(value).trim();
+                            const inv = inventoryRef.current;
+                            const hist = productHistoryRef.current;
+                            const invItem = Array.isArray(inv) ? inv.find(i => String(i.name).trim() === cleanVal) : null;
+                            const uPrice = invItem ? Number(invItem.price) : (hist[cleanVal] || 0);
+                            const q = Number(newOrder.quantity) || 0;
+                            newOrder.price = q * uPrice; 
                         } 
-                        if (field === 'price' && o.product && o.product.trim() !== '') { 
-                            const uPrice = o.quantity > 0 ? Number(value) / o.quantity : 0; 
+                        if (field === 'price' && o.product && String(o.product).trim() !== '') { 
+                            const cleanProd = String(o.product).trim();
+                            const valNum = String(value).replace(/,/g, '');
+                            const uPrice = o.quantity > 0 ? Number(valNum) / o.quantity : 0; 
                             if (uPrice > 0) {
-                                setProductHistory(h => ({ ...h, [o.product]: uPrice })); 
+                                setProductHistory(h => ({ ...h, [cleanProd]: uPrice })); 
                                 setInventory(prevInv => {
                                     if (!Array.isArray(prevInv)) return prevInv;
-                                    const exists = prevInv.find(i => i.name === o.product);
-                                    if (!exists) return [...prevInv, { id: `inv_${Date.now()}_${Math.random()}`, name: o.product, stock: 100, price: uPrice }];
-                                    return prevInv.map(i => i.name === o.product ? { ...i, price: uPrice } : i);
+                                    const exists = prevInv.find(i => String(i.name).trim() === cleanProd);
+                                    if (!exists) return [...prevInv, { id: `inv_${Date.now()}_${Math.random()}`, name: cleanProd, stock: 100, price: uPrice }];
+                                    return prevInv.map(i => String(i.name).trim() === cleanProd ? { ...i, price: uPrice } : i);
                                 });
                             }
                         } 
@@ -927,21 +897,24 @@
                     } 
                     return o; 
                 })); 
-            }, [inventory, productHistory, setProductHistory, setInventory, setOrders]);
+            }, [setOrders, setProductHistory, setInventory]);
 
             const handleQuantityUpdate = useCallback((itemId, newQtyVal) => { 
                 setOrders(prev => prev.map(o => { 
                     if (o.id === itemId) { 
+                        const cleanProd = String(o.product || '').trim();
+                        const inv = inventoryRef.current;
+                        const hist = productHistoryRef.current;
+                        const invItem = Array.isArray(inv) ? inv.find(i => String(i.name).trim() === cleanProd) : null;
                         let unitPrice = 0; 
-                        const invItem = Array.isArray(inventory) ? inventory.find(i => i.name === o.product) : null;
                         if (invItem) unitPrice = Number(invItem.price);
-                        else unitPrice = productHistory[o.product] || (o.quantity > 0 ? o.price/o.quantity : 0);
+                        else unitPrice = hist[cleanProd] || (o.quantity > 0 ? o.price/o.quantity : 0);
                         const validQty = (newQtyVal === '' || isNaN(parseInt(newQtyVal))) ? '' : parseInt(newQtyVal);
                         return { ...o, quantity: validQty, price: unitPrice * (Number(validQty) || 0), isUnmodified: false }; 
                     } 
                     return o; 
                 })); 
-            }, [inventory, productHistory, setOrders]);
+            }, [setOrders]);
 
             const handleOrderCancel = useCallback((id) => setOrders(prev => prev.map(o => o.id === id ? { ...o, isCancelled: !o.isCancelled } : o)), [setOrders]);
             const handleOrderDelete = useCallback((id) => openModal("주문 삭제하시겠습니까?", 'confirm', () => setOrders(prev => prev.filter(o => o.id !== id))), [openModal, setOrders]);
@@ -995,14 +968,19 @@
 
             const addOrderLogic = useCallback((nick, content, qty = 1, force = false, afterId = null) => {
                 const cNick = String(nick).replace(/@/g, '').trim();
-                const price = inventory.find(i => i.name === content)?.price || productHistory[content] || 0;
+                const cContent = String(content || '').trim();
+                const inv = inventoryRef.current;
+                const hist = productHistoryRef.current;
+                const invItem = Array.isArray(inv) ? inv.find(i => String(i.name).trim() === cContent) : null;
+                const price = invItem ? Number(invItem.price) : (hist[cContent] || 0);
+
                 setCheckedOrders(prev => { const n = new Set(prev); n.delete(cNick); return n; });
                 setSelectedNick(cNick);
                 setOrderSearch('');
-                const newOrder = { id: Date.now(), customer: cNick, product: content, quantity: qty, price: Number(price) * qty, deposit: 0, isCancelled: false, isUnmodified: true };
+                const newOrder = { id: Date.now(), customer: cNick, product: cContent, quantity: qty, price: Number(price) * qty, deposit: 0, isCancelled: false, isUnmodified: true };
                 setOrders(prev => {
-                    if (!afterId && !force && content !== '') {
-                        const existIdx = prev.findIndex(o => o.customer === cNick && o.product === content && !o.isCancelled);
+                    if (!afterId && !force && cContent !== '') {
+                        const existIdx = prev.findIndex(o => o.customer === cNick && o.product === cContent && !o.isCancelled);
                         if (existIdx !== -1) { 
                             const next = [...prev]; 
                             next[existIdx] = { ...next[existIdx], quantity: next[existIdx].quantity + qty, price: (next[existIdx].quantity + qty) * price }; 
@@ -1015,7 +993,7 @@
                     }
                     return [newOrder, ...prev];
                 });
-            }, [inventory, productHistory, setCheckedOrders, setOrders]);
+            }, [setCheckedOrders, setOrders]);
 
             const handleLoadOrders = async () => {
                 openModal("불러오시겠습니까?", 'confirm', async () => {
@@ -1048,8 +1026,30 @@
             const handleManualSubmit = (e) => { e.preventDefault(); if(!manualNick.trim()) return openModal("닉네임을 입력해주세요.", 'alert'); addOrderLogic(manualNick, manualProduct, 1); setManualNick(''); setManualProduct(''); };
 
             const handleDepositClick = (dep) => {
+                const isUsed = matchedDeposits?.has(dep.id);
+
+                if (isUsed) {
+                    if (!selectedNick) return openModal("매칭을 취소할 주문자를 먼저 선택해주세요.", "alert");
+                    openModal(`해당 입금 내역(${Number(dep.amount).toLocaleString()}원) 매칭을 취소하고 차감하시겠습니까?`, 'confirm', () => {
+                        setOrders(prev => {
+                            let remainingToSubtract = Number(dep.amount);
+                            return prev.map(o => {
+                                if (o.customer === selectedNick && remainingToSubtract > 0 && (o.deposit || 0) > 0) {
+                                    const sub = Math.min(o.deposit, remainingToSubtract);
+                                    remainingToSubtract -= sub;
+                                    return { ...o, deposit: o.deposit - sub };
+                                }
+                                return o;
+                            });
+                        });
+                        setMatchedDeposits(p => { const next = new Set(p); next.delete(dep.id); return next; });
+                    });
+                    return;
+                }
+
                 const targetNick = orders.find(o => !o.isCancelled && cleanForMatch(o.customer) === cleanForMatch(dep.name))?.customer || selectedNick;
                 if (!targetNick) return openModal("주문자를 먼저 선택해주세요.", "alert");
+
                 setOrders(prev => {
                     let done = false;
                     return prev.map(o => {
@@ -1086,6 +1086,7 @@
                     
                     <QuickAddressModal isOpen={quickAddrModal.isOpen} nick={quickAddrModal.nick} onClose={() => setQuickAddrModal({ isOpen: false, nick: '' })} onSubmit={handleQuickAddressSubmit} />
 
+                    {/* 왼쪽: 댓글 영역 */}
                     <div className="w-[30%] flex flex-col bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg shadow-sm overflow-hidden">
                         <div className="p-1.5 bg-blue-50 dark:bg-blue-900/20 border-b dark:border-slate-700 grid grid-cols-4 gap-1">
                             {quickMessages.map((msg, idx) => (
@@ -1120,41 +1121,7 @@
                         </div>
                     </div>
 
-                    <div className="w-[20%] flex flex-col bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
-                        <div className="p-2 bg-yellow-50 dark:bg-slate-700/50 border-b dark:border-slate-700 flex flex-col gap-2">
-                            <div className="font-bold text-yellow-700 dark:text-yellow-300 flex items-center justify-between"><span className="flex items-center gap-1"><Icon name="money" weight="fill"/> 입금 내역</span><span className="text-xs text-gray-500 dark:text-slate-400">{filteredDeposits.length}건</span></div>
-                            <form onSubmit={handleAddManualDeposit} className="flex flex-col gap-1 bg-white dark:bg-slate-800 p-1 rounded border border-yellow-200 dark:border-slate-600">
-                                <div className="flex gap-1"><input type="text" value={newDepositName} onChange={(e)=>setNewDepositName(e.target.value)} placeholder="입금자명" className="w-[60%] text-xs border dark:border-slate-600 rounded px-1 py-1.5 bg-transparent outline-none focus:ring-1 focus:ring-yellow-400" /><input type="text" value={newDepositAmount ? Number(newDepositAmount).toLocaleString() : ''} onChange={(e)=>{ const val = e.target.value.replace(/,/g, ''); if(!isNaN(val)) setNewDepositAmount(val); }} placeholder="금액" className="w-[40%] text-xs border dark:border-slate-600 rounded px-1 py-1.5 bg-transparent text-right font-bold outline-none focus:ring-1 focus:ring-yellow-400" /></div>
-                                <button type="submit" className="bg-yellow-500 text-white text-xs font-bold py-1.5 rounded hover:bg-yellow-600 transition-colors shadow-sm">수동 입금 추가</button>
-                            </form>
-                            <div className="relative"><Icon name="magnifying-glass" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400"/><input type="text" placeholder="입금자/금액 검색" value={depositSearch} onChange={e => setDepositSearch(e.target.value)} className="w-full text-xs pl-7 pr-6 py-1.5 border dark:border-slate-600 rounded focus:ring-1 focus:ring-yellow-500 outline-none bg-white dark:bg-slate-800" />{depositSearch && <button onClick={()=>setDepositSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><Icon name="x-circle" weight="fill" size={14}/></button>}</div>
-                            {selectedNick && <div className="text-[11px] text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 p-1 rounded text-center font-bold animate-pulse border border-blue-200 dark:border-blue-800">👇 '{selectedNick}' 님께 매칭 대기 중</div>}
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-1.5 space-y-1 bg-gray-100 dark:bg-slate-900">
-                            {filteredDeposits.map(d => {
-                                const isUsed = matchedDeposits?.has(d.id);
-                                return (
-                                    <div key={d.id} onClick={() => handleDepositClick(d)} className={`relative flex items-center justify-between py-1.5 px-2 border rounded cursor-pointer transition-all group ${isUsed ? 'bg-gray-100 dark:bg-slate-800/80 border-gray-200 dark:border-slate-700 opacity-90' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm'}`}>
-                                        <div className="flex items-center gap-1 overflow-hidden">
-                                            <span className={`text-sm truncate ${isUsed ? 'text-gray-600 dark:text-slate-300 font-medium' : 'text-gray-900 dark:text-slate-100 font-bold'}`}>{d.name}</span>
-                                            <button onClick={(e) => handleCopyDepositName(e, d.name, d.id)} className={`shrink-0 transition-colors ${depositCopyStatus[d.id] ? 'text-green-500' : 'text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400'}`} title="이름 복사"><Icon name={depositCopyStatus[d.id] ? "check" : "copy"} weight="bold" size={14}/></button>
-                                            {d.source === 'manual' && <span className="text-[9px] text-gray-400 dark:text-slate-500 bg-gray-200 dark:bg-slate-700 px-1 rounded shrink-0">수동</span>}
-                                        </div>
-                                        <div className="flex items-center gap-2 shrink-0">
-                                            <span className="text-[10px] text-gray-500 dark:text-slate-400">{formatTimeOnly(d.time || d.date)}</span>
-                                            <div className="flex flex-col items-end justify-center">
-                                                <span className={`font-bold text-sm ${isUsed ? 'text-gray-600 dark:text-slate-400' : 'text-blue-600 dark:text-blue-400'}`}>+{Number(d.amount).toLocaleString()}</span>
-                                                {isUsed && <span className="text-[9px] font-bold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/50 border border-green-200 dark:border-green-800 px-1 py-0.5 rounded mt-0.5">매칭완료</span>}
-                                            </div>
-                                        </div>
-                                        <button onClick={(e)=>{e.stopPropagation(); handleDeleteDepositItem(d.id);}} className="absolute -right-1 -top-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><Icon name="trash" size={10} weight="bold"/></button>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        <div className="p-2 bg-white dark:bg-slate-800 text-center font-bold text-xs border-t dark:border-slate-700 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">총: <span className="text-green-600 dark:text-green-400 text-sm">{totalDepositAmount.toLocaleString()}</span>원</div>
-                    </div>
-
+                    {/* 중간: 주문서 영역 (위치 변경) */}
                     <div className="w-[50%] bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg flex flex-col overflow-hidden shadow-sm">
                         <div className="grid grid-cols-5 gap-1 p-2 bg-indigo-50 dark:bg-slate-700/50 border-b dark:border-slate-700 text-center text-[10px]">
                             {[{id:'all', label:'총매출', val:dashboardStats.totalSales}, {id:'paid', label:'입금액', val:dashboardStats.totalDeposit}, {id:'unpaid', label:'미수금', val:dashboardStats.totalUnpaid}, {id:'card', label:'카드예정', val:dashboardStats.totalCardExpected}, {id:'no-address', label:'주소미입력', val:dashboardStats.missingAddressCount, onClick:handleNoAddressClick}].map(s => (
@@ -1202,6 +1169,42 @@
                                 return (<CustomerBlock key={nick} nick={nick} items={items} isSelected={selectedNick === nick} currentShipping={ship} isCard={cardPayments[nick]} isPaidState={bal <= 0 && activeItems.length > 0} grandTotal={grand} depositTotal={depSum} balance={bal} addr={findAddress(nick)?.data} addrType={findAddress(nick)?.type} addressMapping={addressMapping} suggestions={findAddressSuggestions(nick)} autoDepositorName={findAddress(nick)?.data?.realname || ''} displayDepositorName={depositorNames[nick] || findAddress(nick)?.data?.realname || '입금자'} isAutoDepositor={!depositorNames[nick] && findAddress(nick)?.data?.realname} depositorNames={depositorNames} copyStatus={copyStatus} isOrderConfirmed={checkedOrders.has(nick)} isEditingShipping={editingShippingNick === nick} stockLookup={stockLookup} setSelectedNick={setSelectedNick} addOrderLogic={addOrderLogic} handleNicknameEdit={handleNicknameEdit} toggleCardPayment={toggleCardPayment} handleShippingChange={handleShippingChange} setEditingShippingNick={setEditingShippingNick} openModal={openModal} setDepositorNames={setDepositorNames} handleFullDepositToggle={handleFullDepositToggle} copyOrderSheet={copyOrderSheet} handleOrderCheckToggle={handleOrderCheckToggle} handleAddressUnmapping={handleAddressUnmapping} handleAddressMapping={handleAddressMapping} handleProductChange={handleProductChange} handleQuantityUpdate={handleQuantityUpdate} handleOrderCancel={handleOrderCancel} handleOrderDelete={handleOrderDelete} renderSpecialBadge={renderSpecialBadge} onOpenQuickAddress={(nick) => setQuickAddrModal({ isOpen: true, nick })} />);
                             })}
                         </div>
+                    </div>
+
+                    {/* 오른쪽: 입금 영역 (위치 변경) */}
+                    <div className="w-[20%] flex flex-col bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg overflow-hidden shadow-sm">
+                        <div className="p-2 bg-yellow-50 dark:bg-slate-700/50 border-b dark:border-slate-700 flex flex-col gap-2">
+                            <div className="font-bold text-yellow-700 dark:text-yellow-300 flex items-center justify-between"><span className="flex items-center gap-1"><Icon name="money" weight="fill"/> 입금 내역</span><span className="text-xs text-gray-500 dark:text-slate-400">{filteredDeposits.length}건</span></div>
+                            <form onSubmit={handleAddManualDeposit} className="flex flex-col gap-1 bg-white dark:bg-slate-800 p-1 rounded border border-yellow-200 dark:border-slate-600">
+                                <div className="flex gap-1"><input type="text" value={newDepositName} onChange={(e)=>setNewDepositName(e.target.value)} placeholder="입금자명" className="w-[60%] text-xs border dark:border-slate-600 rounded px-1 py-1.5 bg-transparent outline-none focus:ring-1 focus:ring-yellow-400" /><input type="text" value={newDepositAmount ? Number(newDepositAmount).toLocaleString() : ''} onChange={(e)=>{ const val = e.target.value.replace(/,/g, ''); if(!isNaN(val)) setNewDepositAmount(val); }} placeholder="금액" className="w-[40%] text-xs border dark:border-slate-600 rounded px-1 py-1.5 bg-transparent text-right font-bold outline-none focus:ring-1 focus:ring-yellow-400" /></div>
+                                <button type="submit" className="bg-yellow-500 text-white text-xs font-bold py-1.5 rounded hover:bg-yellow-600 transition-colors shadow-sm">수동 입금 추가</button>
+                            </form>
+                            <div className="relative"><Icon name="magnifying-glass" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-400"/><input type="text" placeholder="입금자/금액 검색" value={depositSearch} onChange={e => setDepositSearch(e.target.value)} className="w-full text-xs pl-7 pr-6 py-1.5 border dark:border-slate-600 rounded focus:ring-1 focus:ring-yellow-500 outline-none bg-white dark:bg-slate-800" />{depositSearch && <button onClick={()=>setDepositSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><Icon name="x-circle" weight="fill" size={14}/></button>}</div>
+                            {selectedNick && <div className="text-[11px] text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 p-1 rounded text-center font-bold animate-pulse border border-blue-200 dark:border-blue-800">👇 '{selectedNick}' 님께 매칭 대기 중</div>}
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-1.5 space-y-1 bg-gray-100 dark:bg-slate-900">
+                            {filteredDeposits.map(d => {
+                                const isUsed = matchedDeposits?.has(d.id);
+                                return (
+                                    <div key={d.id} onClick={() => handleDepositClick(d)} className={`relative flex items-center justify-between py-1.5 px-2 border rounded cursor-pointer transition-all group ${isUsed ? 'opacity-80 bg-gray-100 dark:bg-slate-800/80 border-transparent' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 shadow-sm'}`}>
+                                        <div className="flex items-center gap-1 overflow-hidden">
+                                            <span className={`text-sm truncate ${isUsed ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100 font-bold'}`}>{d.name}</span>
+                                            <button onClick={(e) => handleCopyDepositName(e, d.name, d.id)} className={`shrink-0 transition-colors ${depositCopyStatus[d.id] ? 'text-green-500' : 'text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400'}`} title="이름 복사"><Icon name={depositCopyStatus[d.id] ? "check" : "copy"} weight="bold" size={14}/></button>
+                                            {d.source === 'manual' && <span className="text-[9px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1 rounded shrink-0">수동</span>}
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <span className="text-[10px] text-gray-500 dark:text-slate-400">{formatTimeOnly(d.time || d.date)}</span>
+                                            <div className="flex flex-col items-end justify-center">
+                                                <span className={`font-bold text-sm ${isUsed ? 'text-gray-500 dark:text-slate-400' : 'text-blue-600 dark:text-blue-400'}`}>+{Number(d.amount).toLocaleString()}</span>
+                                                {isUsed && <span className="text-[9px] font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-1 py-0.5 rounded mt-0.5">매칭완료</span>}
+                                            </div>
+                                        </div>
+                                        <button onClick={(e)=>{e.stopPropagation(); handleDeleteDepositItem(d.id);}} className="absolute -right-1 -top-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><Icon name="trash" size={10} weight="bold"/></button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="p-2 bg-white dark:bg-slate-800 text-center font-bold text-xs border-t dark:border-slate-700 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">총: <span className="text-green-600 dark:text-green-400 text-sm">{totalDepositAmount.toLocaleString()}</span>원</div>
                     </div>
                 </div>
             );
@@ -1534,7 +1537,10 @@
             const [selectedAddresses, setSelectedAddresses] = useState(new Set());
 
             const filteredAddresses = useMemo(() => {
-                let result = !searchTerm ? [...addresses] : addresses.filter(a => a.nickname.toLowerCase().includes(searchTerm.toLowerCase()) || a.realname.toLowerCase().includes(searchTerm.toLowerCase()));
+                let result = addresses.map((a, i) => ({ ...a, _originalIndex: i }));
+                if (searchTerm) {
+                    result = result.filter(a => a.nickname.toLowerCase().includes(searchTerm.toLowerCase()) || a.realname.toLowerCase().includes(searchTerm.toLowerCase()));
+                }
                 const nicknameCounts = {}; addresses.forEach(a => { const nick = normalizeString(a.nickname); nicknameCounts[nick] = (nicknameCounts[nick] || 0) + 1; });
                 result.sort((a, b) => {
                     const countA = nicknameCounts[normalizeString(a.nickname)] || 0;
@@ -1549,35 +1555,19 @@
 
             const handleAdd = () => { 
                 if (!inputData.nickname) return openModal("닉네임 필수", 'alert'); 
-                const formattedPhone = formatPhoneNumber(inputData.phone);
                 setAddresses(prev => {
-                    const isDuplicate = prev.some(a => a.nickname === inputData.nickname && a.phone === formattedPhone);
+                    const isDuplicate = prev.some(a => a.nickname === inputData.nickname && a.phone === inputData.phone);
                     if (isDuplicate) { openModal("이미 동일한 닉네임과 연락처로 등록된 정보가 있습니다.", 'alert'); return prev; }
-                    return [...prev, { ...inputData, phone: formattedPhone, id: `addr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` }]; 
+                    return [...prev, inputData]; 
                 }); 
                 setInputData({ nickname: '', realname: '', phone: '', zipcode: '', address: '', memo: '' }); 
             };
 
-            const handleDelete = (id, nickname) => { openModal(`'${nickname}'님의 주소 정보를 삭제하시겠습니까?`, 'confirm', () => { setAddresses(prev => prev.filter(a => a.id !== id)); }); };
+            const handleDelete = (index, nickname) => { openModal(`'${nickname}'님의 주소 정보를 삭제하시겠습니까?`, 'confirm', () => { setAddresses(prev => prev.filter((_, i) => i !== index)); setSelectedAddresses(prev => { const n = new Set(prev); n.delete(index); return n; }); }); };
 
-            const handleAddressSearch = (setter) => { 
-                if (!window.daum || !window.daum.Postcode) {
-                    alert("주소 검색 스크립트를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
-                    return;
-                }
-                try { 
-                    new window.daum.Postcode({ 
-                        oncomplete: function(data) { 
-                            let fullAddr = data.address; 
-                            if(data.addressType === 'R'){ if(data.bname !== '') fullAddr += data.bname; if(data.buildingName !== '') fullAddr += ', ' + data.buildingName; } 
-                            setter(prev => ({ ...prev, zipcode: data.zonecode, address: fullAddr })); 
-                        } 
-                    }).open(); 
-                } catch (e) { openModal("주소 검색 오류", 'alert'); } 
-            };
-            
-            const startInlineEdit = (addr) => { setInlineEditId(addr.id); setInlineEditData({...addr}); };
-            const saveInlineEdit = () => { setAddresses(prev => prev.map(a => a.id === inlineEditId ? { ...inlineEditData, phone: formatPhoneNumber(inlineEditData.phone) } : a)); setInlineEditId(null); };
+            const handleAddressSearch = (setter) => { try { new window.daum.Postcode({ oncomplete: function(data) { let fullAddr = data.address; let extraAddr = ''; if(data.addressType === 'R'){ if(data.bname !== '') extraAddr += data.bname; if(data.buildingName !== '') extraAddr += (extraAddr !== '' ? ', ' + data.buildingName : data.buildingName); if(extraAddr !== '') fullAddr += ' (' + extraAddr + ')'; } setter(prev => ({ ...prev, zipcode: data.zonecode, address: fullAddr })); } }).open(); } catch (e) { openModal("주소 검색 오류", 'alert'); } };
+            const startInlineEdit = (addr) => { setInlineEditId(addr._originalIndex); setInlineEditData({...addr}); };
+            const saveInlineEdit = () => { setAddresses(prev => prev.map((a, i) => i === inlineEditId ? inlineEditData : a)); setInlineEditId(null); };
             const handleAddSpecial = () => { if (!scInput.nickname) return openModal("닉네임을 입력해주세요.", 'alert'); setSpecialCustomers(prev => ({ ...prev, [scInput.nickname]: { type: scInput.type, memo: scInput.memo } })); setScInput({ nickname: '', type: 'vip', memo: '' }); };
             const handleDeleteSpecial = (nick) => { openModal(`'${nick}'님의 VIP/진상 설정을 삭제하시겠습니까?`, 'confirm', () => { setSpecialCustomers(prev => { const next = { ...prev }; delete next[nick]; return next; }); }); };
             
@@ -1585,33 +1575,14 @@
                 openModal("현재 화면의 주소를 구글 시트 맨 아래에 '누적 추가' 하시겠습니까?\n(기존 데이터는 절대 지워지지 않고 아래에 안전하게 쌓입니다.)", 'confirm', async () => { 
                     if (!googleScriptUrl) return; 
                     const actualSheetId = getCleanSheetId(customerSheetId);
-                    const payload = addresses.map(a => ({ ...a, phone: a.phone ? `'${a.phone}` : '' }));
-                    await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify({ action: 'append_address', data: payload, sheet_id: actualSheetId }), mode: 'no-cors', headers: {'Content-Type': 'text/plain;charset=utf-8'} }); 
+                    await fetch(googleScriptUrl, { method: 'POST', body: JSON.stringify({ action: 'append_address', data: addresses, sheet_id: actualSheetId }), mode: 'no-cors', headers: {'Content-Type': 'text/plain;charset=utf-8'} }); 
                     openModal("시트 하단에 누적 저장이 완료되었습니다!", 'alert'); 
                 }); 
             };
             
-            const handleCloudLoad = async () => { openModal("클라우드에서 불러오시겠습니까?\n(기존 주소록에 병합됩니다)", 'confirm', async () => { if (!googleScriptUrl) return; const actualSheetId = getCleanSheetId(customerSheetId); const res = await fetch(`${googleScriptUrl}?action=get_addresses&t=${Date.now()}&sheet_id=${actualSheetId}`); const data = await res.json(); if(data.error) { openModal(`로드 실패: ${data.error}`, 'alert'); return; } if(data && data.addresses) { setAddresses(prev => { const newAddrs = [...prev]; data.addresses.forEach(d => { d.phone = formatPhoneNumber(d.phone); d.id = d.id || `addr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`; if(!newAddrs.some(a => a.nickname === d.nickname && a.phone === d.phone)) newAddrs.push(d); }); return newAddrs; }); openModal("로드 완료", 'alert'); } }); };
+            const handleCloudLoad = async () => { openModal("클라우드에서 불러오시겠습니까?\n(기존 주소록에 병합됩니다)", 'confirm', async () => { if (!googleScriptUrl) return; const actualSheetId = getCleanSheetId(customerSheetId); const res = await fetch(`${googleScriptUrl}?action=get_addresses&t=${Date.now()}&sheet_id=${actualSheetId}`); const data = await res.json(); if(data.error) { openModal(`로드 실패: ${data.error}`, 'alert'); return; } if(data && data.addresses) { setAddresses(prev => { const newAddrs = [...prev]; data.addresses.forEach(d => { if(!newAddrs.some(a => a.nickname === d.nickname && a.phone === d.phone)) newAddrs.push(d); }); return newAddrs; }); openModal("로드 완료", 'alert'); } }); };
             
             const handleResetAddresses = () => { openModal("주소록을 모두 초기화하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)", 'confirm', () => { setAddresses([]); openModal("주소록이 초기화되었습니다.", 'alert'); }); };
-
-            const handleDeduplicate = () => {
-                openModal("모든 정보(닉네임, 이름, 연락처, 주소)가 완전히 일치하는 중복 주소들을 하나로 병합하시겠습니까?", "confirm", () => {
-                    setAddresses(prev => {
-                        const uniqueSet = new Set();
-                        const merged = [];
-                        prev.forEach(a => {
-                            const key = `${a.nickname}|${a.realname}|${a.phone}|${a.address}`;
-                            if (!uniqueSet.has(key)) {
-                                uniqueSet.add(key);
-                                merged.push(a);
-                            }
-                        });
-                        openModal(`총 ${prev.length - merged.length}건의 완벽 중복 데이터가 정리되었습니다.`, 'alert');
-                        return merged;
-                    });
-                });
-            };
 
             const handleExtractMatchedAddresses = () => {
                 if (orders.length === 0) return openModal("현재 주문서에 고객이 없습니다.", 'alert');
@@ -1622,15 +1593,15 @@
                     uniqueCustomers.forEach(nick => {
                         const targetNick = addressMapping[nick] || nick;
                         const match = addresses.find(a => normalizeString(a.nickname) === normalizeString(targetNick));
-                        if (match && !addedNicks.has(nick)) { newAddresses.push({ ...match, nickname: nick, id: `addr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` }); addedNicks.add(nick); }
+                        if (match && !addedNicks.has(nick)) { newAddresses.push({ ...match, nickname: nick }); addedNicks.add(nick); }
                     });
                     if (newAddresses.length > 0) { setAddresses(newAddresses); openModal(`총 ${newAddresses.length}명의 매칭된 주소로 정리되었습니다!\n'저장' 버튼을 눌러 덮어씌워주세요.`, 'alert'); } else { openModal("매칭된 주소가 없습니다.", 'alert'); }
                 });
             };
 
-            const toggleSelectAddress = (id) => { setSelectedAddresses(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); };
-            const toggleSelectAll = (e) => { if (e.target.checked) setSelectedAddresses(new Set(filteredAddresses.map(a => a.id))); else setSelectedAddresses(new Set()); };
-            const handleDeleteSelected = () => { if (selectedAddresses.size === 0) return; openModal(`선택한 ${selectedAddresses.size}명의 주소 정보를 삭제하시겠습니까?`, 'confirm', () => { setAddresses(prev => prev.filter(a => !selectedAddresses.has(a.id))); setSelectedAddresses(new Set()); openModal("삭제 완료", 'alert'); }); };
+            const toggleSelectAddress = (index) => { setSelectedAddresses(prev => { const next = new Set(prev); if (next.has(index)) next.delete(index); else next.add(index); return next; }); };
+            const toggleSelectAll = (e) => { if (e.target.checked) setSelectedAddresses(new Set(filteredAddresses.map(a => a._originalIndex))); else setSelectedAddresses(new Set()); };
+            const handleDeleteSelected = () => { if (selectedAddresses.size === 0) return; openModal(`선택한 ${selectedAddresses.size}명의 주소 정보를 삭제하시겠습니까?`, 'confirm', () => { setAddresses(prev => prev.filter((_, i) => !selectedAddresses.has(i))); setSelectedAddresses(new Set()); openModal("삭제 완료", 'alert'); }); };
             
             const handleExcelUpload = (e) => { 
                 const file = e.target.files[0]; 
@@ -1639,18 +1610,22 @@
                 reader.onload = (evt) => { 
                     const wb = XLSX.read(evt.target.result, { type: 'binary' }); 
                     const ws = wb.Sheets[wb.SheetNames[0]]; 
-                    const data = XLSX.utils.sheet_to_json(ws, { header: 1 }); 
+                    const data = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }); 
                     const newAddrs = []; 
                     for(let i=1; i<data.length; i++) { 
                         const row = data[i];
-                        if(row && row[3]) { newAddrs.push({ id: `addr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, nickname: String(row[3] || '').trim(), realname: String(row[5] || '').trim(), phone: formatPhoneNumber(row[6]), zipcode: '', address: String(row[7] || '').trim(), memo: String(row[8] || '').trim() }); } 
+                        if(row && row[3]) { 
+                            let phoneStr = String(row[6] || '').trim();
+                            if (phoneStr.length === 10 && phoneStr.startsWith('10')) phoneStr = '0' + phoneStr;
+                            newAddrs.push({ nickname: String(row[3] || '').trim(), realname: String(row[5] || '').trim(), phone: phoneStr, zipcode: '', address: String(row[7] || '').trim(), memo: String(row[8] || '').trim() }); 
+                        } 
                     } 
                     setAddresses(prev => {
                         const existingSet = new Set(prev.map(c => `${c.nickname}|${c.realname}|${c.phone}|${c.address}`));
                         const combined = [...prev];
                         let addedCount = 0;
                         newAddrs.forEach(n => { const key = `${n.nickname}|${n.realname}|${n.phone}|${n.address}`; if (!existingSet.has(key)) { existingSet.add(key); combined.push(n); addedCount++; } });
-                        setTimeout(() => { openModal(`엑셀 업로드 완료!\n\n총 ${newAddrs.length}건 중 모든 정보가 완전히 동일한 중복 데이터를 쏙 빼고,\n새로운 ${addedCount}건만 추가되었습니다.`, 'alert'); }, 10);
+                        setTimeout(() => { openModal(`엑셀 업로드 완료!\n\n총 ${newAddrs.length}건 중 완전히 동일한 데이터를 쏙 빼고,\n새로운 ${addedCount}건만 추가되었습니다.`, 'alert'); }, 10);
                         return combined;
                     });
                 }; 
@@ -1664,7 +1639,6 @@
                          <div className="flex justify-between items-center mb-4 pb-4 border-b dark:border-slate-700">
                             <h2 className="text-xl font-bold flex items-center gap-2 dark:text-slate-100"><Icon name="address-book" weight="fill" className="text-indigo-600 dark:text-indigo-400"/> 배송 주소록 <span className="text-sm font-normal text-gray-500 dark:text-slate-400">({addresses.length}명)</span></h2>
                             <div className="flex gap-2">
-                                <button onClick={handleDeduplicate} className="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"><Icon name="magic-wand" weight="fill"/> 중복 완벽정리</button>
                                 <button onClick={handleExtractMatchedAddresses} className="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"><Icon name="funnel" weight="fill"/> 매칭 주소만 남기기</button>
                                 <button onClick={handleDeleteSelected} disabled={selectedAddresses.size === 0} className={`px-2 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${selectedAddresses.size > 0 ? 'bg-red-500 hover:bg-red-600 text-white shadow-sm' : 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-slate-500 cursor-not-allowed'}`}><Icon name="trash" weight="fill"/> 선택 삭제</button>
                                 <button onClick={handleResetAddresses} className="bg-rose-500 text-white px-2 py-1 rounded text-xs font-bold transition-colors hover:bg-rose-600 flex items-center gap-1 shadow-sm"><Icon name="trash" weight="fill"/> 초기화</button>
@@ -1698,12 +1672,12 @@
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y dark:divide-slate-700">
-                                    {filteredAddresses.map((addr, i) => {
+                                    {filteredAddresses.map((addr) => {
                                         const isDuplicateNick = nicknameCountsFull[normalizeString(addr.nickname)] > 1;
-                                        const isSelected = selectedAddresses.has(addr.id);
+                                        const isSelected = selectedAddresses.has(addr._originalIndex);
                                         return (
-                                            <tr key={addr.id} className={`hover:bg-indigo-50/50 dark:hover:bg-slate-800 transition-colors cursor-pointer ${isDuplicateNick ? 'bg-orange-50/30 dark:bg-orange-900/10' : ''} ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`} onDoubleClick={()=>startInlineEdit(addr)} onClick={(e) => { if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'svg' && e.target.tagName !== 'line' && e.target.tagName !== 'polyline' && e.target.tagName !== 'path') toggleSelectAddress(addr.id); }}>
-                                                {inlineEditId === addr.id ?(
+                                            <tr key={`addr-${addr._originalIndex}`} className={`hover:bg-indigo-50/50 dark:bg-slate-800 transition-colors cursor-pointer ${isDuplicateNick ? 'bg-orange-50/30 dark:bg-orange-900/10' : ''} ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`} onDoubleClick={()=>startInlineEdit(addr)} onClick={(e) => { if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'svg' && e.target.tagName !== 'line' && e.target.tagName !== 'polyline' && e.target.tagName !== 'path') toggleSelectAddress(addr._originalIndex); }}>
+                                                {inlineEditId === addr._originalIndex ?(
                                                     <td className="p-2" colSpan="6">
                                                         <div className="flex gap-1 items-center">
                                                             <span className="w-10 text-center">-</span>
@@ -1716,12 +1690,12 @@
                                                     </td>
                                                 ):(
                                                     <>
-                                                        <td className="p-2 text-center" onClick={(e)=>e.stopPropagation()}><input type="checkbox" checked={isSelected} onChange={()=>toggleSelectAddress(addr.id)} className="cursor-pointer w-3.5 h-3.5 accent-indigo-600" /></td>
+                                                        <td className="p-2 text-center" onClick={(e)=>e.stopPropagation()}><input type="checkbox" checked={isSelected} onChange={()=>toggleSelectAddress(addr._originalIndex)} className="cursor-pointer w-3.5 h-3.5 accent-indigo-600" /></td>
                                                         <td className="p-2 font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">{addr.nickname}{isDuplicateNick && <span className="text-[9px] bg-orange-500 text-white px-1 rounded font-normal leading-tight shadow-sm">중복</span>}</td>
                                                         <td className="p-2 dark:text-slate-300">{addr.realname}</td>
                                                         <td className="p-2 dark:text-slate-300">{addr.phone}</td>
                                                         <td className="p-2 text-gray-600 dark:text-slate-400 truncate max-w-xs">{addr.address}</td>
-                                                        <td className="p-2 text-center" onClick={(e)=>e.stopPropagation()}><button onClick={()=>handleDelete(addr.id, addr.nickname)} className="text-gray-400 dark:text-slate-500 hover:text-red-500 transition-colors p-1"><Icon name="trash" weight="fill"/></button></td>
+                                                        <td className="p-2 text-center" onClick={(e)=>e.stopPropagation()}><button onClick={()=>handleDelete(addr._originalIndex, addr.nickname)} className="text-gray-400 dark:text-slate-500 hover:text-red-500 transition-colors p-1"><Icon name="trash" weight="fill"/></button></td>
                                                     </>
                                                 )}
                                             </tr>
@@ -2033,7 +2007,22 @@
                 }
             }, []); 
             
-            const EMOJI_LIST = ["💙", "💖", "💛", "💚", "💜", "🤍", "❤️", "⭐", "🌟", "✨", "🌸", "🌼", "🍀", "🌹", "🌻", "✅", "🎁", "📢", "🌈", "🔥", "💎", "👑", "🎀", "🍎", "🍓", "🍒", "🍑", "🍋", "🐶", "🐱", "🐰", "🐻", "🐼", "🐾", "🎈", "🎉", "🛍️", "🛒", "💰", "💸", "💳", "🧾"];
+            const EMOJI_LIST = [
+                "💙", "💖", "💛", "💚", "💜", "🤍", "❤️", "🧡", "🤎", "🖤", "💔", "❣️", "💕", "💞", "💓", "💗", "💘", "💝",
+                "⭐", "🌟", "✨", "💫", "🔥", "💥", "💯", "💢", "💦", "💨", "🌈", "☀️", "🌤", "⛅", "☁️", "🌦", "🌧", "⚡", "❄️", "🌙",
+                "🌸", "🌼", "🍀", "🌹", "🌻", "🌷", "🌺", "🪴", "🌲", "🌳", "🌴", "🌵", "🌿", "☘️", "🍁", "🍂", "🍃",
+                "✅", "🎁", "📢", "📣", "🔔", "💎", "👑", "🎀", "🎈", "🎉", "🎊", "📌", "📍", "✂️", "📝", "✏️", "🔍", "💡",
+                "👗", "👚", "👕", "👖", "👔", "👙", "👠", "👡", "👢", "👟", "👞", "🧢", "👒", "👜", "🎒", "👝", "👛", "💍", "💄", "🕶️",
+                "🍎", "🍓", "🍒", "🍑", "🍋", "🍉", "🍇", "🥑", "🍅", "🍞", "🥐", "🎂", "🍩", "🍫", "🍬", "🍭", "☕", "🍺", "🍷", "🍹", "🍵",
+                "🐶", "🐱", "🐰", "🐻", "🐼", "🐾", "🦊", "🐯", "🦁", "🐸", "🐵", "🐥", "🐧", "🦋", "🐙", "🐬", "🐳", "🐢", "🐞",
+                "🛍️", "🛒", "💰", "💸", "💳", "🧾", "📦", "🚚", "✈️", "🚀", "🛵", "🚲", "🏠", "🏡", "🏥", "📱", "💻", "⌚",
+                "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚",
+                "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣",
+                "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗",
+                "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐",
+                "👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "👇", "☝️", "✋", "🤚", "🖐", "🖖", "👋", "👏", "🙌",
+                "👐", "🤲", "🙏", "✍️", "💅", "🤳", "💪", "🙋‍♀️", "🙋‍♂️", "🙇‍♀️", "🙇‍♂️", "💁‍♀️", "💁‍♂️", "🙆‍♀️", "🙆‍♂️", "🤷‍♀️", "🤷‍♂️", "🤦‍♀️", "🤦‍♂️"
+            ];
 
             const resetAllStatus = () => {
                 openModal("주문서, 채팅, 입금매칭 내역만 초기화됩니다.\n(주소록, VIP명단, 재고, 상품단가는 유지됩니다)", 'confirm', () => {
@@ -2059,79 +2048,77 @@
             useEffect(() => { localStorage.setItem('checkedOrders', JSON.stringify([...checkedOrders])); }, [checkedOrders]);
 
             return (
-                <ErrorBoundary>
-                    <div className="flex flex-col h-screen overflow-hidden text-slate-700 dark:text-slate-200">
-                         <header className="h-12 bg-indigo-900 dark:bg-slate-950 text-white flex items-center justify-between px-4 shrink-0 shadow-md z-50">
-                            <div className="font-bold text-lg flex items-center gap-2 transition-transform hover:scale-105 duration-200 cursor-pointer"><Icon name="lightning" className="text-yellow-400" weight="fill"/> 깔로 주문서 PRO</div>
-                            <div className="flex items-center gap-2">
-                                <div className="flex bg-indigo-800 dark:bg-slate-900 rounded p-1 gap-1">
-                                    {[{ id: 'live', label: '라이브관제', icon: 'monitor-play' }, { id: 'status', label: '재고/발주', icon: 'clipboard-text' }, { id: 'customer', label: '고객관리', icon: 'address-book' }, { id: 'cs', label: 'CS관리', icon: 'headset' }, { id: 'manage', label: '주문관리', icon: 'file-xls' }].map(tab => (
-                                        <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-3 py-1.5 rounded text-sm font-bold flex items-center gap-1 transition-all ${activeTab === tab.id ? 'bg-white dark:bg-slate-700 text-indigo-900 dark:text-white shadow' : 'text-indigo-300 dark:text-slate-400 hover:text-white'}`}><Icon name={tab.icon} weight="bold"/> {tab.label}</button>
-                                    ))}
-                                </div>
-                                <button onClick={()=>setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-indigo-800 dark:bg-slate-800 rounded transition-colors duration-200" title={isDarkMode ? '라이트모드' : '다크모드'}><Icon name={isDarkMode ? 'sun' : 'moon'} weight="fill" size={20}/></button>
-                                <button onClick={()=>setIsSettingsOpen(!isSettingsOpen)} className="p-2 hover:bg-indigo-800 dark:bg-slate-800 rounded transition-colors duration-200" title="환경설정"><Icon name="gear" weight="fill" size={20}/></button>
+                <div className="flex flex-col h-screen overflow-hidden text-slate-700 dark:text-slate-200">
+                    <header className="h-12 bg-indigo-900 dark:bg-slate-950 text-white flex items-center justify-between px-4 shrink-0 shadow-md z-50">
+                        <div className="font-bold text-lg flex items-center gap-2 transition-transform hover:scale-105 duration-200 cursor-pointer"><Icon name="lightning" className="text-yellow-400" weight="fill"/> 깔로 주문서 PRO</div>
+                        <div className="flex items-center gap-2">
+                            <div className="flex bg-indigo-800 dark:bg-slate-900 rounded p-1 gap-1">
+                                {[{ id: 'live', label: '라이브관제', icon: 'monitor-play' }, { id: 'status', label: '재고/발주', icon: 'clipboard-text' }, { id: 'customer', label: '고객관리', icon: 'address-book' }, { id: 'cs', label: 'CS관리', icon: 'headset' }, { id: 'manage', label: '주문관리', icon: 'file-xls' }].map(tab => (
+                                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-3 py-1.5 rounded text-sm font-bold flex items-center gap-1 transition-all ${activeTab === tab.id ? 'bg-white dark:bg-slate-700 text-indigo-900 dark:text-white shadow' : 'text-indigo-300 dark:text-slate-400 hover:text-white'}`}><Icon name={tab.icon} weight="bold"/> {tab.label}</button>
+                                ))}
                             </div>
-                        </header>
-                        <Modal isOpen={modalConfig.isOpen} type={modalConfig.type} message={modalConfig.message} onConfirm={modalConfig.onConfirm} onCancel={modalConfig.onCancel} initialValue={modalConfig.initialValue} />
-                         {isSettingsOpen && (
-                            <div className="absolute top-12 right-4 bg-white dark:bg-slate-800 shadow-xl border dark:border-slate-700 rounded-lg p-4 w-[420px] z-50 animate-pop max-h-[85vh] overflow-y-auto">
-                                <h3 className="font-bold mb-4 flex items-center gap-2 border-b dark:border-slate-700 pb-2"><Icon name="gear" weight="fill" className="text-gray-500"/> 환경설정</h3>
-                                <div className="mb-4 space-y-4">
-                                    <div><label className="block text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-1">구글 앱스 스크립트 URL</label><input type="text" value={googleScriptUrl} onChange={(e)=>setGoogleScriptUrl(e.target.value)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs text-gray-600 dark:text-slate-400 font-mono break-all bg-transparent" /></div>
-                                    <div><label className="block text-xs font-bold text-green-600 dark:text-green-400 mb-1">고객 주소록 시트 ID</label><input type="text" value={customerSheetId} onChange={(e)=>setCustomerSheetId(e.target.value)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs text-gray-600 dark:text-slate-400 font-mono bg-transparent" /></div>
-                                    <div><label className="block text-xs font-bold text-gray-500 dark:text-slate-400 mb-1">기본 배송비</label><input type="number" value={quickShipping} onChange={(e)=>setQuickShipping(Number(e.target.value))} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-sm bg-transparent dark:text-slate-100" /></div>
-                                    <div className="border-t dark:border-slate-700 pt-4"><h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-1"><Icon name="chat-text" weight="fill"/> 주문서 멘트 설정</h4>
-                                        <div className="space-y-3">
-                                            <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">닉네임 이모지 (클릭하여 선택)</label><input type="text" value={templateConfig.emoji} onChange={(e)=>setTemplateConfig({...templateConfig, emoji: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-sm bg-transparent dark:text-slate-100 mb-2" />
-                                            <div className="flex flex-wrap gap-1 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-700 max-h-32 overflow-y-auto scrollbar-thin">
-                                                {EMOJI_LIST.map(em => (<button type="button" key={em} onClick={() => setTemplateConfig({...templateConfig, emoji: em})} className="w-7 h-7 flex items-center justify-center hover:bg-white dark:hover:bg-slate-700 rounded hover:shadow-sm transition-all text-base">{em}</button>))}
-                                            </div>
-                                            </div>
-                                            <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">완납 메시지</label><input type="text" value={templateConfig.paidMsg} onChange={(e)=>setTemplateConfig({...templateConfig, paidMsg: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-sm bg-transparent dark:text-slate-100" /></div>
-                                            <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">미납 안내</label><textarea value={templateConfig.unpaidPrefix} onChange={(e)=>setTemplateConfig({...templateConfig, unpaidPrefix: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-16 resize-none bg-transparent dark:text-slate-100" /></div>
-                                            <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">계좌번호</label><textarea value={bankAccount} onChange={(e)=>setBankAccount(e.target.value)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-12 resize-none bg-transparent dark:text-slate-100" /></div>
-                                            <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">주소 있음 안내</label><textarea value={templateConfig.addrNotice} onChange={(e)=>setTemplateConfig({...templateConfig, addrNotice: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-12 resize-none bg-transparent dark:text-slate-100" /></div>
-                                            <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">주소 없음 안내</label><textarea value={templateConfig.surveyNotice} onChange={(e)=>setTemplateConfig({...templateConfig, surveyNotice: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-24 resize-none bg-transparent dark:text-slate-100" /></div>
-                                            <div className="flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/20 p-2 rounded border border-indigo-100 dark:border-indigo-800">
-                                                <label className="text-xs font-bold text-indigo-700 dark:text-indigo-300 cursor-pointer" onClick={() => setTemplateConfig({...templateConfig, alwaysRequestAddress: !templateConfig.alwaysRequestAddress})}>주소록 무시하고 항상 새로 입력받기 (강제수집)</label>
-                                                <input type="checkbox" checked={templateConfig.alwaysRequestAddress || false} onChange={(e)=>setTemplateConfig({...templateConfig, alwaysRequestAddress: e.target.checked})} className="custom-checkbox" />
-                                            </div>
+                            <button onClick={()=>setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-indigo-800 dark:bg-slate-800 rounded transition-colors duration-200" title={isDarkMode ? '라이트모드' : '다크모드'}><Icon name={isDarkMode ? 'sun' : 'moon'} weight="fill" size={20}/></button>
+                            <button onClick={()=>setIsSettingsOpen(!isSettingsOpen)} className="p-2 hover:bg-indigo-800 dark:bg-slate-800 rounded transition-colors duration-200" title="환경설정"><Icon name="gear" weight="fill" size={20}/></button>
+                        </div>
+                    </header>
+                    <Modal isOpen={modalConfig.isOpen} type={modalConfig.type} message={modalConfig.message} onConfirm={modalConfig.onConfirm} onCancel={modalConfig.onCancel} initialValue={modalConfig.initialValue} />
+                    {isSettingsOpen && (
+                        <div className="absolute top-12 right-4 bg-white dark:bg-slate-800 shadow-xl border dark:border-slate-700 rounded-lg p-4 w-[420px] z-50 animate-pop max-h-[85vh] overflow-y-auto">
+                            <h3 className="font-bold mb-4 flex items-center gap-2 border-b dark:border-slate-700 pb-2"><Icon name="gear" weight="fill" className="text-gray-500"/> 환경설정</h3>
+                            <div className="mb-4 space-y-4">
+                                <div><label className="block text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-1">구글 앱스 스크립트 URL</label><input type="text" value={googleScriptUrl} onChange={(e)=>setGoogleScriptUrl(e.target.value)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs text-gray-600 dark:text-slate-400 font-mono break-all bg-transparent" /></div>
+                                <div><label className="block text-xs font-bold text-green-600 dark:text-green-400 mb-1">고객 주소록 시트 ID</label><input type="text" value={customerSheetId} onChange={(e)=>setCustomerSheetId(e.target.value)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs text-gray-600 dark:text-slate-400 font-mono bg-transparent" /></div>
+                                <div><label className="block text-xs font-bold text-gray-500 dark:text-slate-400 mb-1">기본 배송비</label><input type="number" value={quickShipping} onChange={(e)=>setQuickShipping(Number(e.target.value))} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-sm bg-transparent dark:text-slate-100" /></div>
+                                <div className="border-t dark:border-slate-700 pt-4"><h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-1"><Icon name="chat-text" weight="fill"/> 주문서 멘트 설정</h4>
+                                    <div className="space-y-3">
+                                        <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">닉네임 이모지 (클릭하여 선택)</label><input type="text" value={templateConfig.emoji} onChange={(e)=>setTemplateConfig({...templateConfig, emoji: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-sm bg-transparent dark:text-slate-100 mb-2" />
+                                        <div className="flex flex-wrap gap-1 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-700 max-h-32 overflow-y-auto scrollbar-thin">
+                                            {EMOJI_LIST.map(em => (<button type="button" key={em} onClick={() => setTemplateConfig({...templateConfig, emoji: em})} className="w-7 h-7 flex items-center justify-center hover:bg-white dark:hover:bg-slate-700 rounded hover:shadow-sm transition-all text-base">{em}</button>))}
                                         </div>
-                                    </div>
-                                    <div className="border-t dark:border-slate-700 pt-4">
-                                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-1"><Icon name="lightning" weight="fill" className="text-yellow-500"/> 빠른 댓글 복사 (대시보드용)</h4>
-                                        <div className="space-y-2">
-                                            {quickMessages.map((msg, idx) => (
-                                                <input 
-                                                    key={idx}
-                                                    type="text" 
-                                                    value={msg} 
-                                                    onChange={(e) => {
-                                                        const newMsgs = [...quickMessages];
-                                                        newMsgs[idx] = e.target.value;
-                                                        setQuickMessages(newMsgs);
-                                                    }}
-                                                    placeholder={`빠른 댓글 ${idx + 1}`}
-                                                    className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs bg-transparent dark:text-slate-100" 
-                                                />
-                                            ))}
+                                        </div>
+                                        <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">완납 메시지</label><input type="text" value={templateConfig.paidMsg} onChange={(e)=>setTemplateConfig({...templateConfig, paidMsg: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-sm bg-transparent dark:text-slate-100" /></div>
+                                        <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">미납 안내</label><textarea value={templateConfig.unpaidPrefix} onChange={(e)=>setTemplateConfig({...templateConfig, unpaidPrefix: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-16 resize-none bg-transparent dark:text-slate-100" /></div>
+                                        <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">계좌번호</label><textarea value={bankAccount} onChange={(e)=>setBankAccount(e.target.value)} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-12 resize-none bg-transparent dark:text-slate-100" /></div>
+                                        <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">주소 있음 안내</label><textarea value={templateConfig.addrNotice} onChange={(e)=>setTemplateConfig({...templateConfig, addrNotice: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-12 resize-none bg-transparent dark:text-slate-100" /></div>
+                                        <div><label className="block text-[10px] font-bold text-gray-500 dark:text-slate-400 mb-1">주소 없음 안내</label><textarea value={templateConfig.surveyNotice} onChange={(e)=>setTemplateConfig({...templateConfig, surveyNotice: e.target.value})} className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs h-24 resize-none bg-transparent dark:text-slate-100" /></div>
+                                        <div className="flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/20 p-2 rounded border border-indigo-100 dark:border-indigo-800">
+                                            <label className="text-xs font-bold text-indigo-700 dark:text-indigo-300 cursor-pointer" onClick={() => setTemplateConfig({...templateConfig, alwaysRequestAddress: !templateConfig.alwaysRequestAddress})}>주소록 무시하고 항상 새로 입력받기 (강제수집)</label>
+                                            <input type="checkbox" checked={templateConfig.alwaysRequestAddress || false} onChange={(e)=>setTemplateConfig({...templateConfig, alwaysRequestAddress: e.target.checked})} className="custom-checkbox" />
                                         </div>
                                     </div>
                                 </div>
-                                <button onClick={()=>setIsSettingsOpen(false)} className="w-full bg-indigo-600 text-white rounded py-2 text-sm font-bold hover:bg-indigo-700 transition-colors">저장 및 닫기</button>
+                                <div className="border-t dark:border-slate-700 pt-4">
+                                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-1"><Icon name="lightning" weight="fill" className="text-yellow-500"/> 빠른 댓글 복사 (대시보드용)</h4>
+                                    <div className="space-y-2">
+                                        {quickMessages.map((msg, idx) => (
+                                            <input 
+                                                key={idx}
+                                                type="text" 
+                                                value={msg} 
+                                                onChange={(e) => {
+                                                    const newMsgs = [...quickMessages];
+                                                    newMsgs[idx] = e.target.value;
+                                                    setQuickMessages(newMsgs);
+                                                }}
+                                                placeholder={`빠른 댓글 ${idx + 1}`}
+                                                className="w-full border dark:border-slate-600 rounded px-2 py-1.5 text-xs bg-transparent dark:text-slate-100" 
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
-                        )}
-                         <main className="flex-1 overflow-hidden bg-gray-200 dark:bg-slate-950 p-2 relative">
-                            {activeTab === 'live' && <LiveTab {...{ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory, quickMessages, customerSheetId }} />}
-                            {activeTab === 'status' && <OrderStatusTab {...{ orders, setOrders, setProductHistory, productHistory, inventory, setInventory, openModal, shippingOverrides, quickShipping, addresses, addressMapping, cardPayments, specialCustomers }} />}
-                            {activeTab === 'customer' && <CustomerTab {...{ addresses, setAddresses, googleScriptUrl, customerSheetId, openModal, specialCustomers, setSpecialCustomers, orders, addressMapping }} />}
-                            {activeTab === 'cs' && <CSTab {...{ csData, setCsData, openModal }} />}
-                            {activeTab === 'manage' && <OrderManagementTab {...{ orders, shippingOverrides, quickShipping, addresses, handleExportBackup, handleImportBackup, addressMapping, cardPayments, specialCustomers }} />}
-                         </main>
-                    </div>
-                </ErrorBoundary>
-             );
+                            <button onClick={()=>setIsSettingsOpen(false)} className="w-full bg-indigo-600 text-white rounded py-2 text-sm font-bold hover:bg-indigo-700 transition-colors">저장 및 닫기</button>
+                        </div>
+                    )}
+                    <main className="flex-1 overflow-hidden bg-gray-200 dark:bg-slate-950 p-2 relative">
+                        {activeTab === 'live' && <LiveTab {...{ orders, setOrders, productHistory, setProductHistory, quickShipping, shippingOverrides, setShippingOverrides, bankAccount, googleScriptUrl, addresses, setAddresses, cardPayments, setCardPayments, resetAllStatus, matchedDeposits, setMatchedDeposits, depositorNames, setDepositorNames, clickedChats, setClickedChats, openModal, keywords, setKeywords, sentAddressRequests, setSentAddressRequests, deletedDepositIds, setDeletedDepositIds, checkedOrders, setCheckedOrders, addressMapping, setAddressMapping, templateConfig, specialCustomers, inventory, setInventory, quickMessages, customerSheetId }} />}
+                        {activeTab === 'status' && <OrderStatusTab {...{ orders, setOrders, setProductHistory, productHistory, inventory, setInventory, openModal, shippingOverrides, quickShipping, addresses, addressMapping, cardPayments, specialCustomers }} />}
+                        {activeTab === 'customer' && <CustomerTab {...{ addresses, setAddresses, googleScriptUrl, customerSheetId, openModal, specialCustomers, setSpecialCustomers, orders, addressMapping }} />}
+                        {activeTab === 'cs' && <CSTab {...{ csData, setCsData, openModal }} />}
+                        {activeTab === 'manage' && <OrderManagementTab {...{ orders, shippingOverrides, quickShipping, addresses, handleExportBackup, handleImportBackup, addressMapping, cardPayments, specialCustomers }} />}
+                    </main>
+                </div>
+            );
         }
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
