@@ -60,7 +60,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, useCallback, memo } = React;
 
-        const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwbq1D97fTcJOtPnVE2cDHsVQKiOWcX_SbHAvBMdPGlnlvCeO57LhrFcF_3EBraOQGBoQ/exec";
+        const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyvKtCHXSz47oGqNire1eREUJyjMVX_zBcodtGrwyIfYCrtrkzr1X6Q_mKJMzoo5Ev2ug/exec";
         const FIXED_BANK_ACCOUNT = "카카오뱅크 김선정\n7942 18 01611";
         const DEFAULT_CUSTOMER_SHEET_ID = "1zlL6R8iCy-6ZRMqj6dbefhkwSyRzHibDYBNJLmE35bM";
         
@@ -459,6 +459,9 @@
             const [newDepositName, setNewDepositName] = useState('');
             const [newDepositAmount, setNewDepositAmount] = useState('');
 
+            // [최적화] 화면에 한 번에 그릴 주문서 갯수 제한 (무한 스크롤)
+            const [displayLimit, setDisplayLimit] = useState(30);
+
             const [quickAddrModal, setQuickAddrModal] = useState({ isOpen: false, nick: '' });
             
             const [ignoredAutoMatch, setIgnoredAutoMatch] = useState(() => {
@@ -762,6 +765,20 @@
             }, [orders, orderSearch, filterStatus, cardPayments, getCalculatedShipping, addressLookup, depositorNames, selectedNick]);
 
             const totalItemsCount = useMemo(() => { let count = 0; filteredGroupedOrders.forEach(([_, items]) => { count += items.filter(i => !i.isCancelled).length; }); return count; }, [filteredGroupedOrders]);
+
+            // [최적화] 검색어나 탭 변경 시 보여주는 갯수를 다시 30개로 초기화
+            useEffect(() => { setDisplayLimit(30); }, [orderSearch, filterStatus, selectedNick]);
+
+            // [최적화] 스크롤이 맨 아래에 닿으면 보여주는 갯수를 30개씩 증가시킴
+            const handleOrderScroll = useCallback((e) => {
+                const { scrollTop, clientHeight, scrollHeight } = e.target;
+                if (scrollHeight - scrollTop <= clientHeight + 300) {
+                    setDisplayLimit(prev => Math.min(prev + 30, filteredGroupedOrders.length));
+                }
+            }, [filteredGroupedOrders.length]);
+
+            // [최적화] 전체 리스트 대신 제한된 갯수만큼만 잘라서 화면에 전달
+            const displayedOrders = useMemo(() => filteredGroupedOrders.slice(0, displayLimit), [filteredGroupedOrders, displayLimit]);
 
             const stockLookup = useMemo(() => {
                 const lookup = {};
@@ -1325,26 +1342,52 @@
                         else if (Array.isArray(data)) fetchedOrders = data;
 
                         if (fetchedOrders && fetchedOrders.length > 0) {
-                            const parseNum = (val) => { if (!val) return 0; const n = Number(String(val).replace(/,/g, '')); return isNaN(n) ? 0 : n; };
-                            const loadedOrders = fetchedOrders.map((o, idx) => ({
-                                id: Date.now() + idx,
-                                customer: o.nickname || o.customer || o['닉네임'] || o['주문자'] || '',
-                                product: o.product || o['상품명'] || o['상품'] || '',
-                                quantity: parseNum(o.qty || o.quantity || o['수량']) || 1,
-                                price: parseNum(o.price || o['가격'] || o['단가'] || o['금액']),
-                                deposit: parseNum(o.deposit || o['입금액'] || o['입금']),
-                                isCancelled: false,
-                                isUnmodified: false,
-                                loadedFromCloud: true 
-                            }));
-                            
-                            const newCardPayments = {};
-                            fetchedOrders.forEach(o => {
-                                const nick = o.nickname || o.customer || o['닉네임'] || o['주문자'] || '';
-                                const isCardVal = o.isCard || o['카드결제'];
-                                if (nick && (isCardVal === true || isCardVal === 'true' || isCardVal === 'O' || isCardVal === 'TRUE')) {
-                                    newCardPayments[nick] = true;
+                            if (Array.isArray(fetchedOrders[0])) {
+                                const headers = fetchedOrders[0];
+                                fetchedOrders = fetchedOrders.slice(1).map(row => {
+                                    const obj = {};
+                                    headers.forEach((h, i) => { obj[h] = row[i]; });
+                                    return obj;
+                                });
+                            }
+
+                            const getVal = (obj, keys) => {
+                                const normalizedObj = {};
+                                Object.keys(obj).forEach(k => {
+                                    const cleanKey = String(k).toLowerCase().replace(/[\s\n\r_]/g, '');
+                                    normalizedObj[cleanKey] = obj[k];
+                                });
+                                for (let k of keys) {
+                                    const cleanTarget = String(k).toLowerCase().replace(/[\s\n\r_]/g, '');
+                                    if (normalizedObj[cleanTarget] !== undefined && normalizedObj[cleanTarget] !== null && String(normalizedObj[cleanTarget]).trim() !== '') {
+                                        return String(normalizedObj[cleanTarget]).trim();
+                                    }
                                 }
+                                return '';
+                            };
+
+                            const parseNum = (val) => { if (!val) return 0; const n = Number(String(val).replace(/,/g, '')); return isNaN(n) ? 0 : n; };
+                            
+                            const loadedOrders = fetchedOrders.map((o, idx) => {
+                                const isCardVal = getVal(o, ['isCard', '카드결제', '카드여부']);
+                                return {
+                                    id: Date.now() + idx,
+                                    customer: getVal(o, ['nickname', 'customer', '닉네임', '주문자', '고객명', '아이디']),
+                                    product: getVal(o, ['product', '상품명', '상품', '제품명', '주문제품', '주문상품']),
+                                    quantity: parseNum(getVal(o, ['qty', 'quantity', '수량', '주문수량'])) || 1,
+                                    price: parseNum(getVal(o, ['price', '가격', '단가', '금액', '주문금액'])),
+                                    deposit: parseNum(getVal(o, ['deposit', '입금액', '입금', '결제금액'])),
+                                    isCancelled: false,
+                                    isUnmodified: false,
+                                    loadedFromCloud: true,
+                                    _isCard: isCardVal === 'true' || isCardVal === 'O' || isCardVal === 'TRUE' || isCardVal === 'o' || isCardVal === '카드'
+                                };
+                            }).filter(o => o.customer || o.product);
+
+                            const newCardPayments = {};
+                            loadedOrders.forEach(o => {
+                                if (o.customer && o._isCard) newCardPayments[o.customer] = true;
+                                delete o._isCard;
                             });
 
                             setOrders(loadedOrders);
@@ -1531,8 +1574,8 @@
                                 </div>
                             </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-1.5 bg-gray-100 dark:bg-slate-900 relative z-0">
-                            {filteredGroupedOrders.map(([nick, items]) => {
+                        <div className="flex-1 overflow-y-auto p-1.5 bg-gray-100 dark:bg-slate-900 relative z-0" onScroll={handleOrderScroll}>
+                            {displayedOrders.map(([nick, items]) => {
                                 const ship = getCalculatedShipping(nick);
                                 const activeItems = items.filter(i => !i.isCancelled);
                                 const prodSum = activeItems.reduce((s, i) => s + Number(i.price), 0);
@@ -1676,6 +1719,7 @@
                     return item;
                 }));
 
+                // 상품명이 변경될 때 기존 주문서의 상품명도 동기화
                 if (field === 'name' && oldName !== val && oldName.trim() !== '') {
                     setOrders(prevOrders => prevOrders.map(o => {
                         if (o.product === oldName) {
@@ -1692,6 +1736,27 @@
                         return nextHist;
                     });
                 }
+
+                // 가격이 변경될 때 기존 주문서의 해당 상품 가격도 동기화
+                if (field === 'price' && val !== '') {
+                    const newPriceNum = Number(val);
+                    if (!isNaN(newPriceNum)) {
+                        setOrders(prevOrders => prevOrders.map(o => {
+                            if (o.product === oldName && !o.isCancelled) {
+                                const q = Number(o.quantity) || 0;
+                                return { ...o, price: q * newPriceNum };
+                            }
+                            return o;
+                        }));
+                    }
+                }
+            };
+
+            const handleDeleteInventory = (id, name) => {
+                openModal(`'${name}' 상품을 삭제하시겠습니까?\n(현재 입력된 모든 주문서에서도 해당 상품 내역이 즉시 삭제됩니다!)`, 'confirm', () => {
+                    setInventory(prev => prev.filter(i => i.id !== id));
+                    setOrders(prevOrders => prevOrders.filter(o => o.product !== name));
+                });
             };
 
             const addInventoryRow = (afterId = null) => {
@@ -1826,6 +1891,12 @@
 
             }, [selectedProduct, orders, cardPayments, getCalculatedShipping]);
 
+            const handleDeleteCustomerOrder = (nick, product) => {
+                openModal(`'${nick}' 고객의 '${product}' 주문을 삭제하시겠습니까?\n(주문서 전체 목록에서도 즉시 삭제됩니다)`, 'confirm', () => {
+                    setOrders(prev => prev.filter(o => !(o.customer === nick && o.product === product)));
+                });
+            };
+
             const handleCopyBuyers = () => {
                 if (!selectedProductDetails || selectedProductDetails.length === 0) return;
                 const textToCopy = `[ ${selectedProduct} ] ` + selectedProductDetails.map(d => d.qty > 1 ? `${d.nick}(${d.qty})` : d.nick).join(' / ');
@@ -1909,7 +1980,7 @@
                                         <td className="p-1 text-center text-red-500 dark:text-red-400 font-bold">{p.unpaidOrdered}</td>
                                         <td className="p-1 text-center"><input id={`inv-stock-${p.id}`} type="number" value={p.stock === 0 ? '' : p.stock} onClick={(e) => e.stopPropagation()} onChange={(e) => updateInventory(p.id, 'stock', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (idx + 1 < stats.length) { document.getElementById(`inv-name-${stats[idx+1].id}`).focus(); } else { addInventoryRow(p.id); } } }} className="w-full bg-transparent text-center py-1 outline-none font-bold focus:bg-white dark:focus:bg-slate-900 focus:ring-1 ring-indigo-200 dark:ring-indigo-800 rounded text-gray-700 dark:text-slate-200" /></td>
                                         <td className={`p-1 text-center font-bold ${p.remaining <= 0 ? 'text-red-500 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'} bg-gray-50/50 dark:bg-slate-900/30`}>{p.remaining}</td>
-                                        <td className="p-1 text-center"><button onClick={(e) => { e.stopPropagation(); setInventory(prev => prev.filter(i => i.id !== p.id)); }} className="text-gray-300 dark:text-slate-600 hover:text-red-500 transition-colors"><Icon name="trash" weight="bold"/></button></td>
+                                        <td className="p-1 text-center"><button onClick={(e) => { e.stopPropagation(); handleDeleteInventory(p.id, p.name); }} className="text-gray-300 dark:text-slate-600 hover:text-red-500 transition-colors"><Icon name="trash" weight="bold"/></button></td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -1934,11 +2005,14 @@
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                                     {selectedProductDetails.map((d, i) => (
                                         <div key={i} className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded p-2 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 overflow-hidden">
                                                 <span className="font-bold text-sm text-gray-800 dark:text-slate-100 truncate max-w-[80px]" title={d.nick}>{d.nick}</span>
-                                                <span className="text-xs text-indigo-600 dark:text-indigo-400 font-bold">{d.qty}개</span>
+                                                <span className="text-xs text-indigo-600 dark:text-indigo-400 font-bold shrink-0">{d.qty}개</span>
                                             </div>
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${d.statusClasses}`}>{d.statusText}</span>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${d.statusClasses}`}>{d.statusText}</span>
+                                                <button onClick={() => handleDeleteCustomerOrder(d.nick, selectedProduct)} className="text-gray-300 dark:text-slate-500 hover:text-red-500 transition-colors p-0.5" title="주문 삭제"><Icon name="trash" weight="fill"/></button>
+                                            </div>
                                         </div>
                                     ))}
                                     {selectedProductDetails.length === 0 && <div className="col-span-full text-center text-xs text-gray-500 py-4">해당 상품을 주문한 고객이 아직 없습니다.</div>}
@@ -2048,27 +2122,60 @@
                     const actualSheetId = getCleanSheetId(customerSheetId);
                     try {
                         const res = await fetch(`${googleScriptUrl}?action=get_special_customers&t=${Date.now()}&sheet_id=${actualSheetId}`);
-                        const data = await res.json();
-                        if (data && data.specialCustomers) {
+                        const text = await res.text();
+                        const data = JSON.parse(text);
+
+                        let fetchedSpecials = null;
+                        if (data && data.specialCustomers) fetchedSpecials = data.specialCustomers;
+                        else if (data && data.data) fetchedSpecials = data.data;
+                        else if (data && !data.error) fetchedSpecials = data;
+
+                        if (Array.isArray(fetchedSpecials) && fetchedSpecials.length > 0 && Array.isArray(fetchedSpecials[0])) {
+                            const headers = fetchedSpecials[0];
+                            fetchedSpecials = fetchedSpecials.slice(1).map(row => {
+                                const obj = {};
+                                headers.forEach((h, i) => { obj[h] = row[i]; });
+                                return obj;
+                            });
+                        }
+
+                        if (fetchedSpecials && Object.keys(fetchedSpecials).length > 0) {
                             let newSpecials = {};
-                            if (Array.isArray(data.specialCustomers)) {
-                                data.specialCustomers.forEach(item => {
-                                    if(item.nickname) {
-                                        newSpecials[item.nickname] = {
-                                            type: item.type || 'normal',
-                                            purchaseCount: Number(item.purchaseCount) || 0,
-                                            noShowCount: Number(item.noShowCount) || 0,
-                                            memo: item.memo || ''
+                            
+                            const getVal = (obj, keys) => {
+                                const normalizedObj = {};
+                                Object.keys(obj).forEach(k => {
+                                    const cleanKey = String(k).toLowerCase().replace(/[\s\n\r_]/g, '');
+                                    normalizedObj[cleanKey] = obj[k];
+                                });
+                                for (let k of keys) {
+                                    const cleanTarget = String(k).toLowerCase().replace(/[\s\n\r_]/g, '');
+                                    if (normalizedObj[cleanTarget] !== undefined && normalizedObj[cleanTarget] !== null && String(normalizedObj[cleanTarget]).trim() !== '') {
+                                        return String(normalizedObj[cleanTarget]).trim();
+                                    }
+                                }
+                                return '';
+                            };
+
+                            if (Array.isArray(fetchedSpecials)) {
+                                fetchedSpecials.forEach(item => {
+                                    const nick = getVal(item, ['nickname', '닉네임', '주문자', '고객명', '아이디', 'id']);
+                                    if(nick) {
+                                        newSpecials[nick] = {
+                                            type: getVal(item, ['type', '타입', '분류', '등급', '상태']) || 'normal',
+                                            purchaseCount: Number(getVal(item, ['purchaseCount', '구매횟수', '누적구매', '구매'])) || 0,
+                                            noShowCount: Number(getVal(item, ['noShowCount', '노쇼횟수', '누적노쇼', '노쇼'])) || 0,
+                                            memo: getVal(item, ['memo', '메모', '비고', '사유']) || ''
                                         };
                                     }
                                 });
                             } else {
-                                newSpecials = data.specialCustomers; 
+                                newSpecials = fetchedSpecials; 
                             }
                             setSpecialCustomers(newSpecials);
-                            openModal("명단을 성공적으로 불러왔습니다!", 'alert');
+                            openModal("단골/노쇼 명단을 성공적으로 불러왔습니다!", 'alert');
                         } else {
-                            openModal("불러올 단골 명단이 없습니다.", 'alert');
+                            openModal("불러올 단골/노쇼 명단이 없거나 형식이 맞지 않습니다.", 'alert');
                         }
                     } catch (e) {
                         openModal("불러오기 실패: 서버와 연결할 수 없습니다.", 'alert');
@@ -2094,36 +2201,105 @@
                 }); 
             };
             
-            // 🚨 [오류 픽스 & 완벽 고정] 불러오기 시 기존에 매칭 완료해둔 닉네임이 풀리며 중복 생성되는 문제 해결!
-            // 이제 '전화번호'를 최우선 기준으로 비교하여, 전화번호가 같으면 닉네임이 달라도 덮어쓰지 않고 무시(매칭 유지)합니다.
+            // 🚨 [초강력 데이터 매칭] 공백, 특수문자, 대소문자 무시 및 동의어 완벽 파싱
             const handleCloudLoad = async () => { 
                 openModal("클라우드에서 불러오시겠습니까?\n(기존 주소록에 병합됩니다)", 'confirm', async () => { 
                     if (!googleScriptUrl) return; 
                     const actualSheetId = getCleanSheetId(customerSheetId); 
                     try {
                         const res = await fetch(`${googleScriptUrl}?action=get_addresses&t=${Date.now()}&sheet_id=${actualSheetId}`); 
-                        const data = await res.json(); 
+                        const text = await res.text();
+                        
+                        if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+                            setTimeout(() => openModal("로드 실패: 스크립트 권한 오류이거나 URL이 잘못되었습니다.", 'alert'), 300);
+                            return;
+                        }
+
+                        const data = JSON.parse(text); 
                         if(data.error) { 
                             setTimeout(() => openModal(`로드 실패: ${data.error}`, 'alert'), 300); 
                             return; 
                         } 
-                        if(data && data.addresses) { 
+
+                        let fetchedAddrs = [];
+                        if (data && Array.isArray(data.addresses)) fetchedAddrs = data.addresses;
+                        else if (data && Array.isArray(data.data)) fetchedAddrs = data.data;
+                        else if (Array.isArray(data)) fetchedAddrs = data;
+
+                        if (fetchedAddrs.length > 0 && Array.isArray(fetchedAddrs[0])) {
+                            const headers = fetchedAddrs[0];
+                            fetchedAddrs = fetchedAddrs.slice(1).map(row => {
+                                const obj = {};
+                                headers.forEach((h, i) => { obj[h] = row[i]; });
+                                return obj;
+                            });
+                        }
+
+                        if(fetchedAddrs.length > 0) { 
                             setAddresses(prev => { 
                                 const newAddrs = [...prev]; 
-                                data.addresses.forEach(d => { 
+                                let addedCount = 0;
+                                
+                                const getVal = (obj, keys) => {
+                                    const normalizedObj = {};
+                                    Object.keys(obj).forEach(k => {
+                                        const cleanKey = String(k).toLowerCase().replace(/[\s\n\r_]/g, '');
+                                        normalizedObj[cleanKey] = obj[k];
+                                    });
+
+                                    for (let k of keys) {
+                                        const cleanTarget = String(k).toLowerCase().replace(/[\s\n\r_]/g, '');
+                                        if (normalizedObj[cleanTarget] !== undefined && normalizedObj[cleanTarget] !== null && String(normalizedObj[cleanTarget]).trim() !== '') {
+                                            return String(normalizedObj[cleanTarget]).trim();
+                                        }
+                                    }
+                                    return '';
+                                };
+
+                                fetchedAddrs.forEach(d => { 
+                                    const normData = {
+                                        nickname: getVal(d, ['nickname', '닉네임', '주문자', '주문자명', '고객명', '고객', '아이디', 'id', '유튜브닉네임', '구매자', '구매자명']),
+                                        realname: getVal(d, ['realname', '이름', '수령인', '수령자', '수취인', '수취인명', '입금자명', '입금자', '성함', '받는사람', '받는분', '실명']),
+                                        phone: getVal(d, ['phone', '연락처', '핸드폰', '전화번호', '핸드폰번호', '휴대폰', '번호', '전화', 'hp', 'tel']),
+                                        zipcode: getVal(d, ['zipcode', '우편번호', '우편', '우편번호구분']),
+                                        address: getVal(d, ['address', '주소', '배송지', '배송주소', '상세주소', '기본주소', '집주소', 'addr']),
+                                        memo: getVal(d, ['memo', '메모', '배송메모', '요청사항', '배송요청사항', '비고', '남기실말씀', '기타'])
+                                    };
+
+                                    if (!normData.nickname && !normData.address && !normData.phone) return;
+
                                     const isDup = newAddrs.some(a => {
-                                        if (a.phone && d.phone && a.phone === d.phone) return true; // 전화번호가 같으면 무조건 이미 등록/매칭된 사람으로 취급
-                                        if (a.nickname === d.nickname && a.address === d.address) return true; // 폰번호 없어도 닉/주소 같으면 동일인
+                                        const p1 = String(a.phone || '').replace(/[^0-9]/g, '');
+                                        const p2 = normData.phone.replace(/[^0-9]/g, '');
+                                        if (p1 && p2 && p1 === p2) return true; 
+                                        
+                                        if (a.nickname && normData.nickname && a.address && normData.address && 
+                                            a.nickname === normData.nickname && a.address === normData.address) return true; 
+                                            
                                         return false;
                                     });
-                                    if(!isDup) newAddrs.push(d); 
+
+                                    if(!isDup) {
+                                        newAddrs.push(normData);
+                                        addedCount++;
+                                    }
                                 }); 
+                                
+                                setTimeout(() => {
+                                    if (addedCount > 0) {
+                                        openModal(`로드 완료!\n총 ${fetchedAddrs.length}개의 데이터 중 중복을 제외하고 ${addedCount}건이 추가되었습니다.`, 'alert');
+                                    } else {
+                                        openModal(`데이터 ${fetchedAddrs.length}건을 확인했으나 추가되지 않았습니다.\n\n원인 1: 이미 주소록에 있는 100% 중복 데이터\n원인 2: 구글 시트 첫 줄(가장 윗 줄)에 '닉네임', '연락처', '주소' 등의 이름표(헤더)가 없거나 인식할 수 없는 단어로 적혀있음\n\n시트 1번 행에 이름표가 잘 적혀있는지 꼭 확인해주세요!`, 'alert');
+                                    }
+                                }, 300);
+                                
                                 return newAddrs; 
                             }); 
-                            setTimeout(() => openModal("로드 완료! (이미 연결/매칭해 둔 주소는 안전하게 고정 유지되었습니다)", 'alert'), 300); 
-                        } 
+                        } else {
+                            setTimeout(() => openModal("불러올 주소록 데이터가 시트에 없거나 형식이 맞지 않습니다.\n(시트를 다시 한 번 확인해 주세요)", 'alert'), 300);
+                        }
                     } catch(e) {
-                        setTimeout(() => openModal("로드 실패: 서버 연결 오류", 'alert'), 300);
+                        setTimeout(() => openModal("로드 실패: 서버 응답을 해석할 수 없습니다.\n(시트 데이터를 확인해주세요)", 'alert'), 300);
                     }
                 }); 
             };
